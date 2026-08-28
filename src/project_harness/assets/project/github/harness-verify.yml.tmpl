@@ -1,0 +1,23 @@
+# project-harness:managed version={{HARNESS_VERSION}}
+name: Harness Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Bootstrap
+        run: ./dev/bootstrap
+      - name: Verify
+        run: ./dev/verify
