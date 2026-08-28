@@ -1,14 +1,14 @@
 ---
 id: PLAN-0000
 kind: exec-plan
-status: verifying
+status: complete
 owner: main
 area: repository
 created: 2026-08-28
 updated: 2026-08-28
 base_commit: "45305d09a4f57b8e7e8f90a6362ff667497604a2"
-integrated_commit: "HEAD"
-verified_commit: ""
+integrated_commit: 660575e3a955220e8af32096e2775db79b6e03af
+verified_commit: 660575e3a955220e8af32096e2775db79b6e03af
 ---
 
 # Establish repository baseline
@@ -206,7 +206,7 @@ The worktree is dirty, `HEAD` differs from the declared integrated target, a str
 
 #### Result
 
-Completed at the verifying stage. Twelve regression tests pass. The wheel contains thirty-nine files including twenty-nine packaged assets and zero bytecode files. An isolated installed CLI initializes a service target whose repository-local `verify` and initializer `doctor` commands succeed. Final closure is delegated to `./dev/close-plan`, which reruns the canonical gate, records the actual candidate SHA, and moves this record to `completed/`.
+Completed. `./dev/close-plan PLAN-0000` independently reran the canonical gate against clean commit `660575e3a955220e8af32096e2775db79b6e03af`, recorded that SHA as both integrated and verified, and moved this record to `completed/`. Twelve regression tests pass. The wheel contains thirty-nine files including twenty-nine packaged assets and zero bytecode files. An isolated installed CLI initializes a service target whose repository-local `verify` and initializer `doctor` commands succeed.
 
 ## Architecture Impact
 
@@ -274,8 +274,8 @@ Run commands from the repository root.
 
 ## Validation and Evidence
 
-- Integrated target: symbolic `HEAD`, resolved and recorded by `./dev/close-plan`.
-- Regression suite: twelve tests pass in `20.690s` on Python 3.13.5.
+- Integrated and verified target: `660575e3a955220e8af32096e2775db79b6e03af`.
+- Closure gate: twelve tests pass in `19.034s` on Python 3.13.5 after strict document, plan, and architecture checks.
 - Distribution: `project_harness-0.1.0-py3-none-any.whl`, thirty-nine files, twenty-nine packaged assets, zero bytecode entries.
 - Isolated installation: the installed CLI initializes a service repository with CI; its `./dev/verify` succeeds; `project-harness doctor` succeeds with only the expected warning that the temporary target is not yet a Git repository.
 - Acceptance results: AC-1 through AC-7 are represented by strict repository checks, regression tests, wheel inspection, isolated target execution, and Git-bound closure.
