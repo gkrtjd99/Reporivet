@@ -9,3 +9,10 @@ dist/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
+
+# project-harness:start
+.harness/runs/*
+!.harness/runs/.gitkeep
+__pycache__/
+*.py[cod]
+# project-harness:end

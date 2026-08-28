@@ -20,7 +20,7 @@ dev/               결정적인 컨텍스트·검사·검증 인터페이스
 CI + garden        불변 조건 강제와 장기 드리프트 보고
 ```
 
-설계 배경은 [`docs/design.md`](docs/design.md), 생성 결과는 [`docs/generated-project.md`](docs/generated-project.md)에 정리되어 있습니다.
+설계 배경은 [`docs/design-docs/DESIGN-HARNESS-001-initializer-and-runtime.md`](docs/design-docs/DESIGN-HARNESS-001-initializer-and-runtime.md), 생성 결과는 [`docs/product-specs/SPEC-HARNESS-001-generated-project.md`](docs/product-specs/SPEC-HARNESS-001-generated-project.md)에 정리되어 있습니다.
 
 ## 보장하는 것
 
@@ -180,7 +180,7 @@ project-harness doctor --root .
 python3 -m unittest discover -s tests -v
 ```
 
-테스트는 초기화, 기존 프로젝트 baseline, 문서 소유권 보존, 안전한 업그레이드, catalog drift, Task Packet, strict baseline, 누락 도구 실패, dry-run, command 충돌, Git commit-bound plan closure를 검증합니다.
+테스트는 초기화, 기존 프로젝트 baseline, 문서 소유권 보존, 안전한 업그레이드, catalog drift, 미래 ExecPlan 토큰 보존, Task Packet, strict baseline, 누락 도구 실패, dry-run, command 충돌, Git commit-bound plan closure를 검증합니다.
 
 ## 비목표
 

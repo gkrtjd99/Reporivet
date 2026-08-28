@@ -1,0 +1,45 @@
+# Project-owned configuration. The initializer never overwrites this file.
+version = 1
+
+[project]
+name = "Project Harness"
+summary = "Initialize and safely maintain repository-local, document-first operating harnesses for coding agents."
+kind = "cli"
+primary_language = "Python"
+runtime = "Python 3.11+"
+baseline = "established"
+configuration = "ready"
+default_branch = "main"
+
+[commands]
+bootstrap = []
+run = []
+check = [
+  ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
+]
+verify = [
+  ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
+]
+smoke = []
+architecture = [
+  ["python3", "-m", "compileall", "-q", "src", "tests"],
+]
+
+[paths]
+source = ["src"]
+tests = ["tests"]
+generated_docs = ["docs/generated"]
+
+[policy]
+parallel_writes = false
+agents_max_lines = 140
+stale_plan_days = 21
+require_plan_for = [
+  "public-api",
+  "persistent-data",
+  "authentication",
+  "authorization",
+  "payments",
+  "infrastructure",
+  "deployment",
+]

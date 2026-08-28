@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -183,6 +184,24 @@ supersedes: []
             self.assertIn("SPEC-IDENTITY-001", (root / "docs" / "product-specs" / "index.md").read_text(encoding="utf-8"))
             current = self.run_harness(root, "docs-index", "--check")
             self.assertEqual(current.returncode, 0, current.stdout + current.stderr)
+
+    def test_runtime_plan_tokens_survive_initialization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            template = (root / "docs" / "exec-plans" / "_template.md").read_text(encoding="utf-8")
+            runtime = (root / "dev" / "harness.py").read_text(encoding="utf-8")
+            self.assertIn("created: {{DATE}}", template)
+            self.assertIn('"{{DATE}}": date.today().isoformat()', runtime)
+            self.assertNotIn(f'"{date.today().isoformat()}": date.today().isoformat()', runtime)
+
+            new_plan = self.run_harness(root, "new-plan", "Future", "plan", "--area", "test")
+            self.assertEqual(new_plan.returncode, 0, new_plan.stdout + new_plan.stderr)
+            plan = (root / new_plan.stdout.strip()).read_text(encoding="utf-8")
+            self.assertIn(f"created: {date.today().isoformat()}", plan)
+            self.assertNotIn("{{DATE}}", plan)
 
     def test_new_plan_and_task_packet_are_routable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

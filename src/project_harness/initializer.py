@@ -624,7 +624,11 @@ def apply_harness(
     )
 
     for destination, asset in project_documents(values["PROJECT_KIND"]).items():
-        write_if_missing(root / destination, read_asset(asset, values), changes, dry_run=dry_run)
+        # Keep runtime plan tokens intact. They are resolved by the copied
+        # repository-local harness when a future plan is created, not by the
+        # initializer that installs the template.
+        asset_values = {} if destination == "docs/exec-plans/_template.md" else values
+        write_if_missing(root / destination, read_asset(asset, asset_values), changes, dry_run=dry_run)
 
     config_path = root / "dev" / "harness.toml"
     if not config_path.exists():
@@ -641,8 +645,12 @@ def apply_harness(
         changes.skipped.append(config_path)
 
     for destination, asset in managed_files(with_ci).items():
-        local_values = dict(values)
-        local_values["COMMAND"] = Path(destination).name
+        # Managed code may itself contain tokens for future repository-local
+        # operations. Render only the values owned by this managed artifact so
+        # project metadata such as DATE cannot accidentally rewrite source.
+        local_values = {"HARNESS_VERSION": __version__}
+        if asset == "dev/wrapper.sh.tmpl":
+            local_values["COMMAND"] = Path(destination).name
         write_managed(root / destination, read_asset(asset, local_values), changes, mode=mode, dry_run=dry_run)
 
     executable = [root / path for path in managed_files(with_ci) if path.startswith("dev/")]
