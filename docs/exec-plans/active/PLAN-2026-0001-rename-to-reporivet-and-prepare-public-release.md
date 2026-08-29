@@ -206,7 +206,7 @@ The candidate differs from the integrated target, the worktree is dirty, evidenc
 
 #### Result
 
-Complete with a publication-interface limitation. Candidate commit `330b02e02f361ece252045a8ab2bd6dbdce4512c` passed the canonical gate, isolated wheel install, initialized-project verification, ignore-rule assertions, tracked-file inspection, and current/history credential scans. The connected GitHub identity can read `gkrtjd99/Reporivet`, but a direct repository-content write returned HTTP 403 `Resource not accessible by integration`; the GitHub App installation list does not include the `gkrtjd99` account. No unauthenticated, partial, or permission-bypassing upload was attempted. A verified Git bundle, source ZIP, wheel, and SHA-256 manifest are produced after plan closure for an exact push once repository access is granted.
+Complete with a publication-interface limitation. The Reporivet implementation passed the canonical gate, isolated wheel install, initialized-project verification, ignore-rule assertions, tracked-file inspection, and current/history credential scans. The public repository's existing `c852464` README commit was reconstructed from its verified Git data and merged as ancestry, so the final bundle can be pushed without deleting that history. The connected GitHub identity can read `gkrtjd99/Reporivet`, but the available GitHub App installation list does not include the `gkrtjd99` account and the exposed repository interface cannot write content. No unauthenticated, partial, force, or permission-bypassing upload was attempted. A verified Git bundle, source ZIP, wheel, and SHA-256 manifest are produced after plan closure for an exact push once repository write authorization is granted.
 
 ## Architecture Impact
 
@@ -243,7 +243,10 @@ No data migration applies. The rename is an atomic pre-release source change. Re
 - 2026-08-29 — The root ignore file protects Python caches and raw harness runs but does not yet cover common credentials, local environments, editor state, databases, infrastructure state, or broader build output.
 - 2026-08-29 — Existing commits use a non-routable local author identity and contain no user filesystem paths in the current tree.
 - 2026-08-29 — The first private-key detector matched its own literal signature inside generated `dev/harness.py`; splitting the detector source while preserving the compiled pattern removed the self-match and a plan-closure regression test protects the behavior.
-- 2026-08-29 — Repository metadata reports owner push permission, but the connected GitHub App is not installed for `gkrtjd99`; direct content creation fails with HTTP 403, so publication cannot be completed through the available interface.
+- 2026-08-29 — Repository metadata reports owner push permission, but the connected GitHub App installation list does not include `gkrtjd99`; the exposed repository interface is read-only for this account, so publication cannot be completed through the available interface.
+- 2026-08-29 — A release smoke build exposed ignored `__pycache__` bytecode inside the wheel because broad package-data discovery consumed stale build metadata; package discovery was narrowed to explicit templates and runtime assets, and the rebuilt wheel contains zero cache/bytecode entries.
+- 2026-08-29 — The remote repository contains one signed initial README commit. Its exact blob, tree, and commit objects were reconstructed and merged locally so publication does not require deleting remote history.
+- 2026-08-29 — A broad `site/` ignore rule could hide intentional static-site source. It was removed, while framework-specific generated directories remain ignored and a regression assertion keeps `site/index.html` trackable.
 
 ## Decision Log
 
@@ -266,23 +269,23 @@ Run commands from the repository root.
 
 ## Validation and Evidence
 
-- Integrated implementation candidate: `330b02e02f361ece252045a8ab2bd6dbdce4512c`.
+- Initial implementation slice: `330b02e02f361ece252045a8ab2bd6dbdce4512c`; the final verifying target is `HEAD` and also contains remote-history ancestry plus the narrow `site/` ignore correction.
 - Canonical clean-commit gate: `./dev/verify` passed; security check inspected 87 tracked paths, document catalogs were current, strict document and plan checks passed, architecture compilation passed, and all 15 regression tests passed.
 - Maintenance check: `./dev/garden` found zero current candidates.
 - CLI: `PYTHONPATH=src python3 -m reporivet --help` passed.
-- Distribution: `reporivet-0.1.0-py3-none-any.whl`, 39 entries, required templates present, zero bytecode/cache entries.
+- Distribution: `reporivet-0.1.0-py3-none-any.whl`, SHA-256 `4fec1341a1eedebf6ade5c993196b28d49184d0bb1bdf847123ef918dc825628`, 39 entries, 29 exact packaged assets, and zero bytecode/cache entries.
 - Isolated installation: wheel installed into a fresh virtual environment; `reporivet --help`, service-project initialization with CI, generated-project `./dev/verify`, and `reporivet doctor` passed.
-- Generated ignore policy: `.env`, wheel/build output, IDE state, Terraform state, and raw harness logs were ignored; `.env.example`, `uv.lock`, `package-lock.json`, and `.vscode/extensions.json` remained trackable.
+- Generated ignore policy: `.env`, keys and credentials, cloud/CLI auth state, wheel/build output, IDE state, Terraform state, local databases, and raw harness logs were ignored; `.env.example`, lockfiles, `.docker/Dockerfile`, `.vscode/extensions.json`, and `site/index.html` remained trackable.
 - Repository hygiene: `git ls-files -ci --exclude-per-directory=.gitignore` returned no tracked ignored files.
-- Secret audit: current security gate found zero violations; 130 historical blobs under 2 MiB produced zero high-confidence credential or private-key signatures; tracked history contained no user filesystem paths or personal email address.
+- Secret audit: the current security gate found zero violations; all reachable historical blobs under 2 MiB produced zero high-confidence credential or private-key signatures; project-authored history contained no user filesystem paths or personal email address. The preserved GitHub initial commit retains its original public author metadata.
 - GitHub Actions: checkout, Python setup, and artifact upload actions are pinned to exact release commit SHAs.
-- Publication attempt: destination `gkrtjd99/Reporivet` is public and currently contains only its initial README commit; direct content write failed with HTTP 403 `Resource not accessible by integration` because the connected GitHub App is not installed for `gkrtjd99`.
+- Publication attempt: destination `gkrtjd99/Reporivet` is public and contains only initial README commit `c852464`; the connected GitHub App installation list does not include `gkrtjd99`, and the available repository interface exposes no authorized content-write operation for this account.
 - Publication fallback: after this verifying plan is committed and closed, produce a Git bundle, clean source ZIP, wheel, and SHA-256 manifest bound to the final local `main` branch.
 - Raw logs: `.harness/runs/` and not committed.
 
 ## Outcomes and Retrospective
 
-Reporivet now has one public identity across package metadata, CLI, source paths, managed markers, current documents, and generated projects. Repository hygiene is layered rather than relying on `.gitignore` alone: broad ignore defaults prevent common mistakes, examples and lockfiles remain trackable, and the completion gate inspects tracked paths and credential signatures. The self-scanning false positive demonstrated why the security control needed end-to-end plan-closure coverage. The implementation and artifacts are ready for publication; the only unresolved external condition is installing or granting the connected GitHub App access to `gkrtjd99/Reporivet`.
+Reporivet now has one public identity across package metadata, CLI, source paths, managed markers, current documents, and generated projects. Repository hygiene is layered rather than relying on `.gitignore` alone: broad ignore defaults prevent common mistakes, examples and lockfiles remain trackable, and the completion gate inspects tracked paths and credential signatures. The self-scanning false positive demonstrated why the security control needed end-to-end plan-closure coverage. The implementation and artifacts are ready for publication; the only unresolved external condition is granting a GitHub write path for `gkrtjd99/Reporivet`. The final local history preserves the repository's existing initial commit, so no force-push is required once authorization is available.
 
 ## Follow-ups
 
