@@ -172,6 +172,7 @@ class ReporivetTests(unittest.TestCase):
                 ".cursor/rules/project.mdc",
                 ".codex/config.toml",
                 "Package.resolved",
+                "site/index.html",
                 "README.md",
             )
             for relative in allowed_examples:
