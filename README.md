@@ -1,8 +1,10 @@
 # Reporivet
 
+[한국어](README.md) | [English](README.en.md)
+
 > **Repository-native harness for long-running, agent-driven software development.**
 
-OpenAI의 **Harness Engineering**을 주 기준으로, 저장소 자체를 에이전트가 읽고 수정하고 검증하고 정리할 수 있는 운영 환경으로 만드는 초기화 도구입니다.
+OpenAI의 [**Harness engineering: leveraging Codex in an agent-first world**](https://openai.com/ko-KR/index/harness-engineering/)를 주 기준으로, 저장소 자체를 에이전트가 읽고 수정하고 검증하고 정리할 수 있는 운영 환경으로 만드는 초기화 도구입니다.
 
 이 프로젝트는 에이전트 실행 플랫폼이나 별도 오케스트레이터가 아닙니다. 초기화가 끝난 프로젝트는 저장소 안의 `AGENTS.md`, `docs/`, `dev/`, Git, 선택적 GitHub Actions만으로 운영됩니다. 특정 LLM 플러그인, Skill, Task DB, 장기 실행 컨트롤러가 필요하지 않습니다.
 
