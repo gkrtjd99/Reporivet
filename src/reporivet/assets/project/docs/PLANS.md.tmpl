@@ -41,6 +41,8 @@ Set the plan to `verifying`, resolve all Task Packets and documentation impact, 
 
 ```bash
 ./dev/close-plan PLAN-...
+# A REVIEW verdict additionally requires the human rationale:
+./dev/close-plan PLAN-... --accept-review "reviewed impact and recovery rationale"
 ```
 
-The command verifies the clean current `HEAD`, records the actual commit SHA, and moves the plan into `completed/`. Commit that historical completion record separately.
+The command runs the canonical Verification Run exactly once against the plan base and clean current `HEAD`. `PASS` closes directly; `REVIEW` closes only with a genuine explicit rationale; `BLOCK` and `INCONCLUSIVE` cannot be overridden. Successful closure records the run ID, manifest SHA-256, Gate verdict, verified commit, and applicable criterion evidence before moving the plan into `completed/`. Commit that historical completion record separately.

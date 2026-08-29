@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
+import json
 import shutil
 import subprocess
 import sys
@@ -45,6 +47,15 @@ class TraceabilityTests(unittest.TestCase):
     def run_plan_check(self, root: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(root / "dev/harness.py"), "plan-check"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def run_harness(self, root: Path, command: str, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-I", str(root / "dev/harness.py"), command, *args],
             cwd=root,
             text=True,
             capture_output=True,
@@ -464,6 +475,90 @@ The bounded behavior and evidence chain are recorded.
                     check = self.run_plan_check(root)
                     self.assertNotEqual(check.returncode, 0)
                     self.assertIn(expected, check.stderr)
+
+    def test_close_plan_binds_traceable_criterion_evidence_to_final_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for relative in (
+                "ARCHITECTURE.md",
+                "docs/PRODUCT.md",
+                "docs/DESIGN.md",
+                "docs/QUALITY.md",
+                "docs/SECURITY.md",
+                "docs/RELIABILITY.md",
+            ):
+                path = root / relative
+                if not path.exists():
+                    continue
+                text = path.read_text(encoding="utf-8")
+                path.write_text(
+                    text.replace("status: draft", "status: active").replace("TODO", "Established"),
+                    encoding="utf-8",
+                )
+            config = root / "dev/harness.toml"
+            config.write_text(
+                config.read_text(encoding="utf-8").replace(
+                    'baseline = "draft"',
+                    'baseline = "established"',
+                ),
+                encoding="utf-8",
+            )
+            spec = root / "docs/product-specs/SPEC-TEST-001-traceability.md"
+            spec.write_text(self.spec_text(), encoding="utf-8")
+            catalog = self.run_harness(root, "docs-index")
+            self.assertEqual(catalog.returncode, 0, catalog.stdout + catalog.stderr)
+
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Traceability Fixture"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=root, check=True, capture_output=True)
+            base = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+
+            plan = root / "docs/exec-plans/active/PLAN-2026-0099-traceability.md"
+            plan_text = self.plan_text(status="complete")
+            plan_text = plan_text.replace("status: complete", "status: verifying", 1)
+            plan_text = plan_text.replace(f'base_commit: "{COMMIT}"', f'base_commit: "{base}"')
+            plan_text = plan_text.replace(f'integrated_commit: "{COMMIT}"', 'integrated_commit: "HEAD"')
+            plan_text = plan_text.replace(f'verified_commit: "{COMMIT}"', 'verified_commit: ""')
+            plan.write_text(plan_text, encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "candidate"], cwd=root, check=True, capture_output=True)
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+
+            close = self.run_harness(root, "close-plan", "PLAN-2026-0099")
+            self.assertEqual(close.returncode, 0, close.stdout + close.stderr)
+            runs = sorted((root / ".harness/runs").glob("*-verify"))
+            self.assertEqual(len(runs), 1)
+            run = runs[0]
+            manifest_hash = hashlib.sha256((run / "manifest.json").read_bytes()).hexdigest()
+            gate = json.loads((run / "gate.json").read_text(encoding="utf-8"))
+            self.assertEqual(gate["verdict"], "PASS")
+
+            completed = root / "docs/exec-plans/completed" / plan.name
+            self.assertFalse(plan.exists())
+            text = completed.read_text(encoding="utf-8")
+            expected_row = (
+                f"| `AC-1` | `T1/T2` | `.harness/runs/{run.name}/manifest.json` | "
+                f"`{run.name}` | `{manifest_hash}` | `{head}` | `PASS` | none |"
+            )
+            self.assertIn(expected_row, text)
+            final_check = self.run_plan_check(root)
+            self.assertEqual(final_check.returncode, 0, final_check.stdout + final_check.stderr)
 
 
 if __name__ == "__main__":

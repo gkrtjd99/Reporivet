@@ -25,6 +25,33 @@ MANAGED_MARKER = re.compile(r"# reporivet:managed version=[^\s]+")
 DEFINITION_DRAFT_PATH = Path("docs/product-specs/project-definition.draft.md")
 AUDIT_STATUSES = frozenset({"confirmed", "inferred", "unknown", "conflict", "skipped"})
 AUDIT_COMMAND_GROUPS = ("bootstrap", "run", "check", "verify", "smoke", "architecture")
+GATE_PROTECTED_PATHS = (
+    ".github/workflows/**",
+    "AGENTS.md",
+    "dev/harness.py",
+    "dev/harness.toml",
+    "docs/SECURITY.md",
+)
+GATE_CONTAINED_PATHS = ("docs/**", "src/**", "tests/**")
+GATE_WIDE_PATHS = (
+    ".github/**",
+    "ARCHITECTURE.md",
+    "Cargo.toml",
+    "build.gradle",
+    "build.gradle.kts",
+    "dev/**",
+    "go.mod",
+    "package.json",
+    "pom.xml",
+    "pyproject.toml",
+)
+GATE_IRREVERSIBLE_PATHS = (
+    "db/migrations/**",
+    "infrastructure/**",
+    "migrations/**",
+    "schema/migrations/**",
+    "terraform/**",
+)
 AUDIT_IGNORED_DIRECTORIES = frozenset(
     {
         ".git",
@@ -677,6 +704,15 @@ def build_config(
             '  "infrastructure",',
             '  "deployment",',
             "]",
+            "",
+            "[gate]",
+            'mode = "shadow"',
+            'default_risk = "unknown"',
+            "require_clean = true",
+            f"protected_paths = {toml_array(GATE_PROTECTED_PATHS)}",
+            f"contained_paths = {toml_array(GATE_CONTAINED_PATHS)}",
+            f"wide_paths = {toml_array(GATE_WIDE_PATHS)}",
+            f"irreversible_paths = {toml_array(GATE_IRREVERSIBLE_PATHS)}",
         )
     )
     return "\n".join(lines) + "\n"
@@ -1840,8 +1876,34 @@ def read_existing_config(root: Path) -> dict[str, object]:
     try:
         with config_path.open("rb") as handle:
             return tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise InitError(f"cannot read {config_path}: {exc}") from exc
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise InitError(f"cannot read dev/harness.toml: {exc}") from exc
+
+
+def gate_config_advisory(config: dict[str, object]) -> str:
+    if "gate" not in config:
+        return "dev/harness.toml has no [gate] table; conservative shadow defaults apply in memory"
+    gate = config["gate"]
+    if not isinstance(gate, dict):
+        return "dev/harness.toml [gate] value is not a table; verification will be inconclusive"
+    mode = gate.get("mode", "shadow")
+    default_risk = gate.get("default_risk", "unknown")
+    require_clean = gate.get("require_clean", True)
+    if mode not in {"shadow", "enforce"}:
+        return "dev/harness.toml [gate].mode must be shadow or enforce"
+    if default_risk not in {"contained", "wide", "irreversible", "unknown"}:
+        return "dev/harness.toml [gate].default_risk is invalid"
+    if not isinstance(require_clean, bool):
+        return "dev/harness.toml [gate].require_clean must be true or false"
+    for field in ("protected_paths", "contained_paths", "wide_paths", "irreversible_paths"):
+        value = gate.get(field, [])
+        if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+            return f"dev/harness.toml [gate].{field} must be an array of non-empty strings"
+        for pattern in value:
+            pure = Path(pattern)
+            if pure.is_absolute() or "\\" in pattern or ".." in pure.parts:
+                return f"dev/harness.toml [gate].{field} contains an unsafe pattern"
+    return ""
 
 
 def upgrade_project(
@@ -1926,6 +1988,17 @@ def doctor_project(root: Path) -> int:
             warnings.append(f"dev/harness.py is not at initializer version {__version__}; run reporivet upgrade --dry-run")
     if not (root / ".git").exists():
         warnings.append("no .git directory detected; plans and decisions are not yet versioned")
+
+    config_path = root / "dev" / "harness.toml"
+    if config_path.exists():
+        try:
+            config = read_existing_config(root)
+        except InitError as exc:
+            errors.append(str(exc))
+        else:
+            advisory = gate_config_advisory(config)
+            if advisory:
+                warnings.append(advisory)
 
     for warning in warnings:
         print(f"WARNING: {warning}")

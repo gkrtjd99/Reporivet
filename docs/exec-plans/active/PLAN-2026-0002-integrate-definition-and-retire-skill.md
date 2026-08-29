@@ -31,7 +31,7 @@ Observable completion requires all acceptance criteria below, current-state docu
 
 - [x] Establish current Reporivet behavior, ownership, verification, packaging, and test constraints.
 - [x] Inspect HarnessEngineeringSkill at pinned commit and classify migration inputs.
-- [ ] Deliver definition, audit/adoption, traceability, conditional knowledge, and context routing.
+- [x] Deliver definition, audit/adoption, traceability, conditional knowledge, and context routing.
 - [ ] Deliver one Verification Run, Gate policy, evidence-bound close-plan, and CI evidence.
 - [ ] Resolve runtime parity, documentation, deterministic regression, and release packaging.
 - [ ] Integrate and independently verify the clean candidate.
@@ -444,7 +444,7 @@ Focused verification tests passed 10/10 and the full suite passed 76/76 under Py
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -488,13 +488,17 @@ Target mismatch, unavailable required explicit SHA at closure, dirty closing wor
 
 #### Result
 
-Pending implementation and evidence.
+Implemented conservative generated `[gate]` policy plus read-only in-memory defaults for existing configs, deterministic doctor advisories, explicit local base/head/target evidence, canonical Git commit resolution, contained/wide/irreversible/unknown risk classification, independent protected-path matching, fixed PASS/REVIEW/BLOCK/INCONCLUSIVE priority, and shadow/enforce exit semantics. Malformed policy or target evidence becomes INCONCLUSIVE; missing evidence cannot PASS; no parent, remote, fetch, or network evidence is inferred.
+
+`close-plan` now invokes the canonical Verification Run exactly once against the plan base and clean current HEAD, validates the persisted manifest/Gate/hash/target binding, accepts PASS directly, requires one safe explicit human reason for REVIEW, rejects BLOCK/INCONCLUSIVE without override, binds traceable criterion rows, and transactionally restores the exact active bytes and mode after a failed move or post-move structural check while retaining verification artifacts. Plan enumeration now refuses symlinked directories/files and FIFO or other nonregular Markdown entries before opening them.
+
+Focused Gate/Verification, close-plan, old-config/doctor, and traceability suites passed 31/31; the complete suite and `./dev/check` passed 89/89 under the required Python 3.12 PATH shim. Compilation, security, code-map/catalog drift, strict documentation/plan/architecture checks, package doctor, canonical/dogfood version-token parity, and `git diff --check` passed. Two independent read-only reviews initially found abbreviated/uppercase explicit SHA mismatch and pre-guard symlink/FIFO plan reads; both defects received focused regressions and the same reviewers independently reproduced the fixes, verified the genuine mismatch and refusal boundaries, and returned PASS with no remaining finding. The exact committed T7 candidate Verification Run remains separate ignored evidence; final plan-bound closure evidence remains deferred to T9.
 
 ### T8 — Integrate ownership, CI, documentation, and release packaging
 
 #### State
 
-blocked
+ready
 
 #### Task type
 
@@ -646,6 +650,8 @@ There is no persisted-data migration, network migration, old repository operatio
 - 2026-08-29 — Dogfood `dev/security-check` is bespoke and does not honor `PYTHON`, unlike the packaged wrapper ownership map.
 - 2026-08-29 — Current canonical/dogfood runtime comparison must normalize the `{{HARNESS_VERSION}}` token; parity will become a deterministic test.
 - 2026-08-29 — T2 independent verification showed that placeholder detection must normalize Unicode/Markdown edge punctuation and that malformed stable-ID detection must distinguish compact ID-like fields from ordinary prose beginning with `AC`, `JRN`, or `REQ`.
+- 2026-08-30 — Explicit abbreviated or uppercase Git object IDs must be resolved to their canonical local commit before comparison; raw textual comparison falsely reports a target mismatch.
+- 2026-08-30 — Plan discovery must reject symlinked and nonregular entries before reading frontmatter; checking only the selected plan after enumeration permits outside reads and FIFO hangs.
 
 ## Decision Log
 

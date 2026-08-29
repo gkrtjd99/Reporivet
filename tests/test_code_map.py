@@ -290,6 +290,40 @@ verification:
             doctor = self.run_cli("doctor", "--root", str(root))
             self.assertEqual(doctor.returncode, 0, doctor.stdout + doctor.stderr)
 
+    def test_old_config_uses_gate_defaults_and_doctor_is_read_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            config = root / "dev/harness.toml"
+            old_text = config.read_text(encoding="utf-8").split("\n[gate]\n", 1)[0] + "\n"
+            config.write_text(old_text, encoding="utf-8")
+            before = config.read_bytes()
+
+            doctor = self.run_cli("doctor", "--root", str(root))
+            self.assertEqual(doctor.returncode, 0, doctor.stdout + doctor.stderr)
+            self.assertIn("conservative shadow defaults apply in memory", doctor.stdout)
+            self.assertEqual(config.read_bytes(), before)
+
+            verify = self.run_harness(root, "verify")
+            self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
+            self.assertIn("Gate REVIEW (shadow)", verify.stdout)
+            self.assertEqual(config.read_bytes(), before)
+
+    def test_doctor_reports_malformed_config_without_mutating_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            config = root / "dev/harness.toml"
+            config.write_bytes(b"[project\n")
+            before = config.read_bytes()
+
+            doctor = self.run_cli("doctor", "--root", str(root))
+            self.assertEqual(doctor.returncode, 2, doctor.stdout + doctor.stderr)
+            self.assertIn("cannot read", doctor.stderr)
+            self.assertEqual(config.read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

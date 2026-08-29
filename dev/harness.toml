@@ -45,3 +45,39 @@ require_plan_for = [
   "infrastructure",
   "deployment",
 ]
+
+[gate]
+mode = "shadow"
+default_risk = "unknown"
+require_clean = true
+protected_paths = [
+  ".github/workflows/**",
+  "AGENTS.md",
+  "dev/harness.py",
+  "dev/harness.toml",
+  "docs/SECURITY.md",
+]
+contained_paths = [
+  "docs/**",
+  "src/**",
+  "tests/**",
+]
+wide_paths = [
+  ".github/**",
+  "ARCHITECTURE.md",
+  "Cargo.toml",
+  "build.gradle",
+  "build.gradle.kts",
+  "dev/**",
+  "go.mod",
+  "package.json",
+  "pom.xml",
+  "pyproject.toml",
+]
+irreversible_paths = [
+  "db/migrations/**",
+  "infrastructure/**",
+  "migrations/**",
+  "schema/migrations/**",
+  "terraform/**",
+]

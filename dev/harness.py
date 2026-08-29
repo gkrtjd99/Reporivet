@@ -58,6 +58,45 @@ VERIFICATION_CHECKS = (
     "smoke",
 )
 CHECK_STATUSES = frozenset({"pass", "fail", "error", "skipped", "unknown"})
+GATE_MODES = frozenset({"shadow", "enforce"})
+GATE_RISKS = frozenset({"contained", "wide", "irreversible", "unknown"})
+GATE_VERDICTS = frozenset({"PASS", "REVIEW", "BLOCK", "INCONCLUSIVE"})
+DEFAULT_GATE_POLICY: dict[str, object] = {
+    "mode": "shadow",
+    "default_risk": "unknown",
+    "require_clean": True,
+    "protected_paths": (
+        ".github/workflows/**",
+        "AGENTS.md",
+        "dev/harness.py",
+        "dev/harness.toml",
+        "docs/SECURITY.md",
+    ),
+    "contained_paths": (
+        "docs/**",
+        "src/**",
+        "tests/**",
+    ),
+    "wide_paths": (
+        ".github/**",
+        "ARCHITECTURE.md",
+        "Cargo.toml",
+        "build.gradle",
+        "build.gradle.kts",
+        "dev/**",
+        "go.mod",
+        "package.json",
+        "pom.xml",
+        "pyproject.toml",
+    ),
+    "irreversible_paths": (
+        "db/migrations/**",
+        "infrastructure/**",
+        "migrations/**",
+        "schema/migrations/**",
+        "terraform/**",
+    ),
+}
 DEFINITION_SECTIONS = (
     "Project Identity",
     "Problem and Current Alternative",
@@ -707,6 +746,37 @@ class CheckResult:
         }
 
 
+@dataclass(frozen=True)
+class GatePolicy:
+    mode: str
+    default_risk: str
+    require_clean: bool
+    protected_paths: tuple[str, ...]
+    contained_paths: tuple[str, ...]
+    wide_paths: tuple[str, ...]
+    irreversible_paths: tuple[str, ...]
+    source: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "contained_paths": list(self.contained_paths),
+            "default_risk": self.default_risk,
+            "irreversible_paths": list(self.irreversible_paths),
+            "mode": self.mode,
+            "protected_paths": list(self.protected_paths),
+            "require_clean": self.require_clean,
+            "wide_paths": list(self.wide_paths),
+        }
+
+
+@dataclass(frozen=True)
+class VerificationResult:
+    run: VerificationRun
+    verification_status: str
+    manifest_sha256: str
+    gate: dict[str, object]
+
+
 @dataclass
 class Config:
     raw: dict[str, object]
@@ -732,6 +802,19 @@ class Config:
         return value if isinstance(value, dict) else {}
 
     @property
+    def gate(self) -> dict[str, object]:
+        if "gate" not in self.raw:
+            return {}
+        value = self.raw["gate"]
+        if not isinstance(value, dict):
+            raise InfrastructureError("[gate] must be a table")
+        return value
+
+    @property
+    def gate_configured(self) -> bool:
+        return "gate" in self.raw
+
+    @property
     def baseline(self) -> str:
         return str(self.project.get("baseline", "draft")).lower()
 
@@ -755,11 +838,73 @@ class Config:
         return result
 
     def list_value(self, section: str, name: str) -> list[str]:
-        source = {"paths": self.paths, "policy": self.policy}.get(section, {})
+        source = {"paths": self.paths, "policy": self.policy, "gate": self.gate}.get(section, {})
         value = source.get(name, []) if isinstance(source, dict) else []
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             raise InfrastructureError(f"[{section}].{name} must be an array of strings")
         return list(value)
+
+
+def normalize_gate_pattern(value: str, *, field: str) -> str:
+    pattern = value.strip()
+    path = PurePosixPath(pattern)
+    if (
+        not pattern
+        or "\\" in pattern
+        or path.is_absolute()
+        or any(part in {"", ".", ".."} for part in pattern.split("/"))
+    ):
+        raise InfrastructureError(f"[gate].{field} contains an unsafe repository-relative pattern")
+    return pattern
+
+
+def gate_policy(config: Config) -> GatePolicy:
+    raw = config.gate
+    mode = str(raw.get("mode", DEFAULT_GATE_POLICY["mode"])).strip().lower()
+    default_risk = str(raw.get("default_risk", DEFAULT_GATE_POLICY["default_risk"])).strip().lower()
+    require_clean = raw.get("require_clean", DEFAULT_GATE_POLICY["require_clean"])
+    if mode not in GATE_MODES:
+        raise InfrastructureError("[gate].mode must be 'shadow' or 'enforce'")
+    if default_risk not in GATE_RISKS:
+        raise InfrastructureError("[gate].default_risk must be contained, wide, irreversible, or unknown")
+    if not isinstance(require_clean, bool):
+        raise InfrastructureError("[gate].require_clean must be true or false")
+
+    patterns: dict[str, tuple[str, ...]] = {}
+    for field in ("protected_paths", "contained_paths", "wide_paths", "irreversible_paths"):
+        value = raw.get(field, DEFAULT_GATE_POLICY[field])
+        if not isinstance(value, (list, tuple)) or not all(isinstance(item, str) for item in value):
+            raise InfrastructureError(f"[gate].{field} must be an array of strings")
+        normalized = tuple(normalize_gate_pattern(item, field=field) for item in value)
+        if len(set(normalized)) != len(normalized):
+            raise InfrastructureError(f"[gate].{field} must not contain duplicate patterns")
+        patterns[field] = normalized
+
+    return GatePolicy(
+        mode=mode,
+        default_risk=default_risk,
+        require_clean=require_clean,
+        protected_paths=patterns["protected_paths"],
+        contained_paths=patterns["contained_paths"],
+        wide_paths=patterns["wide_paths"],
+        irreversible_paths=patterns["irreversible_paths"],
+        source="configured" if config.gate_configured else "default",
+    )
+
+
+def default_gate_policy(*, source: str = "default") -> GatePolicy:
+    config = Config({})
+    policy = gate_policy(config)
+    return GatePolicy(
+        mode=policy.mode,
+        default_risk=policy.default_risk,
+        require_clean=policy.require_clean,
+        protected_paths=policy.protected_paths,
+        contained_paths=policy.contained_paths,
+        wide_paths=policy.wide_paths,
+        irreversible_paths=policy.irreversible_paths,
+        source=source,
+    )
 
 
 def load_config() -> Config:
@@ -777,6 +922,7 @@ def load_config() -> Config:
         raise InfrastructureError("[project].baseline must be 'draft' or 'established'")
     if config.configuration not in {"ready", "review"}:
         raise InfrastructureError("[project].configuration must be 'ready' or 'review'")
+    gate_policy(config)
     return config
 
 
@@ -1628,6 +1774,13 @@ def parse_scalar(value: str) -> object:
     value = value.strip()
     if not value:
         return ""
+    if value.startswith('"') and value.endswith('"'):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            decoded = None
+        if isinstance(decoded, str):
+            return decoded
     if value == "[]":
         return []
     if value.startswith("[") and value.endswith("]"):
@@ -2985,10 +3138,29 @@ def command_docs_index(args: argparse.Namespace) -> int:
 def plan_files() -> list[Plan]:
     plans: list[Plan] = []
     for directory in (ROOT / "docs" / "exec-plans" / "active", ROOT / "docs" / "exec-plans" / "completed"):
+        ensure_safe_repository_path(directory)
         if not directory.exists():
             continue
+        if not directory.is_dir():
+            raise HarnessError(
+                f"plan directory is not a regular directory: {directory.relative_to(ROOT)}"
+            )
         for path in sorted(directory.glob("*.md")):
-            metadata, _, text = read_frontmatter(path)
+            ensure_safe_repository_path(path)
+            if not path.is_file():
+                raise HarnessError(
+                    f"plan entry is not a regular file: {path.relative_to(ROOT)}"
+                )
+            try:
+                metadata, _, text = read_frontmatter(path)
+            except UnicodeError as exc:
+                raise HarnessError(
+                    f"plan file is not valid UTF-8: {path.relative_to(ROOT)}"
+                ) from exc
+            except OSError as exc:
+                raise HarnessError(
+                    f"cannot read plan file: {path.relative_to(ROOT)}"
+                ) from exc
             plans.append(Plan(path=path, metadata=metadata, text=text))
     return plans
 
@@ -4321,10 +4493,15 @@ def local_git_command(*args: str) -> tuple[int | None, bytes, str]:
     return completed.returncode, completed.stdout, completed.stderr.decode("utf-8", errors="replace").strip()
 
 
-def collect_target_evidence() -> dict[str, object]:
-    base_sha = os.environ.get("REPORIVET_BASE_SHA", "").strip()
-    intended_head = os.environ.get("REPORIVET_HEAD_SHA", "").strip()
-    target = os.environ.get("REPORIVET_TARGET", "").strip()
+def collect_target_evidence(
+    *,
+    base_sha: str | None = None,
+    intended_head: str | None = None,
+    target: str | None = None,
+) -> dict[str, object]:
+    base_sha = (os.environ.get("REPORIVET_BASE_SHA", "") if base_sha is None else base_sha).strip()
+    intended_head = (os.environ.get("REPORIVET_HEAD_SHA", "") if intended_head is None else intended_head).strip()
+    target = (os.environ.get("REPORIVET_TARGET", "") if target is None else target).strip()
     evidence: dict[str, object] = {
         "actual_head_sha": "",
         "base_sha": base_sha,
@@ -4337,15 +4514,18 @@ def collect_target_evidence() -> dict[str, object]:
         "head_matches_intended": None,
         "intended_head_sha": intended_head,
         "target": target,
+        "target_reason_code": "TARGET_EVIDENCE_UNKNOWN",
+        "target_status": "unknown",
     }
     git_marker = ROOT / ".git"
     if not git_marker.exists() or git_marker.is_symlink():
         evidence["git_status"] = "unavailable"
+        evidence["target_reason_code"] = "GIT_UNAVAILABLE"
         evidence["changed_paths_detail"] = (
             "repository root has no safe local Git metadata; enclosing repositories were ignored and no Git parent was inferred"
         )
         return evidence
-    code, stdout, stderr = local_git_command("rev-parse", "--show-toplevel")
+    code, stdout, _ = local_git_command("rev-parse", "--show-toplevel")
     top_level = os.fsdecode(stdout).strip() if code == 0 else ""
     try:
         matches_root = bool(top_level) and Path(top_level).resolve(strict=False) == ROOT.resolve(strict=False)
@@ -4353,6 +4533,7 @@ def collect_target_evidence() -> dict[str, object]:
         matches_root = False
     if not matches_root:
         evidence["git_status"] = "unavailable"
+        evidence["target_reason_code"] = "GIT_ROOT_MISMATCH"
         evidence["changed_paths_detail"] = (
             "local Git top-level does not match the repository root; changed paths are unknown and no Git parent was inferred"
         )
@@ -4362,29 +4543,69 @@ def collect_target_evidence() -> dict[str, object]:
     head_code, head_stdout, head_error = local_git_command("rev-parse", "--verify", "HEAD")
     actual_head = head_stdout.decode("ascii", errors="ignore").strip() if head_code == 0 else ""
     evidence["actual_head_sha"] = actual_head
-    if intended_head and actual_head:
-        evidence["head_matches_intended"] = intended_head == actual_head
+    if head_code != 0:
+        evidence["target_status"] = "error" if base_sha or intended_head else "unknown"
+        evidence["target_reason_code"] = "HEAD_UNAVAILABLE"
+        evidence["changed_paths_detail"] = portable_detail(head_error or "local HEAD commit is unavailable")
+        return evidence
 
-    status_code, status_stdout, status_error = local_git_command("status", "--porcelain=v1", "-z", "--untracked-files=all")
+    status_code, status_stdout, status_error = local_git_command(
+        "status", "--porcelain=v1", "-z", "--untracked-files=all"
+    )
     if status_code == 0:
         evidence["clean"] = status_stdout == b""
-    elif status_error:
+    else:
         evidence["git_status"] = "error"
-        evidence["changed_paths_detail"] = portable_detail(status_error)
+        evidence["target_status"] = "error"
+        evidence["target_reason_code"] = "GIT_STATUS_ERROR"
+        evidence["changed_paths_detail"] = portable_detail(status_error or "git status failed")
+        return evidence
 
-    selected_head = intended_head or actual_head
+    selected_head = actual_head
+    if intended_head:
+        if re.fullmatch(r"[0-9a-fA-F]{7,64}", intended_head) is None:
+            evidence["target_status"] = "error"
+            evidence["target_reason_code"] = "INTENDED_HEAD_INVALID"
+            evidence["changed_paths_detail"] = "REPORIVET_HEAD_SHA is not a local Git object id"
+            return evidence
+        intended_code, intended_stdout, intended_error = local_git_command(
+            "rev-parse", "--verify", f"{intended_head}^{{commit}}"
+        )
+        if intended_code != 0:
+            evidence["target_status"] = "error"
+            evidence["target_reason_code"] = "HEAD_COMMIT_UNAVAILABLE"
+            evidence["changed_paths_detail"] = portable_detail(
+                intended_error or "intended head commit is unavailable in the local repository"
+            )
+            return evidence
+        selected_head = intended_stdout.decode("ascii", errors="ignore").strip()
+        evidence["head_matches_intended"] = selected_head == actual_head
+        if selected_head != actual_head:
+            evidence["target_status"] = "mismatch"
+            evidence["target_reason_code"] = "TARGET_HEAD_MISMATCH"
+            evidence["changed_paths_detail"] = "explicit intended head does not match the observed local HEAD"
+            return evidence
+
     if not base_sha:
+        evidence["target_reason_code"] = "BASE_SHA_MISSING"
         evidence["changed_paths_detail"] = "REPORIVET_BASE_SHA is not set; no Git parent was inferred"
         return evidence
-    if not re.fullmatch(r"[0-9a-fA-F]{7,64}", base_sha):
+    if re.fullmatch(r"[0-9a-fA-F]{7,64}", base_sha) is None:
+        evidence["target_status"] = "error"
+        evidence["target_reason_code"] = "BASE_SHA_INVALID"
         evidence["changed_paths_detail"] = "REPORIVET_BASE_SHA is not a local Git object id"
         return evidence
-    if not selected_head or not re.fullmatch(r"[0-9a-fA-F]{7,64}", selected_head):
+
+    if re.fullmatch(r"[0-9a-fA-F]{7,64}", selected_head) is None:
+        evidence["target_status"] = "error"
+        evidence["target_reason_code"] = "HEAD_INVALID"
         evidence["changed_paths_detail"] = "no explicit or observed local head object id is available"
         return evidence
     for label, object_id in (("base", base_sha), ("head", selected_head)):
         object_code, _, object_error = local_git_command("cat-file", "-e", f"{object_id}^{{commit}}")
         if object_code != 0:
+            evidence["target_status"] = "error"
+            evidence["target_reason_code"] = f"{label.upper()}_COMMIT_UNAVAILABLE"
             evidence["changed_paths_detail"] = portable_detail(
                 object_error or f"{label} commit is unavailable in the local repository"
             )
@@ -4393,17 +4614,32 @@ def collect_target_evidence() -> dict[str, object]:
         "diff", "--name-only", "-z", base_sha, selected_head, "--"
     )
     if diff_code != 0:
+        evidence["target_status"] = "error"
+        evidence["target_reason_code"] = "GIT_DIFF_ERROR"
         evidence["changed_paths_detail"] = portable_detail(diff_error or "git diff failed")
         return evidence
-    changed_paths = sorted(
-        Path(os.fsdecode(item)).as_posix() for item in diff_stdout.split(b"\0") if item
-    )
+
+    changed_paths: list[str] = []
+    for item in diff_stdout.split(b"\0"):
+        if not item:
+            continue
+        path = os.fsdecode(item).replace(os.sep, "/")
+        pure = PurePosixPath(path)
+        if pure.is_absolute() or "\\" in path or any(part in {"", ".", ".."} for part in path.split("/")):
+            evidence["target_status"] = "error"
+            evidence["target_reason_code"] = "CHANGED_PATH_INVALID"
+            evidence["changed_paths_detail"] = "Git reported an unsafe changed path"
+            return evidence
+        changed_paths.append(path)
+    changed_paths.sort()
     evidence.update(
         {
             "changed_paths": changed_paths,
             "changed_paths_detail": f"{len(changed_paths)} path(s) from explicit base to local target",
             "changed_paths_method": "git-diff-explicit-base-to-target",
             "changed_paths_status": "available",
+            "target_reason_code": "TARGET_CONFIRMED",
+            "target_status": "available",
         }
     )
     return evidence
@@ -4421,16 +4657,21 @@ def verification_detection_summary() -> tuple[dict[str, object], str]:
     try:
         config = load_config()
         source_paths = config.list_value("paths", "source")
+        effective_gate = gate_policy(config)
         summary = {
             "architecture_commands": len(config.command_group("architecture")),
             "configuration": config.configuration,
             "config_status": "available",
+            "gate_mode": effective_gate.mode,
+            "gate_policy_source": effective_gate.source,
             "lifecycle": config.lifecycle,
             "smoke_commands": len(config.command_group("smoke")),
             "source_paths_present": sum(1 for path in source_paths if (ROOT / path).exists()),
             "verify_commands": len(config.command_group("verify")),
         }
-        policy_hash = sha256_bytes(json_text(config.policy).encode("utf-8"))
+        policy_hash = sha256_bytes(
+            json_text({"gate": effective_gate.as_dict(), "policy": config.policy}).encode("utf-8")
+        )
     except Exception as exc:
         return {"config_status": "error", "detail": portable_detail(exc)}, ""
     return summary, policy_hash
@@ -4467,19 +4708,128 @@ def verification_manifest(
     }
 
 
-def verification_gate(target_evidence: dict[str, object], manifest_hash: str) -> dict[str, object]:
+def gate_pattern_matches(path: str, pattern: str) -> bool:
+    if any(character in pattern for character in "*?["):
+        return fnmatch.fnmatchcase(path, pattern)
+    prefix = pattern.rstrip("/")
+    return path == prefix or path.startswith(prefix + "/")
+
+
+def gate_paths_matching(paths: Sequence[str], patterns: Sequence[str]) -> list[str]:
+    return sorted(path for path in paths if any(gate_pattern_matches(path, pattern) for pattern in patterns))
+
+
+def classify_gate_risk(paths: Sequence[str], policy: GatePolicy) -> tuple[str, list[str]]:
+    contained = set(gate_paths_matching(paths, policy.contained_paths))
+    wide = set(gate_paths_matching(paths, policy.wide_paths))
+    irreversible = set(gate_paths_matching(paths, policy.irreversible_paths))
+    matched = sorted(contained | wide | irreversible)
+    if irreversible:
+        return "irreversible", matched
+    if wide:
+        return "wide", matched
+    if not paths or len(contained) == len(paths):
+        return "contained", matched
+    return policy.default_risk, matched
+
+
+def verification_gate(
+    checks: Sequence[CheckResult],
+    target_evidence: dict[str, object],
+    manifest_hash: str,
+) -> dict[str, object]:
+    policy_error = ""
+    try:
+        policy = gate_policy(load_config())
+    except Exception as exc:
+        policy = default_gate_policy(source="fallback")
+        policy_error = portable_detail(exc)
+
+    changed_paths_value = target_evidence.get("changed_paths", [])
+    changed_paths = (
+        [str(path) for path in changed_paths_value]
+        if isinstance(changed_paths_value, list)
+        else []
+    )
+    risk, matched_paths = classify_gate_risk(changed_paths, policy)
+    protected_matches = gate_paths_matching(changed_paths, policy.protected_paths)
+    target_status = str(target_evidence.get("target_status", "unknown"))
+    if target_status != "available":
+        risk = "unknown"
+        matched_paths = []
+        protected_matches = []
+    failed = sorted(check.name for check in checks if check.required and check.status == "fail")
+    errored = sorted(
+        check.name for check in checks if check.required and check.status in {"error", "unknown"}
+    )
+    reason_codes: list[str] = []
+    reasons: list[str] = []
+
+    if failed:
+        verdict = "BLOCK"
+        reason_codes.append("REQUIRED_CHECK_FAILED")
+        reasons.append("Required candidate checks failed: " + ", ".join(failed) + ".")
+    elif errored or policy_error or target_status in {"error", "mismatch"}:
+        verdict = "INCONCLUSIVE"
+        if errored:
+            reason_codes.append("REQUIRED_CHECK_ERROR")
+            reasons.append("Required checks could not produce candidate evidence: " + ", ".join(errored) + ".")
+        if policy_error:
+            reason_codes.append("GATE_CONFIG_ERROR")
+            reasons.append("Gate configuration could not be evaluated: " + policy_error)
+        if target_status == "mismatch":
+            reason_codes.append("TARGET_MISMATCH")
+            reasons.append(str(target_evidence.get("changed_paths_detail", "Explicit target evidence does not match.")))
+        elif target_status == "error":
+            reason_codes.append("TARGET_EVIDENCE_ERROR")
+            reasons.append(str(target_evidence.get("changed_paths_detail", "Target evidence could not be evaluated.")))
+    else:
+        if target_status != "available":
+            reason_codes.append("TARGET_EVIDENCE_UNKNOWN")
+            reasons.append(str(target_evidence.get("changed_paths_detail", "Target evidence is unavailable.")))
+        if risk == "unknown":
+            reason_codes.append("RISK_UNKNOWN")
+            reasons.append("One or more changed paths are outside the declared contained, wide, and irreversible patterns.")
+        elif risk == "wide":
+            reason_codes.append("RISK_WIDE")
+            reasons.append("One or more changed paths match the declared wide-change patterns.")
+        elif risk == "irreversible":
+            reason_codes.append("RISK_IRREVERSIBLE")
+            reasons.append("One or more changed paths match the declared irreversible-change patterns.")
+        if protected_matches:
+            reason_codes.append("PROTECTED_PATH_MATCH")
+            reasons.append("Protected paths changed: " + ", ".join(protected_matches) + ".")
+        if policy.require_clean and target_evidence.get("clean") is False:
+            reason_codes.append("WORKTREE_DIRTY")
+            reasons.append("The repository worktree is not clean.")
+        elif policy.require_clean and target_status == "available" and target_evidence.get("clean") is not True:
+            reason_codes.append("CLEAN_STATE_UNKNOWN")
+            reasons.append("The clean-worktree requirement could not be confirmed.")
+        if reason_codes:
+            verdict = "REVIEW"
+        else:
+            verdict = "PASS"
+            reason_codes.append("GATE_PASS")
+            reasons.append("All required checks passed against a clean, explicit, contained local target.")
+
     return {
-        "effective_risk": "unknown",
+        "effective_risk": risk,
         "manifest_sha256": manifest_hash,
-        "matched_paths": [],
-        "mode": "deferred",
-        "policy_patterns": [],
-        "protected_path_matches": [],
-        "reason_codes": ["GATE_POLICY_DEFERRED"],
-        "reasons": ["Risk-based Gate policy is deferred to the next declared implementation slice."],
+        "matched_paths": matched_paths,
+        "mode": policy.mode,
+        "policy_patterns": {
+            "contained": list(policy.contained_paths),
+            "irreversible": list(policy.irreversible_paths),
+            "protected": list(policy.protected_paths),
+            "wide": list(policy.wide_paths),
+        },
+        "policy_source": policy.source,
+        "protected_path_matches": protected_matches,
+        "reason_codes": reason_codes,
+        "reasons": reasons,
         "schema": "reporivet.gate/v1",
         "target_evidence": target_evidence,
-        "verdict": "UNKNOWN",
+        "verdict": verdict,
     }
 
 
@@ -4493,13 +4843,17 @@ def verification_report(
     checks: Sequence[CheckResult],
     status: str,
     target_evidence: dict[str, object],
+    gate: dict[str, object],
 ) -> str:
+    reason_codes = gate.get("reason_codes", [])
+    primary_reason = reason_codes[0] if isinstance(reason_codes, list) and reason_codes else "UNKNOWN"
     lines = [
         f"# Verification Run `{run.run_id}`",
         "",
         f"- Verification status: **{status}**",
-        "- Gate verdict: **UNKNOWN** (`GATE_POLICY_DEFERRED`)",
-        "- Effective risk: **unknown** (policy deferred)",
+        f"- Gate verdict: **{gate.get('verdict', 'INCONCLUSIVE')}** (`{markdown_code_value(primary_reason)}`)",
+        f"- Gate mode: **{gate.get('mode', 'shadow')}**",
+        f"- Effective risk: **{gate.get('effective_risk', 'unknown')}**",
         f"- Target: `{markdown_code_value(target_evidence.get('target') or 'unknown')}`",
         f"- Actual HEAD: `{markdown_code_value(target_evidence.get('actual_head_sha') or 'unknown')}`",
         f"- Intended head: `{markdown_code_value(target_evidence.get('intended_head_sha') or 'unknown')}`",
@@ -4521,15 +4875,19 @@ def verification_report(
     lines.extend(("", "## Changed paths", ""))
     changed_paths = target_evidence.get("changed_paths", [])
     if isinstance(changed_paths, list) and changed_paths:
-        lines.extend(f"- `{path}`" for path in changed_paths)
+        lines.extend(f"- `{markdown_code_value(path)}`" for path in changed_paths)
     else:
         lines.append(f"- {target_evidence.get('changed_paths_detail', 'Unavailable.')}")
+    lines.extend(("", "## Gate reasons", ""))
+    reasons = gate.get("reasons", [])
+    if isinstance(reason_codes, list) and isinstance(reasons, list):
+        for index, code in enumerate(reason_codes):
+            reason = reasons[index] if index < len(reasons) else "No detail recorded."
+            lines.append(f"- `{markdown_code_value(code)}`: {reason}")
+    if not reason_codes:
+        lines.append("- `UNKNOWN`: no Gate reason was recorded.")
     lines.extend(
         (
-            "",
-            "## Gate reasons",
-            "",
-            "- `GATE_POLICY_DEFERRED`: risk-based Gate policy is not evaluated in this implementation slice.",
             "",
             "## Rerun",
             "",
@@ -4541,21 +4899,46 @@ def verification_report(
     return "\n".join(lines) + "\n"
 
 
-def finalize_verification_run(run: VerificationRun, checks: Sequence[CheckResult]) -> str:
+def finalize_verification_run(
+    run: VerificationRun,
+    checks: Sequence[CheckResult],
+    *,
+    base_sha: str | None = None,
+    intended_head: str | None = None,
+    target: str | None = None,
+) -> VerificationResult:
     status = verification_status(checks)
-    target_evidence = collect_target_evidence()
+    target_evidence = collect_target_evidence(
+        base_sha=base_sha,
+        intended_head=intended_head,
+        target=target,
+    )
     manifest_path = run.path / "manifest.json"
     manifest = verification_manifest(run, checks, status, target_evidence, utc_now().isoformat())
     write_json_file(manifest_path, manifest)
     manifest_hash = sha256_file(manifest_path)
-    write_json_file(run.path / "gate.json", verification_gate(target_evidence, manifest_hash))
+    gate = verification_gate(checks, target_evidence, manifest_hash)
+    write_json_file(run.path / "gate.json", gate)
     report_path = run.path / "report.md"
     ensure_safe_repository_path(report_path)
-    report_path.write_text(verification_report(run, checks, status, target_evidence), encoding="utf-8")
-    return status
+    report_path.write_text(
+        verification_report(run, checks, status, target_evidence, gate),
+        encoding="utf-8",
+    )
+    return VerificationResult(
+        run=run,
+        verification_status=status,
+        manifest_sha256=manifest_hash,
+        gate=gate,
+    )
 
 
-def command_verify(_: argparse.Namespace) -> int:
+def run_verification(
+    *,
+    base_sha: str | None = None,
+    intended_head: str | None = None,
+    target: str | None = None,
+) -> VerificationResult:
     run = create_verification_run()
     checks: list[CheckResult] = []
     stages = (
@@ -4592,9 +4975,36 @@ def command_verify(_: argparse.Namespace) -> int:
             )
             persist_check(run, result)
         checks.append(result)
-    status = finalize_verification_run(run, checks)
-    print(f"\nVerification {status}. Evidence: {run.path.relative_to(ROOT)}")
-    return {"pass": 0, "fail": 1, "error": 2}[status]
+    return finalize_verification_run(
+        run,
+        checks,
+        base_sha=base_sha,
+        intended_head=intended_head,
+        target=target,
+    )
+
+
+def verification_exit_code(result: VerificationResult) -> int:
+    verdict = str(result.gate.get("verdict", "INCONCLUSIVE"))
+    mode = str(result.gate.get("mode", "shadow"))
+    if verdict == "INCONCLUSIVE":
+        return 2
+    if verdict == "BLOCK" or (verdict == "REVIEW" and mode == "enforce"):
+        return 1
+    if verdict in {"PASS", "REVIEW"}:
+        return 0
+    return 2
+
+
+def command_verify(_: argparse.Namespace) -> int:
+    result = run_verification()
+    verdict = result.gate.get("verdict", "INCONCLUSIVE")
+    mode = result.gate.get("mode", "shadow")
+    print(
+        f"\nVerification {result.verification_status}. Gate {verdict} ({mode}). "
+        f"Evidence: {result.run.path.relative_to(ROOT)}"
+    )
+    return verification_exit_code(result)
 
 
 def git_output(*args: str, check: bool = True) -> str:
@@ -5256,45 +5666,235 @@ def command_context(args: argparse.Namespace) -> int:
     return 0
 
 
+def safe_review_reason(value: object) -> str:
+    reason = str(value or "").strip()
+    if not definition_value_is_concrete(reason):
+        raise HarnessError("Gate REVIEW requires a genuine non-empty --accept-review reason")
+    if any(character in reason for character in "\r\n\x00|`") or any(ord(character) < 32 for character in reason):
+        raise HarnessError("--accept-review must be one safe Markdown-table line without pipes or backticks")
+    return reason
+
+
+def load_verification_artifact(path: Path, label: str) -> dict[str, object]:
+    ensure_safe_repository_path(path)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise HarnessError(f"cannot read finalized {label}: {portable_detail(exc)}") from exc
+    if not isinstance(value, dict):
+        raise HarnessError(f"finalized {label} must be a JSON object")
+    return value
+
+
+def validate_close_verification(
+    result: VerificationResult,
+    *,
+    base_commit: str,
+    head: str,
+    target: str,
+) -> tuple[dict[str, object], dict[str, object]]:
+    manifest_path = result.run.path / "manifest.json"
+    gate_path = result.run.path / "gate.json"
+    manifest = load_verification_artifact(manifest_path, "verification manifest")
+    gate = load_verification_artifact(gate_path, "Gate evidence")
+    manifest_hash = sha256_file(manifest_path)
+    if manifest_hash != result.manifest_sha256:
+        raise HarnessError("finalized verification manifest hash differs from the in-memory result")
+    if str(gate.get("manifest_sha256", "")) != manifest_hash:
+        raise HarnessError("Gate evidence does not bind the finalized verification manifest hash")
+    if gate != result.gate:
+        raise HarnessError("finalized Gate evidence differs from the in-memory verification result")
+    if str(manifest.get("run_id", "")) != result.run.run_id:
+        raise HarnessError("verification manifest run ID does not match its run directory")
+    if str(manifest.get("status", "")) != result.verification_status:
+        raise HarnessError("verification manifest status differs from the in-memory result")
+    target_evidence = manifest.get("target_evidence")
+    if not isinstance(target_evidence, dict) or gate.get("target_evidence") != target_evidence:
+        raise HarnessError("manifest and Gate target evidence do not match")
+    expected = {
+        "actual_head_sha": head,
+        "base_sha": base_commit,
+        "intended_head_sha": head,
+        "target": target,
+    }
+    for field, value in expected.items():
+        if str(target_evidence.get(field, "")) != value:
+            raise HarnessError(f"verification target field {field} does not match the closing plan")
+    if target_evidence.get("head_matches_intended") is not True:
+        raise HarnessError("verification did not confirm the intended closing HEAD")
+    if target_evidence.get("clean") is not True:
+        raise HarnessError("verification did not confirm a clean closing worktree")
+    return manifest, gate
+
+
+def bind_traceable_verification_rows(
+    text: str,
+    *,
+    run_id: str,
+    manifest_hash: str,
+    verified_commit: str,
+    verdict: str,
+    review_reason: str,
+) -> str:
+    metadata, _ = parse_frontmatter_text(text)
+    if str(metadata.get("traceability", "")).strip() != "1":
+        return text
+    lines = text.splitlines()
+    heading_index = next(
+        (index for index, line in enumerate(lines) if line.strip() == "## Validation and Evidence"),
+        None,
+    )
+    if heading_index is None:
+        raise HarnessError("traceable plan is missing its Validation and Evidence section")
+    header = "| " + " | ".join(ACCEPTANCE_EVIDENCE_HEADERS) + " |"
+    table_index = next(
+        (
+            index
+            for index in range(heading_index + 1, len(lines))
+            if lines[index].strip().casefold() == header.casefold()
+        ),
+        None,
+    )
+    if table_index is None or table_index + 2 >= len(lines):
+        raise HarnessError("traceable plan is missing its acceptance evidence table")
+    row_index = table_index + 2
+    bound = 0
+    evidence_path = f".harness/runs/{run_id}/manifest.json"
+    row_reason = review_reason if verdict == "REVIEW" else "none"
+    while row_index < len(lines) and lines[row_index].strip().startswith("|"):
+        cells = [cell.strip() for cell in lines[row_index].strip().strip("|").split("|")]
+        if len(cells) != len(ACCEPTANCE_EVIDENCE_HEADERS):
+            raise HarnessError("traceable plan acceptance evidence table has an invalid row")
+        lines[row_index] = (
+            f"| {cells[0]} | {cells[1]} | `{evidence_path}` | `{run_id}` | "
+            f"`{manifest_hash}` | `{verified_commit}` | `{verdict}` | {row_reason} |"
+        )
+        bound += 1
+        row_index += 1
+    if bound == 0:
+        raise HarnessError("traceable plan acceptance evidence table has no criterion rows")
+    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+
+
+def restore_active_plan(
+    source: Path,
+    destination: Path,
+    original_bytes: bytes,
+    original_mode: int,
+    cause: BaseException,
+) -> None:
+    try:
+        destination.unlink(missing_ok=True)
+        ensure_safe_repository_path(source)
+        source.write_bytes(original_bytes)
+        os.chmod(source, original_mode & 0o7777)
+    except OSError as rollback_error:
+        raise HarnessError(
+            "plan closure failed and exact active-plan restoration also failed: "
+            + portable_detail(rollback_error)
+        ) from cause
+
+
 def command_close_plan(args: argparse.Namespace) -> int:
     plan = locate_plan(args.plan, active_only=True)
     if plan.status != "verifying":
         raise HarnessError(f"plan must be in status 'verifying' before close; current status is '{plan.status}'")
-    if not (ROOT / ".git").exists():
-        raise HarnessError("close-plan requires a Git repository")
+    ensure_safe_repository_path(plan.path)
+    if not plan.path.is_file():
+        raise HarnessError("close-plan requires the active plan to be a regular file")
+    git_marker = ROOT / ".git"
+    if not git_marker.exists() or git_marker.is_symlink():
+        raise HarnessError("close-plan requires safe local Git metadata")
     if git_output("status", "--porcelain"):
         raise HarnessError("close-plan requires a clean working tree so verification can bind to one integrated commit")
     head = git_head()
-    if not head:
-        raise HarnessError("cannot determine integrated Git commit")
+    if re.fullmatch(r"[0-9a-fA-F]{7,64}", head) is None:
+        raise HarnessError("cannot determine the integrated Git commit")
     declared = str(plan.metadata.get("integrated_commit", "")).strip()
     if declared not in {"HEAD", head}:
         raise HarnessError(
             f"plan integrated_commit ({declared or 'missing'}) must be HEAD or match current HEAD ({head}); "
             "update and commit the verifying plan before closing"
         )
-    command_verify(argparse.Namespace())
-    original_text = plan.text
+    base_commit = str(plan.metadata.get("base_commit", "")).strip()
+    if re.fullmatch(r"[0-9a-fA-F]{7,64}", base_commit) is None:
+        raise HarnessError("close-plan requires an explicit local base_commit Git object ID")
+
     completed_dir = ROOT / "docs" / "exec-plans" / "completed"
-    completed_dir.mkdir(parents=True, exist_ok=True)
     destination = completed_dir / plan.path.name
+    ensure_safe_repository_path(destination)
     if destination.exists():
         raise HarnessError(f"completed plan already exists: {destination.relative_to(ROOT)}")
+    original_bytes = plan.path.read_bytes()
+    original_mode = plan.path.stat().st_mode
+    try:
+        original_text = original_bytes.decode("utf-8")
+    except UnicodeError as exc:
+        raise HarnessError("active plan is not valid UTF-8") from exc
+
+    result = run_verification(base_sha=base_commit, intended_head=head, target=plan.id)
+    _, gate = validate_close_verification(
+        result,
+        base_commit=base_commit,
+        head=head,
+        target=plan.id,
+    )
+    if git_head() != head:
+        raise HarnessError("closing HEAD changed during verification; the plan remains active")
+    if git_output("status", "--porcelain"):
+        raise HarnessError("verification changed the working tree; the plan remains active")
+    if plan.path.read_bytes() != original_bytes:
+        raise HarnessError("the active plan changed during verification; the plan remains active")
+
+    verdict = str(gate.get("verdict", "INCONCLUSIVE")).upper()
+    if verdict == "BLOCK":
+        raise HarnessError("Gate BLOCK prevents plan closure and cannot be overridden")
+    if verdict == "INCONCLUSIVE":
+        raise HarnessError("Gate INCONCLUSIVE prevents plan closure and cannot be overridden")
+    if verdict not in {"PASS", "REVIEW"}:
+        raise HarnessError(f"unsupported Gate verdict prevents plan closure: {verdict}")
+    review_reason = safe_review_reason(args.accept_review) if verdict == "REVIEW" else ""
+
     updated = update_frontmatter(
         original_text,
-        {"status": "complete", "updated": date.today().isoformat(), "integrated_commit": head, "verified_commit": head},
+        {
+            "status": "complete",
+            "updated": date.today().isoformat(),
+            "integrated_commit": head,
+            "verified_commit": head,
+            "verification_run": json.dumps(result.run.run_id),
+            "manifest_sha256": json.dumps(result.manifest_sha256),
+            "gate_verdict": json.dumps(verdict),
+            "gate_review_reason": json.dumps(review_reason, ensure_ascii=False),
+        },
     )
-    plan.path.unlink()
-    destination.write_text(updated, encoding="utf-8")
+    updated = bind_traceable_verification_rows(
+        updated,
+        run_id=result.run.run_id,
+        manifest_hash=result.manifest_sha256,
+        verified_commit=head,
+        verdict=verdict,
+        review_reason=review_reason,
+    )
+
+    completed_dir.mkdir(parents=True, exist_ok=True)
+    moved = False
     try:
+        destination.write_bytes(updated.encode("utf-8"))
+        os.chmod(destination, original_mode & 0o7777)
+        plan.path.unlink()
+        moved = True
         command_docs_index(argparse.Namespace(check=True))
         command_docs_check(argparse.Namespace(strict=True))
         command_plan_check(argparse.Namespace(strict=True))
-    except Exception:
-        destination.unlink(missing_ok=True)
-        plan.path.write_text(original_text, encoding="utf-8")
+    except BaseException as exc:
+        if moved or destination.exists():
+            restore_active_plan(plan.path, destination, original_bytes, original_mode, exc)
         raise
-    print(f"Closed {plan.id} at verified commit {head}.")
+    print(
+        f"Closed {plan.id} at verified commit {head} with Gate {verdict}. "
+        f"Evidence: {result.run.path.relative_to(ROOT)}"
+    )
     print(f"Moved to {destination.relative_to(ROOT)}. Commit the completion record separately.")
     return 0
 
@@ -5425,6 +6025,11 @@ def build_parser() -> argparse.ArgumentParser:
     task.set_defaults(func=command_task)
     close = sub.add_parser("close-plan", help="verify an integrated commit and archive a completed plan")
     close.add_argument("plan")
+    close.add_argument(
+        "--accept-review",
+        default="",
+        help="explicit human rationale required only when the finalized Gate verdict is REVIEW",
+    )
     close.set_defaults(func=command_close_plan)
     garden = sub.add_parser("garden", help="report stale plans, documents, paths, and references without changing them")
     garden.add_argument("--strict", action="store_true")

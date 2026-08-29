@@ -98,6 +98,11 @@ class ReporivetTests(unittest.TestCase):
             config = (root / "dev" / "harness.toml").read_text(encoding="utf-8")
             self.assertIn('baseline = "draft"', config)
             self.assertIn('configuration = "ready"', config)
+            self.assertIn("[gate]", config)
+            self.assertIn('mode = "shadow"', config)
+            self.assertIn('default_risk = "unknown"', config)
+            self.assertIn("require_clean = true", config)
+            self.assertIn('protected_paths = [".github/workflows/**", "AGENTS.md", "dev/harness.py", "dev/harness.toml", "docs/SECURITY.md"]', config)
             self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1", (root / ".github/workflows/harness-verify.yml").read_text())
             self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", (root / ".github/workflows/harness-garden.yml").read_text())
 
@@ -411,63 +416,6 @@ supersedes: []
             self.assertIn("refusing to replace existing project-owned command paths", result.stderr)
             self.assertFalse((root / "AGENTS.md").exists())
             self.assertIn("project-owned", (root / "dev" / "check").read_text(encoding="utf-8"))
-
-    def test_close_plan_binds_verification_to_clean_git_head(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            new_plan = self.run_harness(root, "new-plan", "Close", "test", "--area", "test")
-            self.assertEqual(new_plan.returncode, 0, new_plan.stdout + new_plan.stderr)
-            plan_path = root / new_plan.stdout.strip()
-
-            for relative in (
-                "ARCHITECTURE.md",
-                "docs/PRODUCT.md",
-                "docs/DESIGN.md",
-                "docs/QUALITY.md",
-                "docs/SECURITY.md",
-                "docs/RELIABILITY.md",
-            ):
-                path = root / relative
-                text = path.read_text(encoding="utf-8")
-                text = text.replace("status: draft", "status: active").replace("TODO", "Established")
-                path.write_text(text, encoding="utf-8")
-
-            plan = plan_path.read_text(encoding="utf-8")
-            plan = plan.replace("status: proposed", "status: verifying")
-            plan = plan.replace('integrated_commit: ""', 'integrated_commit: "HEAD"')
-            plan = plan.replace("TODO", "resolved")
-            plan = plan.replace("pending", "resolved")
-            plan = plan.replace("- [ ]", "- [x]")
-            plan = re.sub(r"(#### State\n\n)(ready|blocked)", r"\1complete", plan)
-            plan_path.write_text(plan, encoding="utf-8")
-
-            config = root / "dev" / "harness.toml"
-            config.write_text(
-                config.read_text(encoding="utf-8").replace('baseline = "draft"', 'baseline = "established"'),
-                encoding="utf-8",
-            )
-
-            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
-            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
-            subprocess.run(["git", "add", "."], cwd=root, check=True)
-            subprocess.run(["git", "commit", "-m", "candidate"], cwd=root, check=True, capture_output=True)
-            head = subprocess.run(
-                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
-            ).stdout.strip()
-
-            plan_id = plan_path.name.split("-close-test.md")[0]
-            close = self.run_harness(root, "close-plan", plan_id)
-            self.assertEqual(close.returncode, 0, close.stdout + close.stderr)
-            completed = root / "docs" / "exec-plans" / "completed" / plan_path.name
-            self.assertTrue(completed.exists())
-            completed_text = completed.read_text(encoding="utf-8")
-            self.assertIn("status: complete", completed_text)
-            self.assertIn(f"integrated_commit: {head}", completed_text)
-            self.assertIn(f"verified_commit: {head}", completed_text)
-
 
 if __name__ == "__main__":
     unittest.main()
