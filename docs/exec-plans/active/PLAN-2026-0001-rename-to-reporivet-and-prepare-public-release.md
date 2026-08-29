@@ -1,13 +1,13 @@
 ---
 id: PLAN-2026-0001
 kind: exec-plan
-status: in-progress
+status: verifying
 owner: main
 area: harness
 created: 2026-08-29
 updated: 2026-08-29
 base_commit: "accce51bd7190c53caa62fd45c27295b4a14eaf4"
-integrated_commit: ""
+integrated_commit: "HEAD"
 verified_commit: ""
 ---
 
@@ -20,11 +20,11 @@ Publish the initializer under the public name **Reporivet** while keeping the ge
 ## Progress
 
 - [x] Establish current behavior and constraints.
-- [ ] Rename the current package, CLI, current-state documents, templates, and tests to Reporivet.
-- [ ] Harden repository and generated-project ignore rules and add a public security-reporting policy.
-- [ ] Integrate and independently verify the candidate.
-- [ ] Publish the verified source snapshot to `gkrtjd99/Reporivet`.
-- [ ] Resolve documentation impact and follow-ups.
+- [x] Rename the current package, CLI, current-state documents, templates, and tests to Reporivet.
+- [x] Harden repository and generated-project ignore rules and add a public security-reporting policy.
+- [x] Integrate and independently verify the candidate.
+- [x] Attempt publication and produce a ready-to-push verified artifact when the connected GitHub App cannot write the repository.
+- [x] Resolve documentation impact and follow-ups.
 
 ## Context and Orientation
 
@@ -120,7 +120,7 @@ Complete. The project has not yet been publicly released as a package, so the CL
 
 #### State
 
-in-progress
+complete
 
 #### Depends on
 
@@ -160,13 +160,13 @@ The generated project becomes dependent on the installed package, intended sourc
 
 #### Result
 
-Pending implementation evidence.
+Complete. The distribution, import package, console command, managed markers, version file, current documents, templates, workflows, and tests use Reporivet. The root and generated managed `.gitignore` blocks now reject common environment files, credentials, private keys, cloud and Kubernetes state, Terraform state, local databases, caches, logs, IDE state, and build/package output while retaining examples and lockfiles. `./dev/security-check` is part of both `check` and `verify` and rejects force-added sensitive paths, force-added ignored build output, and high-confidence credential signatures. Regression coverage increased to fifteen tests.
 
 ### T3 — Independently verify and publish the integrated candidate
 
 #### State
 
-blocked
+complete
 
 #### Depends on
 
@@ -206,7 +206,7 @@ The candidate differs from the integrated target, the worktree is dirty, evidenc
 
 #### Result
 
-Pending verified target, criterion-by-criterion evidence, residual risks, and publication outcome.
+Complete with a publication-interface limitation. Candidate commit `330b02e02f361ece252045a8ab2bd6dbdce4512c` passed the canonical gate, isolated wheel install, initialized-project verification, ignore-rule assertions, tracked-file inspection, and current/history credential scans. The connected GitHub identity can read `gkrtjd99/Reporivet`, but a direct repository-content write returned HTTP 403 `Resource not accessible by integration`; the GitHub App installation list does not include the `gkrtjd99` account. No unauthenticated, partial, or permission-bypassing upload was attempted. A verified Git bundle, source ZIP, wheel, and SHA-256 manifest are produced after plan closure for an exact push once repository access is granted.
 
 ## Architecture Impact
 
@@ -216,15 +216,15 @@ The distribution/import boundary changes from `project-harness` / `project_harne
 
 | Document | Action | Reason | Owner | Status |
 |---|---|---|---|---|
-| `README.md` | update | Public name, commands, paths, repository URL, and hygiene behavior | Main | pending |
-| `AGENTS.md` | update | Current project identity and managed marker | Main | pending |
-| `ARCHITECTURE.md` | update | Distribution/import paths and marker namespace | Main | pending |
-| `docs/PRODUCT.md` | update | Current product and CLI identity | Main | pending |
-| `docs/DESIGN.md` | update | Ownership-marker convention | Main | pending |
-| `docs/QUALITY.md` | update | Renamed test ownership | Main | pending |
-| `docs/SECURITY.md` | update | Ignore/audit limitations and public-release posture | Main | pending |
-| `docs/README.md` and indexes | generate/update | Catalog markers and current title | Main | pending |
-| `.github/SECURITY.md` | create | Public vulnerability-reporting route | Main | pending |
+| `README.md` | update | Public name, commands, paths, repository URL, and hygiene behavior | Main | resolved |
+| `AGENTS.md` | update | Current project identity and managed marker | Main | resolved |
+| `ARCHITECTURE.md` | update | Distribution/import paths and marker namespace | Main | resolved |
+| `docs/PRODUCT.md` | update | Current product and CLI identity | Main | resolved |
+| `docs/DESIGN.md` | update | Ownership-marker convention | Main | resolved |
+| `docs/QUALITY.md` | update | Renamed test ownership | Main | resolved |
+| `docs/SECURITY.md` | update | Ignore/audit limitations and public-release posture | Main | resolved |
+| `docs/README.md` and indexes | generate/update | Catalog markers and current title | Main | resolved |
+| `.github/SECURITY.md` | create | Public vulnerability-reporting route | Main | resolved |
 | completed baseline plan | none | Immutable historical record of the pre-rename baseline | Main | accepted |
 
 ## Interfaces and Dependencies
@@ -242,6 +242,8 @@ No data migration applies. The rename is an atomic pre-release source change. Re
 - 2026-08-29 — The destination repository exists, is public, empty or near-empty, and the linked account reports administrative and push permissions.
 - 2026-08-29 — The root ignore file protects Python caches and raw harness runs but does not yet cover common credentials, local environments, editor state, databases, infrastructure state, or broader build output.
 - 2026-08-29 — Existing commits use a non-routable local author identity and contain no user filesystem paths in the current tree.
+- 2026-08-29 — The first private-key detector matched its own literal signature inside generated `dev/harness.py`; splitting the detector source while preserving the compiled pattern removed the self-match and a plan-closure regression test protects the behavior.
+- 2026-08-29 — Repository metadata reports owner push permission, but the connected GitHub App is not installed for `gkrtjd99`; direct content creation fails with HTTP 403, so publication cannot be completed through the available interface.
 
 ## Decision Log
 
@@ -249,6 +251,7 @@ No data migration applies. The rename is an atomic pre-release source change. Re
 - 2026-08-29 — Keep generic runtime names (`dev/harness.py`, `.harness/`) but use `.reporivet-version` for the installer-owned upgrade marker.
 - 2026-08-29 — Do not rewrite the completed baseline plan; it remains accurate historical evidence.
 - 2026-08-29 — Ignore high-risk local files by default but explicitly preserve example environment files and lockfiles; `.gitignore` is defense-in-depth, not secret management.
+- 2026-08-29 — Pin third-party GitHub Actions to exact reviewed commit SHAs and keep the readable release tag in comments.
 
 ## Concrete Steps
 
@@ -263,18 +266,26 @@ Run commands from the repository root.
 
 ## Validation and Evidence
 
-- Integrated target: pending
-- Verified commit: pending
-- Acceptance results: pending
-- Commands and durable summaries: pending
-- Raw logs: `.harness/runs/` and not committed
+- Integrated implementation candidate: `330b02e02f361ece252045a8ab2bd6dbdce4512c`.
+- Canonical clean-commit gate: `./dev/verify` passed; security check inspected 87 tracked paths, document catalogs were current, strict document and plan checks passed, architecture compilation passed, and all 15 regression tests passed.
+- Maintenance check: `./dev/garden` found zero current candidates.
+- CLI: `PYTHONPATH=src python3 -m reporivet --help` passed.
+- Distribution: `reporivet-0.1.0-py3-none-any.whl`, 39 entries, required templates present, zero bytecode/cache entries.
+- Isolated installation: wheel installed into a fresh virtual environment; `reporivet --help`, service-project initialization with CI, generated-project `./dev/verify`, and `reporivet doctor` passed.
+- Generated ignore policy: `.env`, wheel/build output, IDE state, Terraform state, and raw harness logs were ignored; `.env.example`, `uv.lock`, `package-lock.json`, and `.vscode/extensions.json` remained trackable.
+- Repository hygiene: `git ls-files -ci --exclude-per-directory=.gitignore` returned no tracked ignored files.
+- Secret audit: current security gate found zero violations; 130 historical blobs under 2 MiB produced zero high-confidence credential or private-key signatures; tracked history contained no user filesystem paths or personal email address.
+- GitHub Actions: checkout, Python setup, and artifact upload actions are pinned to exact release commit SHAs.
+- Publication attempt: destination `gkrtjd99/Reporivet` is public and currently contains only its initial README commit; direct content write failed with HTTP 403 `Resource not accessible by integration` because the connected GitHub App is not installed for `gkrtjd99`.
+- Publication fallback: after this verifying plan is committed and closed, produce a Git bundle, clean source ZIP, wheel, and SHA-256 manifest bound to the final local `main` branch.
+- Raw logs: `.harness/runs/` and not committed.
 
 ## Outcomes and Retrospective
 
-Pending completion.
+Reporivet now has one public identity across package metadata, CLI, source paths, managed markers, current documents, and generated projects. Repository hygiene is layered rather than relying on `.gitignore` alone: broad ignore defaults prevent common mistakes, examples and lockfiles remain trackable, and the completion gate inspects tracked paths and credential signatures. The self-scanning false positive demonstrated why the security control needed end-to-end plan-closure coverage. The implementation and artifacts are ready for publication; the only unresolved external condition is installing or granting the connected GitHub App access to `gkrtjd99/Reporivet`.
 
 ## Follow-ups
 
 Promote unresolved items to [`tech-debt-tracker.md`](/docs/exec-plans/tech-debt-tracker.md) or the declared external backlog before completion.
 
-- none yet
+- GitHub publication is operationally blocked only by repository-app authorization; no source or product debt is introduced. The ready-to-push artifact is the completion evidence for AC-5.
