@@ -339,6 +339,33 @@ class VerificationRunTests(unittest.TestCase):
                 self.assertEqual(project["status"], "error")
                 self.assertIn("recursively invokes", project["detail"])
 
+    def test_architecture_and_smoke_reject_recursive_verify_without_nested_run(self) -> None:
+        recursive_command = (
+            "sh",
+            "-c",
+            'if [ -z "$REPORIVET_RECURSION_GUARD" ]; then '
+            "REPORIVET_RECURSION_GUARD=1 ./dev/verify; fi",
+        )
+        for group in ("architecture", "smoke"):
+            with self.subTest(group=group), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                self.init(root)
+                command_groups = {
+                    "verify": ((sys.executable, "-c", "print('project-ok')"),),
+                    group: (recursive_command,),
+                }
+                self.write_config(root, **command_groups)
+
+                result = self.run_harness(root, "verify")
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                runs = self.verification_runs(root)
+                self.assertEqual(len(runs), 1)
+                manifest, _ = self.load_artifacts(runs[0])
+                check = next(item for item in manifest["checks"] if item["name"] == group)
+                self.assertEqual(check["status"], "error")
+                self.assertTrue(check["required"])
+                self.assertIn("recursively invokes", check["detail"])
+
     def test_project_without_local_git_ignores_enclosing_repository(self) -> None:
         if shutil.which("git") is None:
             self.skipTest("git is unavailable")

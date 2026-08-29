@@ -392,7 +392,7 @@ Focused T5 tests passed 4/4 and the full suite passed 66/66 under Python 3.12. C
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -436,13 +436,15 @@ More than one top-level run, lost artifacts, silent missing check, raw secret/lo
 
 #### Result
 
-Pending implementation and evidence.
+Implemented one shared Verification Run with seven fixed ordered stages, immediate per-check JSON persistence, shared built-in/external logs, deterministic manifest/Gate/report finalization, candidate-failure versus infrastructure-error semantics, required failure precedence, optional absent-smoke skip, malformed configured-smoke blocking, explicit local Git target evidence without parent inference, structured command redaction, and recursion rejection across architecture, project, and smoke groups. The T6 Gate remains deliberately `UNKNOWN`/`deferred` until T7 policy is applied.
+
+Focused verification tests passed 10/10 and the full suite passed 76/76 under Python 3.12. Strict code-map, document catalog, documentation, plan, security, runtime parity, in-memory compilation, and `git diff --check` passed. Post-fix dogfood run `.harness/runs/20260829T170435788817Z-verify` passed all required stages, skipped only absent optional smoke, and bound manifest SHA-256 `5d3382d727a445f1698b3c1f929726194c295b2fec41f99d0ae634d3c8e463c4`. Independent verification reproduced the architecture/smoke recursion guards and all T6 pass/fail/error/no-Git/explicit-target scenarios, found no remaining defect, and returned `VERDICT: PASS`. Clean final candidate evidence remains deferred to T9.
 
 ### T7 — Add Gate policy and evidence-bound close-plan
 
 #### State
 
-blocked
+in-progress
 
 #### Task type
 

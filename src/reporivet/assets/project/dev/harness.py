@@ -4171,6 +4171,13 @@ def recursive_verify_reason(command: Sequence[str]) -> str:
     return ""
 
 
+def validate_nonrecursive_commands(commands: Sequence[Sequence[str]]) -> None:
+    for command in commands:
+        reason = recursive_verify_reason(command)
+        if reason:
+            raise InfrastructureError(reason)
+
+
 def verification_security_check(run: VerificationRun) -> CheckResult:
     no_git = not (ROOT / ".git").exists()
     result = execute_builtin_check(
@@ -4203,7 +4210,9 @@ def verification_architecture_check(run: VerificationRun) -> CheckResult:
     def preflight() -> None:
         config = load_config()
         validate_architecture_document(strict=config.lifecycle == "active")
-        state["commands"] = config.command_group("architecture")
+        commands = config.command_group("architecture")
+        validate_nonrecursive_commands(commands)
+        state["commands"] = commands
         print("Architecture document check passed.")
 
     built_in = execute_builtin_check(run, "architecture", required=True, action=preflight)
@@ -4235,10 +4244,7 @@ def verification_project_check(run: VerificationRun) -> CheckResult:
                 "dev/harness.toml is still marked configuration = 'review'; confirm deterministic commands first"
             )
         commands = config.command_group("verify")
-        for command in commands:
-            reason = recursive_verify_reason(command)
-            if reason:
-                raise InfrastructureError(reason)
+        validate_nonrecursive_commands(commands)
         state["commands"] = commands
         state["source_exists"] = any(
             (ROOT / path).exists() for path in config.list_value("paths", "source")
@@ -4264,7 +4270,9 @@ def verification_smoke_check(run: VerificationRun) -> CheckResult:
 
     def preflight() -> None:
         config = load_config()
-        state["commands"] = config.command_group("smoke")
+        commands = config.command_group("smoke")
+        validate_nonrecursive_commands(commands)
+        state["commands"] = commands
         print("Smoke configuration passed preflight.")
 
     preflight_result = execute_builtin_check(run, "smoke", required=False, action=preflight)
