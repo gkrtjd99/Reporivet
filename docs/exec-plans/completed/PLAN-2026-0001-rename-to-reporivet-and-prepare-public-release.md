@@ -1,14 +1,14 @@
 ---
 id: PLAN-2026-0001
 kind: exec-plan
-status: verifying
+status: complete
 owner: main
 area: harness
 created: 2026-08-29
 updated: 2026-08-29
 base_commit: "accce51bd7190c53caa62fd45c27295b4a14eaf4"
-integrated_commit: "HEAD"
-verified_commit: ""
+integrated_commit: c2a7b529280df18445b7d829969651f3e3b90e28
+verified_commit: c2a7b529280df18445b7d829969651f3e3b90e28
 ---
 
 # Rename to Reporivet and prepare public release
@@ -269,18 +269,18 @@ Run commands from the repository root.
 
 ## Validation and Evidence
 
-- Initial implementation slice: `330b02e02f361ece252045a8ab2bd6dbdce4512c`; the final verifying target is `HEAD` and also contains remote-history ancestry plus the narrow `site/` ignore correction.
+- Initial implementation slice: `330b02e02f361ece252045a8ab2bd6dbdce4512c`; final integrated and verified commit: `c2a7b529280df18445b7d829969651f3e3b90e28`, including remote-history ancestry plus the narrow `site/` ignore correction.
 - Canonical clean-commit gate: `./dev/verify` passed; security check inspected 87 tracked paths, document catalogs were current, strict document and plan checks passed, architecture compilation passed, and all 15 regression tests passed.
 - Maintenance check: `./dev/garden` found zero current candidates.
 - CLI: `PYTHONPATH=src python3 -m reporivet --help` passed.
-- Distribution: `reporivet-0.1.0-py3-none-any.whl`, SHA-256 `4fec1341a1eedebf6ade5c993196b28d49184d0bb1bdf847123ef918dc825628`, 39 entries, 29 exact packaged assets, and zero bytecode/cache entries.
+- Distribution: `reporivet-0.1.0-py3-none-any.whl`, SHA-256 `d7627b247db13b39d81d7b4ed482f7397e0834e87141bcce1d9c86711df3e8d8`, 39 entries, 29 exact packaged assets, and zero bytecode/cache entries.
 - Isolated installation: wheel installed into a fresh virtual environment; `reporivet --help`, service-project initialization with CI, generated-project `./dev/verify`, and `reporivet doctor` passed.
 - Generated ignore policy: `.env`, keys and credentials, cloud/CLI auth state, wheel/build output, IDE state, Terraform state, local databases, and raw harness logs were ignored; `.env.example`, lockfiles, `.docker/Dockerfile`, `.vscode/extensions.json`, and `site/index.html` remained trackable.
 - Repository hygiene: `git ls-files -ci --exclude-per-directory=.gitignore` returned no tracked ignored files.
 - Secret audit: the current security gate found zero violations; all reachable historical blobs under 2 MiB produced zero high-confidence credential or private-key signatures; project-authored history contained no user filesystem paths or personal email address. The preserved GitHub initial commit retains its original public author metadata.
 - GitHub Actions: checkout, Python setup, and artifact upload actions are pinned to exact release commit SHAs.
 - Publication attempt: destination `gkrtjd99/Reporivet` is public and contains only initial README commit `c852464`; the connected GitHub App installation list does not include `gkrtjd99`, and the available repository interface exposes no authorized content-write operation for this account.
-- Publication fallback: after this verifying plan is committed and closed, produce a Git bundle, clean source ZIP, wheel, and SHA-256 manifest bound to the final local `main` branch.
+- Publication fallback: produce a Git bundle, clean source ZIP, wheel, and SHA-256 manifest from final local `main`; the hosted initial commit is already in its ancestry, so an authorized push requires no force or history rewrite.
 - Raw logs: `.harness/runs/` and not committed.
 
 ## Outcomes and Retrospective
