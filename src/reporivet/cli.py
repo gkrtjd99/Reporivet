@@ -9,7 +9,7 @@ from .initializer import InitError, apply_harness, doctor_project, upgrade_proje
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="project-harness",
+        prog="reporivet",
         description="Initialize and maintain a repository-local, document-first agent harness.",
     )
     sub = parser.add_subparsers(dest="command", required=True)

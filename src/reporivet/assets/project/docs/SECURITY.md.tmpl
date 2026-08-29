@@ -20,8 +20,16 @@ TODO: identify actual trust boundaries, actors, credentials, and privileged oper
 |---|---|---|---|---|
 | `TODO` | TODO | TODO | TODO | TODO |
 
+## Repository hygiene baseline
+
+- The Reporivet-managed `.gitignore` block excludes common real environment files, credentials, private keys, local infrastructure state, personal editor data, local databases, logs, caches, and build output.
+- Sanitized examples such as `.env.example` and `*.tfvars.example`, source files, migrations, documentation, and dependency lockfiles remain trackable.
+- `.gitignore` is defense-in-depth only. Rotate any exposed credential and remove sensitive Git history where required.
+- Review and document any intentional force-add of a file that matches a credential, key, database, or local-state pattern.
+
 ## Required controls
 
+- Reporivet provides a managed `.gitignore` and `./dev/security-check`; review project-specific exceptions in `[policy].security_allow_tracked`.
 - TODO: record implemented controls and point to enforcement or tests.
 
 ## Security-sensitive change gates

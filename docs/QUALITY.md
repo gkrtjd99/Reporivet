@@ -19,19 +19,21 @@ Quality means a target repository is created safely, remains understandable afte
 | Layer | Purpose | Canonical command | Evidence |
 |---|---|---|---|
 | Syntax | Compile Python sources and tests | `python3 -m compileall -q src tests` | Zero exit status |
-| Regression | Exercise initializer and generated runtime end to end | `python3 -m unittest discover -s tests -v` | Twelve passing tests |
+| Regression | Exercise initializer and generated runtime end to end | `python3 -m unittest discover -s tests -v` | Fifteen passing tests |
 | Repository fast feedback | Structural checks plus regression suite | `./dev/check` | Catalog, document, plan, and test output |
 | Completion gate | Strict repository checks plus regression suite | `./dev/verify` | Integrated command logs under `.harness/runs/` |
 | Distribution smoke | Build and install a wheel, initialize a project, run its verify and doctor commands | Release procedure | Installed CLI and generated project succeed |
 
 ## Test ownership
 
-`tests/test_project_harness.py` owns black-box and integration behavior for:
+`tests/test_reporivet.py` owns black-box and integration behavior for:
 
 - blank and existing repository initialization;
 - baseline plan and command-review state;
 - project-owned content preservation;
 - managed-block idempotence;
+- sensitive, personal, build-output ignore rules and example/lockfile exceptions;
+- force-added sensitive path and token-signature rejection;
 - durable document catalog drift;
 - future ExecPlan template-token preservation and creation-time rendering;
 - ExecPlan creation and Task Packet routing;

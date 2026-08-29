@@ -1,12 +1,12 @@
 ---
-id: SPEC-HARNESS-001
+id: SPEC-REPORIVET-001
 kind: product-spec
 status: active
 area: harness
 summary: Observable structure and lifecycle of a generated repository harness
 applies_to:
-  - "src/project_harness/assets/project/**"
-  - "src/project_harness/initializer.py"
+  - "src/reporivet/assets/project/**"
+  - "src/reporivet/initializer.py"
 supersedes: []
 ---
 
@@ -20,7 +20,7 @@ A service or application profile creates:
 .
 ├── AGENTS.md
 ├── ARCHITECTURE.md
-├── .harness-version
+├── .reporivet-version
 ├── dev/
 │   ├── harness.toml
 │   ├── harness.py
@@ -30,6 +30,7 @@ A service or application profile creates:
 │   ├── check
 │   ├── verify
 │   ├── smoke
+│   ├── security-check
 │   ├── docs-index
 │   ├── docs-check
 │   ├── plan-check
@@ -80,8 +81,15 @@ Library, CLI, and other profiles omit `RELIABILITY.md` unless the project needs 
 - Project-owned current-state documents, specifications, plans, decisions, runbooks, and command configuration are preserved.
 - Unmarked existing canonical command paths are never silently replaced.
 
+## Repository hygiene behavior
+
+- The managed `.gitignore` blocks common environment files, credentials, private keys, local infrastructure state, databases, build output, logs, caches, and personal editor state.
+- Documented example, sample, and template environment or credential files remain trackable.
+- `./dev/security-check` catches sensitive files that were force-added or already tracked; narrow non-secret fixtures require an explicit policy allowlist.
+
 ## Verification behavior
 
+- Tracked sensitive paths and high-confidence secret signatures are rejected before project commands.
 - Catalog, document, plan, and architecture checks run before project commands.
 - Missing configured executables fail visibly.
 - Source-bearing projects cannot pass with an empty verification group.

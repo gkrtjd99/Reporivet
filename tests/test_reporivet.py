@@ -15,10 +15,10 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
 sys.path.insert(0, str(SRC))
 
-from project_harness.cli import main as cli_main
+from reporivet.cli import main as cli_main
 
 
-class ProjectHarnessTests(unittest.TestCase):
+class ReporivetTests(unittest.TestCase):
     maxDiff = None
 
     def run_cli(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -71,11 +71,12 @@ class ProjectHarnessTests(unittest.TestCase):
             expected = (
                 "AGENTS.md",
                 "ARCHITECTURE.md",
-                ".harness-version",
+                ".reporivet-version",
                 "dev/harness.toml",
                 "dev/harness.py",
                 "dev/context",
                 "dev/verify",
+                "dev/security-check",
                 "dev/garden",
                 "docs/README.md",
                 "docs/PRODUCT.md",
@@ -97,11 +98,145 @@ class ProjectHarnessTests(unittest.TestCase):
             config = (root / "dev" / "harness.toml").read_text(encoding="utf-8")
             self.assertIn('baseline = "draft"', config)
             self.assertIn('configuration = "ready"', config)
-            self.assertIn("actions/checkout@v6", (root / ".github/workflows/harness-verify.yml").read_text())
-            self.assertIn("actions/upload-artifact@v7", (root / ".github/workflows/harness-garden.yml").read_text())
+            self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1", (root / ".github/workflows/harness-verify.yml").read_text())
+            self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", (root / ".github/workflows/harness-garden.yml").read_text())
 
             verify = self.run_harness(root, "verify")
             self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
+
+    def test_generated_gitignore_blocks_build_secrets_and_personal_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            second = self.init(root)
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            gitignore = (root / ".gitignore").read_text(encoding="utf-8")
+            self.assertEqual(gitignore.count("# reporivet:start"), 1)
+            self.assertEqual(gitignore.count("# reporivet:end"), 1)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+
+            ignored = (
+                ".harness/runs/verify.log",
+                ".env",
+                ".env.production",
+                "secrets.env",
+                "credentials.json",
+                "service-account-prod.json",
+                ".vault-token",
+                ".dev.vars",
+                ".mcp.json",
+                ".cursor/mcp.json",
+                ".docker/config.json",
+                ".config/gh/hosts.yml",
+                ".bundle/config",
+                ".cargo/credentials.toml",
+                "key.properties",
+                "id_ed25519",
+                "certificate.p12",
+                "terraform.tfstate",
+                ".idea/workspace.xml",
+                ".vscode/settings.json",
+                "dist/reporivet.whl",
+                ".venv/bin/python",
+                "node_modules/package/index.js",
+                "target/debug/app",
+                ".vite/deps/chunk.js",
+                ".dart_tool/package_config.json",
+                ".serverless/state.json",
+                ".wrangler/state.json",
+                ".supabase/state.json",
+                "local.properties",
+            )
+            for relative in ignored:
+                check = subprocess.run(
+                    ["git", "check-ignore", "-q", relative],
+                    cwd=root,
+                    check=False,
+                )
+                self.assertEqual(check.returncode, 0, f"expected ignored: {relative}")
+
+            allowed_examples = (
+                ".env.example",
+                ".env.production.example",
+                "service-account.example.json",
+                "terraform.tfvars.example",
+                ".vscode/extensions.json",
+                ".reporivet-version",
+                "uv.lock",
+                "poetry.lock",
+                "package-lock.json",
+                "pnpm-lock.yaml",
+                "Cargo.lock",
+                ".docker/Dockerfile",
+                ".cursor/rules/project.mdc",
+                ".codex/config.toml",
+                "Package.resolved",
+                "README.md",
+            )
+            for relative in allowed_examples:
+                check = subprocess.run(
+                    ["git", "check-ignore", "-q", relative],
+                    cwd=root,
+                    check=False,
+                )
+                self.assertEqual(check.returncode, 1, f"expected trackable: {relative}")
+
+    def test_security_check_rejects_force_added_sensitive_material(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+
+            secret = root / ".env"
+            secret.write_text("API_TOKEN=not-a-real-token\n", encoding="utf-8")
+            subprocess.run(["git", "add", "-f", ".env"], cwd=root, check=True)
+            path_failure = self.run_harness(root, "security-check")
+            self.assertNotEqual(path_failure.returncode, 0)
+            self.assertIn("tracked sensitive local configuration", path_failure.stderr)
+
+            config = root / "dev" / "harness.toml"
+            config.write_text(
+                config.read_text(encoding="utf-8").replace(
+                    "security_allow_tracked = []", 'security_allow_tracked = [".env"]'
+                ),
+                encoding="utf-8",
+            )
+            allowlisted = self.run_harness(root, "security-check")
+            self.assertEqual(allowlisted.returncode, 0, allowlisted.stdout + allowlisted.stderr)
+
+            subprocess.run(["git", "rm", "--cached", "-f", ".env"], cwd=root, check=True, capture_output=True)
+            secret.unlink()
+            dockerfile = root / ".docker" / "Dockerfile"
+            dockerfile.parent.mkdir()
+            dockerfile.write_text("FROM scratch\n", encoding="utf-8")
+            subprocess.run(["git", "add", ".docker/Dockerfile"], cwd=root, check=True)
+            docker_allowed = self.run_harness(root, "security-check")
+            self.assertEqual(docker_allowed.returncode, 0, docker_allowed.stdout + docker_allowed.stderr)
+
+            token_file = root / "notes.txt"
+            token_file.write_text("temporary=" + "AK" + "IA" + "A" * 16 + "\n", encoding="utf-8")
+            subprocess.run(["git", "add", "notes.txt"], cwd=root, check=True)
+            content_failure = self.run_harness(root, "security-check")
+            self.assertNotEqual(content_failure.returncode, 0)
+            self.assertIn("AWS access key signature", content_failure.stderr)
+
+    def test_security_check_rejects_force_added_ignored_build_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+
+            artifact = root / "dist" / "reporivet.whl"
+            artifact.parent.mkdir()
+            artifact.write_bytes(b"not-a-real-wheel")
+            subprocess.run(["git", "add", "-f", "dist/reporivet.whl"], cwd=root, check=True)
+
+            failure = self.run_harness(root, "security-check")
+            self.assertNotEqual(failure.returncode, 0)
+            self.assertIn("tracked path is ignored by a repository .gitignore", failure.stderr)
 
     def test_existing_implementation_gets_baseline_plan_and_requires_command_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,8 +286,8 @@ class ProjectHarnessTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
             text = (root / "AGENTS.md").read_text(encoding="utf-8")
             self.assertIn("Keep this section.", text)
-            self.assertEqual(text.count("<!-- project-harness:start -->"), 1)
-            self.assertEqual(text.count("<!-- project-harness:end -->"), 1)
+            self.assertEqual(text.count("<!-- reporivet:start -->"), 1)
+            self.assertEqual(text.count("<!-- reporivet:end -->"), 1)
 
     def test_docs_index_catalogs_new_durable_document_and_detects_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

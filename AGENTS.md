@@ -1,5 +1,5 @@
-<!-- project-harness:start -->
-# Project Harness Repository Operating Contract
+<!-- reporivet:start -->
+# Reporivet Repository Operating Contract
 
 ## Purpose
 
@@ -72,6 +72,7 @@ Record out-of-scope discoveries in the active plan or [`docs/exec-plans/tech-deb
 - Fast feedback: `./dev/check`
 - Canonical completion gate: `./dev/verify`
 - Observable smoke checks: `./dev/smoke`
+- Tracked-secret guard: `./dev/security-check`
 - Document catalog: `./dev/docs-index`
 - Maintenance candidates: `./dev/garden`
 
@@ -82,4 +83,4 @@ The committed [`dev/harness.toml`](dev/harness.toml) is authoritative. Missing c
 A change is complete only when observable behavior and non-goals are satisfied, the integrated commit passes applicable verification, independent review is complete when required, current-state documents match reality, Documentation Impact is resolved, decisions and follow-ups are recorded, and the Main Agent or human reviewer accepts the evidence.
 
 An agent saying “done” is not completion evidence.
-<!-- project-harness:end -->
+<!-- reporivet:end -->

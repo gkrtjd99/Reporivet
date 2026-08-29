@@ -3,7 +3,7 @@ id: DESIGN
 kind: design
 status: active
 area: repository
-summary: Current interaction, ownership, and implementation conventions for Project Harness
+summary: Current interaction, ownership, and implementation conventions for Reporivet
 applies_to:
   - "src/**"
   - "tests/**"
@@ -27,8 +27,9 @@ The repository, not a hidden conversation or external control plane, is the oper
 ## Ownership conventions
 
 - Project-owned files are created only when absent.
-- Harness-owned files have `project-harness:managed` in their first lines.
+- Harness-owned files have `reporivet:managed` in their first lines.
 - Shared files use bounded managed blocks with paired start and end markers.
+- The managed `.gitignore` block protects common sensitive and local-only files, but keeps example configuration and reproducibility artifacts eligible for tracking.
 - Malformed or partial markers are errors, not opportunities to append a second block.
 - Upgrades preserve unmarked files even when that means reporting a version mismatch for manual resolution.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# project-harness:managed version={{HARNESS_VERSION}}
+# reporivet:managed version={{HARNESS_VERSION}}
 """Repository-local entrypoints for agent-readable context, plans, checks, and verification."""
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "dev" / "harness.toml"
-CATALOG_START = "<!-- project-harness:catalog:start -->"
-CATALOG_END = "<!-- project-harness:catalog:end -->"
+CATALOG_START = "<!-- reporivet:catalog:start -->"
+CATALOG_END = "<!-- reporivet:catalog:end -->"
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 TITLE_LINE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 TASK_HEADING = re.compile(r"^###\s+(T[0-9A-Za-z_-]+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
@@ -98,6 +98,124 @@ TASK_REQUIRED_LABELS = (
     "Verify",
     "Stop conditions",
     "Result",
+)
+
+
+SENSITIVE_DIRECTORY_NAMES = frozenset(
+    {
+        ".aws",
+        ".azure",
+        ".credentials",
+        ".gcloud",
+        ".gnupg",
+        ".kube",
+        ".secrets",
+        ".ssh",
+    }
+)
+SENSITIVE_BASENAMES = frozenset(
+    {
+        ".env",
+        ".envrc",
+        ".git-credentials",
+        ".netrc",
+        ".npmrc",
+        ".pypirc",
+        ".terraformrc",
+        ".vault-token",
+        "application_default_credentials.json",
+        "auth.json",
+        "credentials.json",
+        "secret.json",
+        "secret.yaml",
+        "secret.yml",
+        "secrets.json",
+        "secrets.yaml",
+        "secrets.yml",
+        "key.properties",
+        "keystore.properties",
+        "kubeconfig",
+        "local.properties",
+        "terraform.rc",
+    }
+)
+SENSITIVE_PATH_PREFIXES = (
+    ".config/gcloud/",
+    ".config/gh/",
+    ".config/op/",
+)
+SENSITIVE_PATH_SUFFIXES = frozenset(
+    {
+        ".bundle/config",
+        ".cargo/credentials",
+        ".cargo/credentials.toml",
+        ".config/pip/pip.conf",
+        ".docker/config.json",
+        ".gem/credentials",
+    }
+)
+SENSITIVE_SUFFIXES = frozenset(
+    {
+        ".db",
+        ".jks",
+        ".kdbx",
+        ".key",
+        ".keystore",
+        ".mobileprovision",
+        ".ovpn",
+        ".p12",
+        ".p8",
+        ".pem",
+        ".pfx",
+        ".ppk",
+        ".sqlite",
+        ".sqlite3",
+        ".secret",
+        ".token",
+        ".tfstate",
+        ".tfvars",
+    }
+)
+SENSITIVE_CONTENT_PATTERNS = (
+    (
+        "private key",
+        re.compile(
+            rb"-----" + rb"BEGIN (?:(?:RSA|DSA|EC|OPENSSH|ENCRYPTED) )?" + rb"PRIVATE KEY-----"
+            + rb"|-----" + rb"BEGIN PGP " + rb"PRIVATE KEY BLOCK-----"
+        ),
+    ),
+    (
+        "AWS access key",
+        re.compile(rb"(?<![A-Z0-9])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])"),
+    ),
+    (
+        "GitHub token",
+        re.compile(rb"(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})"),
+    ),
+    (
+        "OpenAI-like API key",
+        re.compile(rb"(?<![A-Za-z0-9_-])sk-(?:(?:proj|svcacct)-)?[A-Za-z0-9_-]{24,}"),
+    ),
+    (
+        "Stripe live secret",
+        re.compile(rb"(?<![A-Za-z0-9_])sk_live_[A-Za-z0-9]{16,}"),
+    ),
+    (
+        "Google API key",
+        re.compile(rb"(?<![A-Za-z0-9_-])AIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"),
+    ),
+    (
+        "GitLab personal access token",
+        re.compile(rb"(?<![A-Za-z0-9_-])glpat-[A-Za-z0-9_-]{20,}"),
+    ),
+    (
+        "npm access token",
+        re.compile(rb"(?<![A-Za-z0-9_])npm_[A-Za-z0-9]{36,}"),
+    ),
+    (
+        "Slack token",
+        re.compile(rb"(?<![A-Za-z0-9_-])xox[baprs]-[A-Za-z0-9-]{20,}"),
+    ),
 )
 
 
@@ -423,7 +541,7 @@ def replace_catalog(text: str, block: str, *, path: Path) -> str:
     start = text.find(CATALOG_START)
     end = text.find(CATALOG_END)
     if start == -1 or end == -1 or end < start:
-        raise HarnessError(f"{path.relative_to(ROOT)} is missing project-harness catalog markers")
+        raise HarnessError(f"{path.relative_to(ROOT)} is missing reporivet catalog markers")
     end += len(CATALOG_END)
     return text[:start].rstrip() + "\n\n" + block.rstrip() + "\n" + text[end:].lstrip("\n")
 
@@ -840,8 +958,137 @@ def command_architecture_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def is_example_or_template_name(name: str) -> bool:
+    lowered = name.lower()
+    return any(marker in lowered for marker in (".example", ".sample", ".template", "-example", "-sample", "-template"))
+
+
+def sensitive_path_reason(relative: Path) -> str | None:
+    lowered_parts = tuple(part.lower() for part in relative.parts)
+    if any(part in SENSITIVE_DIRECTORY_NAMES for part in lowered_parts[:-1]):
+        return "sensitive local directory"
+    normalized = relative.as_posix().lower().lstrip("./")
+    if any(normalized == suffix or normalized.endswith("/" + suffix) for suffix in SENSITIVE_PATH_SUFFIXES):
+        return "sensitive local configuration"
+    if any(normalized.startswith(prefix) or ("/" + prefix) in normalized for prefix in SENSITIVE_PATH_PREFIXES):
+        return "sensitive local configuration"
+    name = relative.name.lower()
+    if is_example_or_template_name(name):
+        return None
+    if name in SENSITIVE_BASENAMES:
+        return "sensitive local configuration"
+    if name.startswith(".env.") or name.endswith(".env") or ".env." in name:
+        return "environment file"
+    if name.startswith(("id_rsa", "id_dsa", "id_ecdsa", "id_ed25519")) and not name.endswith(".pub"):
+        return "private key filename"
+    if name.startswith("client_secret") and name.endswith(".json"):
+        return "OAuth client credential"
+    if name.startswith("service-account") and name.endswith(".json"):
+        return "service account credential"
+    if name.endswith("-service-account.json") or name.startswith("firebase-adminsdk"):
+        return "service account credential"
+    if name.startswith("credentials.") and name.endswith(".json"):
+        return "credential file"
+    if name.endswith("-credentials.json"):
+        return "credential file"
+    if name.startswith("kubeconfig"):
+        return "cluster credential file"
+    suffix = relative.suffix.lower()
+    if suffix in SENSITIVE_SUFFIXES:
+        return f"sensitive {suffix} file"
+    if name.endswith(".tfstate") or ".tfstate." in name:
+        return "Terraform state"
+    if name.endswith(".tfvars.json"):
+        return "Terraform variable file"
+    if name.startswith(("config.local.", "settings.local.")) or ".local." in name:
+        return "local configuration"
+    return None
+
+
+def git_tracked_paths() -> list[Path]:
+    completed = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        message = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise HarnessError(message or "git ls-files failed during security check")
+    return [Path(os.fsdecode(item)) for item in completed.stdout.split(b"\0") if item]
+
+
+def git_tracked_ignored_paths() -> set[Path]:
+    completed = subprocess.run(
+        ["git", "ls-files", "-ci", "--exclude-per-directory=.gitignore", "-z"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        message = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise HarnessError(message or "git ignored-path audit failed during security check")
+    return {Path(os.fsdecode(item)) for item in completed.stdout.split(b"\0") if item}
+
+
+def path_is_allowlisted(relative: Path, patterns: Sequence[str]) -> bool:
+    normalized = relative.as_posix()
+    normalized_patterns = [
+        pattern[2:] if pattern.startswith("./") else pattern.lstrip("/")
+        for pattern in patterns
+    ]
+    return any(fnmatch.fnmatch(normalized, pattern) for pattern in normalized_patterns)
+
+
+def command_security_check(_: argparse.Namespace) -> int:
+    if not (ROOT / ".git").exists():
+        print("Security check skipped because this project is not yet a Git repository.")
+        return 0
+    config = load_config()
+    allowlist = config.list_value("policy", "security_allow_tracked")
+    max_bytes = int(config.policy.get("security_scan_max_bytes", 2_097_152))
+    violations: list[str] = []
+    tracked_paths = git_tracked_paths()
+    tracked_ignored = git_tracked_ignored_paths()
+    for relative in tracked_paths:
+        if path_is_allowlisted(relative, allowlist):
+            continue
+        reason = sensitive_path_reason(relative)
+        if reason:
+            violations.append(f"{relative.as_posix()}: tracked {reason}")
+            continue
+        if relative in tracked_ignored:
+            violations.append(f"{relative.as_posix()}: tracked path is ignored by a repository .gitignore")
+            continue
+        path = ROOT / relative
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            if path.stat().st_size > max_bytes:
+                continue
+            payload = path.read_bytes()
+        except OSError as exc:
+            raise HarnessError(f"cannot inspect tracked file {relative}: {exc}") from exc
+        for label, pattern in SENSITIVE_CONTENT_PATTERNS:
+            if pattern.search(payload):
+                violations.append(f"{relative.as_posix()}: contains a {label} signature")
+                break
+    if violations:
+        for violation in violations:
+            print(f"ERROR: {violation}", file=sys.stderr)
+        raise HarnessError(
+            "security check rejected tracked sensitive material; remove it from Git, rotate real credentials, "
+            "or add a narrowly reviewed [policy].security_allow_tracked entry"
+        )
+    print(f"Security check passed ({len(tracked_paths)} tracked path(s) inspected).")
+    return 0
+
+
 def command_check(_: argparse.Namespace) -> int:
     config = load_config()
+    command_security_check(argparse.Namespace())
     command_docs_index(argparse.Namespace(check=True))
     command_docs_check(argparse.Namespace(strict=False))
     command_plan_check(argparse.Namespace(strict=False))
@@ -854,6 +1101,7 @@ def command_check(_: argparse.Namespace) -> int:
 
 def command_verify(_: argparse.Namespace) -> int:
     config = load_config()
+    command_security_check(argparse.Namespace())
     command_docs_index(argparse.Namespace(check=True))
     strict = config.lifecycle == "active"
     command_docs_check(argparse.Namespace(strict=strict))
@@ -1134,6 +1382,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("check", help="run the fast local feedback loop").set_defaults(func=command_check)
     sub.add_parser("verify", help="run the canonical completion gate").set_defaults(func=command_verify)
     sub.add_parser("smoke", help="run configured observable smoke checks").set_defaults(func=command_smoke)
+    sub.add_parser("security-check", help="reject tracked secrets and sensitive local files").set_defaults(func=command_security_check)
     docs_index = sub.add_parser("docs-index", help="generate or check the durable document catalog")
     docs_index.add_argument("--check", action="store_true")
     docs_index.set_defaults(func=command_docs_index)

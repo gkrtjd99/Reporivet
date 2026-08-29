@@ -1,4 +1,6 @@
-# Project Harness
+# Reporivet
+
+> **Repository-native harness for long-running, agent-driven software development.**
 
 OpenAI의 **Harness Engineering**을 주 기준으로, 저장소 자체를 에이전트가 읽고 수정하고 검증하고 정리할 수 있는 운영 환경으로 만드는 초기화 도구입니다.
 
@@ -20,7 +22,7 @@ dev/               결정적인 컨텍스트·검사·검증 인터페이스
 CI + garden        불변 조건 강제와 장기 드리프트 보고
 ```
 
-설계 배경은 [`docs/design-docs/DESIGN-HARNESS-001-initializer-and-runtime.md`](docs/design-docs/DESIGN-HARNESS-001-initializer-and-runtime.md), 생성 결과는 [`docs/product-specs/SPEC-HARNESS-001-generated-project.md`](docs/product-specs/SPEC-HARNESS-001-generated-project.md)에 정리되어 있습니다.
+설계 배경은 [`docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md`](docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md), 생성 결과는 [`docs/product-specs/SPEC-REPORIVET-001-generated-project.md`](docs/product-specs/SPEC-REPORIVET-001-generated-project.md)에 정리되어 있습니다.
 
 ## 보장하는 것
 
@@ -32,6 +34,8 @@ CI + garden        불변 조건 강제와 장기 드리프트 보고
 - `dev/harness.toml`에 커밋된 명령만 완료 게이트에서 실행합니다.
 - 설정된 실행 파일이 없으면 검사를 건너뛰지 않고 실패합니다.
 - 검증 로그는 `.harness/runs/`에 남고 Git에는 커밋되지 않습니다.
+- 생성되는 `.gitignore`는 빌드 결과, 환경파일, 키, 자격증명, IDE 개인설정을 기본 차단합니다.
+- `./dev/security-check`는 force-add 등으로 Git에 들어온 민감 경로와 고신뢰 토큰 서명을 완료 게이트에서 거부합니다.
 - `garden`은 오래된 계획·문서·경로·참조를 자동 삭제하지 않고 후보로 보고합니다.
 - 재초기화와 업그레이드는 프로젝트 소유 문서를 덮어쓰지 않습니다.
 
@@ -46,14 +50,18 @@ Python 런타임 의존성은 표준 라이브러리뿐입니다.
 
 ## 설치
 
+저장소를 복제해 editable 모드로 설치합니다.
+
 ```bash
+git clone https://github.com/gkrtjd99/Reporivet.git
+cd Reporivet
 python3 -m pip install -e .
 ```
 
 설치하지 않고 실행할 수도 있습니다.
 
 ```bash
-PYTHONPATH=src python3 -m project_harness --help
+PYTHONPATH=src python3 -m reporivet --help
 ```
 
 ## 초기화
@@ -61,7 +69,7 @@ PYTHONPATH=src python3 -m project_harness --help
 새 경로도 생성할 수 있습니다.
 
 ```bash
-project-harness init \
+reporivet init \
   --root /absolute/path/to/project \
   --name "My Project" \
   --summary "사용자가 이 프로젝트로 얻는 가치" \
@@ -74,7 +82,7 @@ project-harness init \
 변경 예정만 확인하려면:
 
 ```bash
-project-harness init --root ./my-project --name "My Project" --dry-run
+reporivet init --root ./my-project --name "My Project" --dry-run
 ```
 
 ### 기존 프로젝트
@@ -100,6 +108,7 @@ docs/exec-plans/active/PLAN-0000-establish-repository-baseline.md
 ./dev/check                             # 빠른 피드백
 ./dev/verify                            # canonical completion gate
 ./dev/smoke                             # 사용자 관찰 가능 경로
+./dev/security-check                    # Git 추적 비밀·개인 파일 차단
 
 ./dev/docs-index                        # 문서 catalog 갱신
 ./dev/docs-index --check                # catalog drift 검사
@@ -141,16 +150,16 @@ docs/exec-plans/active/PLAN-0000-establish-repository-baseline.md
 ## 안전한 업그레이드
 
 ```bash
-project-harness upgrade --root . --dry-run
-project-harness upgrade --root .
-project-harness doctor --root .
+reporivet upgrade --root . --dry-run
+reporivet upgrade --root .
+reporivet doctor --root .
 ```
 
 업그레이드 가능한 대상:
 
-- `AGENTS.md`의 `project-harness` managed block
+- `AGENTS.md`의 `reporivet` managed block
 - `.gitignore`의 managed block
-- `.harness-version`
+- `.reporivet-version`
 - `dev/harness.py`와 wrapper 스크립트
 - initializer가 생성한 GitHub Actions 파일
 - 새 버전에서 추가된 누락 스캐폴드 파일
@@ -164,6 +173,19 @@ project-harness doctor --root .
 - 문서 index의 사람 작성 영역
 
 초기화하려는 저장소에 이미 프로젝트 소유의 `dev/check`, `dev/verify` 같은 경로가 있으면 조용히 대체하지 않고 충돌을 보고하며 중단합니다.
+
+## 저장소 위생과 비밀정보
+
+Reporivet은 자신과 생성 대상 프로젝트의 `.gitignore`에 관리 블록을 추가해 다음 항목의 실수성 커밋을 줄입니다.
+
+- `.env` 계열의 실제 환경값, 토큰, 개인키, 인증서·키스토어, 클라우드·Kubernetes 자격증명
+- Terraform state와 로컬 deployment state
+- IDE·에디터·운영체제의 개인 설정
+- 로컬 DB, 원시 로그, 캐시, 가상환경, 의존성 디렉터리, 테스트·coverage·빌드 산출물
+
+반대로 `.env.example`, `*.tfvars.example`, `.vscode/extensions.json`, 소스·migration·문서와 package-manager lockfile은 계속 추적할 수 있습니다. 의도적으로 공개 가능한 테스트 키나 fixture가 ignore 패턴과 겹치면 내용을 검토하고 근거를 남긴 뒤 명시적으로 추가해야 합니다.
+
+`.gitignore`는 보안 경계가 아니며 이미 커밋된 비밀정보를 제거하지 않습니다. 비밀정보가 한 번이라도 Git에 들어갔다면 먼저 폐기·회전한 뒤 필요에 따라 history에서 제거해야 합니다. 취약점 제보 절차는 [`.github/SECURITY.md`](.github/SECURITY.md)를 따릅니다.
 
 ## CI
 
@@ -180,7 +202,7 @@ project-harness doctor --root .
 python3 -m unittest discover -s tests -v
 ```
 
-테스트는 초기화, 기존 프로젝트 baseline, 문서 소유권 보존, 안전한 업그레이드, catalog drift, 미래 ExecPlan 토큰 보존, Task Packet, strict baseline, 누락 도구 실패, dry-run, command 충돌, Git commit-bound plan closure를 검증합니다.
+테스트는 초기화, 기존 프로젝트 baseline, 문서 소유권 보존, 안전한 업그레이드, 민감·개인·빌드 산출물 ignore 정책과 example·lockfile 예외, force-added 민감 경로와 고신뢰 credential signature 차단, catalog drift, 미래 ExecPlan 토큰 보존, Task Packet, strict baseline, 누락 도구 실패, dry-run, command 충돌, Git commit-bound plan closure를 검증합니다.
 
 ## 비목표
 

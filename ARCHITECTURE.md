@@ -19,16 +19,16 @@ This document describes implemented reality. Proposed structure belongs in an ac
 - Project kind: Python command-line initializer.
 - Primary language: Python 3.11 or newer.
 - Runtime dependencies: Python standard library only.
-- Distribution: a Python wheel exposing the `project-harness` console command.
+- Distribution: a Python wheel exposing the `reporivet` console command.
 
 ## Repository map
 
 | Path | Responsibility | Public boundary |
 |---|---|---|
-| `src/project_harness/cli.py` | CLI parsing and command dispatch | `project-harness init`, `upgrade`, `doctor` |
-| `src/project_harness/initializer.py` | Safe project inspection, rendering, ownership-aware writes, command inference, upgrades, and diagnostics | Python package internals |
-| `src/project_harness/assets/project/` | Versioned templates and generated repository runtime | Packaged data consumed by the initializer |
-| `src/project_harness/assets/project/dev/harness.py` | Canonical generated runtime for context, documents, plans, checks, verification, and gardening | Copied to target repositories as `dev/harness.py` |
+| `src/reporivet/cli.py` | CLI parsing and command dispatch | `reporivet init`, `upgrade`, `doctor` |
+| `src/reporivet/initializer.py` | Safe project inspection, rendering, ownership-aware writes, command inference, upgrades, and diagnostics | Python package internals |
+| `src/reporivet/assets/project/` | Versioned templates and generated repository runtime | Packaged data consumed by the initializer |
+| `src/reporivet/assets/project/dev/harness.py` | Canonical generated runtime for context, documents, plans, checks, verification, and gardening | Copied to target repositories as `dev/harness.py` |
 | `tests/` | End-to-end initializer and generated-runtime regression tests | `python3 -m unittest discover -s tests -v` |
 | `dev/` | This repository's dogfooded harness entry points | `./dev/*` |
 | `docs/` | This repository's current-state and historical operating knowledge | Read through `docs/README.md` |
@@ -40,7 +40,7 @@ This document describes implemented reality. Proposed structure belongs in an ac
 | CLI | User-facing arguments and exit codes | Initializer public functions | Generated target state |
 | Initializer | File ownership, templates, detection, upgrades | Standard library, packaged assets | Host-specific plugins or LLM APIs |
 | Packaged assets | Target repository contract and runtime source | Template variables only | Initializer process state |
-| Generated runtime | Repository-local context, validation, command execution, Git-bound plan closure | Standard library, target repository files and configured tools | Installed `project-harness` package after generation |
+| Generated runtime | Repository-local context, validation, command execution, Git-bound plan closure | Standard library, target repository files and configured tools | Installed `reporivet` package after generation |
 | Tests | Observable behavior and safety invariants | Public CLI and generated runtime | Network services or user accounts |
 
 Dependency direction is `CLI -> initializer -> packaged assets`. A generated target runs independently as `wrapper -> dev/harness.py -> repository files/configured commands`.
@@ -52,7 +52,7 @@ Dependency direction is `CLI -> initializer -> packaged assets`. A generated tar
 3. Refuse collisions with existing project-owned canonical command paths.
 4. Upsert only marked blocks in `AGENTS.md` and `.gitignore`.
 5. Create project-owned documents and `dev/harness.toml` only when missing.
-6. Create or refresh only files carrying a `project-harness:managed` marker.
+6. Create or refresh only files carrying a `reporivet:managed` marker.
 7. Generate document catalogs and run structural checks unless explicitly skipped.
 8. For existing implementations, create `PLAN-0000` and require command review.
 
@@ -77,7 +77,7 @@ The generated runtime may execute only command arrays explicitly committed in th
 
 ## Mechanical invariants
 
-- `python3 -m unittest discover -s tests -v` covers ownership, idempotence, conflict handling, document indexing, plan validation, deterministic command failure, dry-run behavior, and Git-bound closure.
+- `python3 -m unittest discover -s tests -v` covers ownership, idempotence, sensitive/local/build ignore behavior and safe exceptions, conflict handling, document indexing, plan validation, deterministic command failure, dry-run behavior, and Git-bound closure.
 - `python3 -m compileall -q src tests` checks Python syntax and import compilation.
 - Wheel smoke tests confirm all packaged assets are included and an installed console command can initialize and verify a project.
 - Target repositories enforce current-state document metadata, catalog drift, links, ExecPlan lifecycle, Task Packet fields, strict baseline readiness, executable availability, and clean-Git plan closure.

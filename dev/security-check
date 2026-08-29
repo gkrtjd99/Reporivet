@@ -1,0 +1,5 @@
+#!/bin/sh
+# reporivet:managed version=0.1.0
+set -eu
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec python3 "$SCRIPT_DIR/harness.py" security-check "$@"

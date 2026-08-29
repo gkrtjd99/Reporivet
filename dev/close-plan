@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# project-harness:managed version=0.1.0
+# reporivet:managed version=0.1.0
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHON=${PYTHON:-python3}

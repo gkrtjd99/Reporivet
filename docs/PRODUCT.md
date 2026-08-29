@@ -3,7 +3,7 @@ id: PRODUCT
 kind: product
 status: active
 area: product
-summary: Current users, capabilities, requirements, and non-goals of Project Harness
+summary: Current users, capabilities, requirements, and non-goals of Reporivet
 applies_to:
   - "src/**"
   - "tests/**"
@@ -13,7 +13,7 @@ applies_to:
 
 ## Purpose
 
-Project Harness initializes and safely maintains a repository-local, document-first operating environment for coding agents. The resulting project can be understood, changed, verified, and cleaned up from version-controlled repository artifacts without a custom plugin, Skill, task database, or long-running orchestrator.
+Reporivet initializes and safely maintains a repository-local, document-first operating environment for coding agents. The resulting project can be understood, changed, verified, and cleaned up from version-controlled repository artifacts without a custom plugin, Skill, task database, or long-running orchestrator.
 
 ## Users and jobs
 
@@ -24,7 +24,7 @@ Project Harness initializes and safely maintains a repository-local, document-fi
 
 ## Current capabilities
 
-- Initialize a new or existing project through `project-harness init`.
+- Initialize a new or existing project through `reporivet init`.
 - Detect common project languages, runtimes, package managers, tests, and draft commands without treating inference as verified truth.
 - Generate a short `AGENTS.md`, current-state documents, durable document templates, ExecPlan templates, technical-debt tracking, and repository-local command entry points.
 - Generate an existing-project baseline plan and block false-green verification until inferred commands are reviewed.
@@ -32,7 +32,9 @@ Project Harness initializes and safely maintains a repository-local, document-fi
 - Validate document metadata, catalogs, links, plan lifecycle, Task Packets, configured executables, and integrated Git commits.
 - Report long-term maintenance candidates through `garden` without automatic deletion.
 - Optionally generate GitHub Actions for verification and scheduled garden reporting.
-- Diagnose an initialized project through `project-harness doctor`.
+- Diagnose an initialized project through `reporivet doctor`.
+- Install a managed ignore block that blocks common secret, personal, raw-log, cache, local-database, infrastructure-state, and build-output files while preserving examples and lockfiles.
+- Reject force-added or pre-existing tracked sensitive paths and high-confidence credential signatures through `./dev/security-check`.
 
 ## Requirements and invariants
 
@@ -44,6 +46,8 @@ Project Harness initializes and safely maintains a repository-local, document-fi
 - **REQ-GIT-1:** A plan can close only against a clean, explicitly declared Git `HEAD` that passes the canonical gate.
 - **REQ-PORT-1:** The generated runtime has no dependency on the initializer package after generation.
 - **REQ-SAFE-1:** Initialization refuses to replace an existing unmarked canonical command path.
+- **REQ-SAFE-2:** Generated ignore rules fail toward protecting local secrets and artifacts without hiding documented examples, source, migrations, or lockfiles.
+- **REQ-SAFE-3:** `check` and `verify` reject tracked sensitive material unless a narrowly reviewed path is explicitly allowlisted.
 
 ## Non-goals
 

@@ -14,11 +14,11 @@ from . import __version__
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 ASSETS = PACKAGE_ROOT / "assets" / "project"
-AGENTS_START = "<!-- project-harness:start -->"
-AGENTS_END = "<!-- project-harness:end -->"
-GITIGNORE_START = "# project-harness:start"
-GITIGNORE_END = "# project-harness:end"
-MANAGED_MARKER = "project-harness:managed"
+AGENTS_START = "<!-- reporivet:start -->"
+AGENTS_END = "<!-- reporivet:end -->"
+GITIGNORE_START = "# reporivet:start"
+GITIGNORE_END = "# reporivet:end"
+MANAGED_MARKER = "reporivet:managed"
 SOURCE_MARKERS = (
     "src",
     "app",
@@ -50,7 +50,7 @@ class ChangeSet:
 
     def print(self, root: Path, *, dry_run: bool = False) -> None:
         prefix = "Planned" if dry_run else "Applied"
-        print(f"\n{prefix} project harness changes")
+        print(f"\n{prefix} Reporivet changes")
         for label, paths in (("created", self.created), ("updated", self.updated), ("skipped", self.skipped)):
             print(f"\n{label}:")
             if not paths:
@@ -415,6 +415,8 @@ def build_config(
             "parallel_writes = false",
             "agents_max_lines = 140",
             "stale_plan_days = 21",
+            "security_scan_max_bytes = 2097152",
+            "security_allow_tracked = []",
             "require_plan_for = [",
             '  "public-api",',
             '  "persistent-data",',
@@ -487,7 +489,7 @@ def project_documents(kind: str) -> dict[str, str]:
 
 def managed_files(with_ci: bool) -> dict[str, str]:
     files = {
-        ".harness-version": "root/harness-version.tmpl",
+        ".reporivet-version": "root/reporivet-version.tmpl",
         "dev/harness.py": "dev/harness.py",
         "dev/bootstrap": "dev/wrapper.sh.tmpl",
         "dev/context": "dev/wrapper.sh.tmpl",
@@ -495,6 +497,7 @@ def managed_files(with_ci: bool) -> dict[str, str]:
         "dev/check": "dev/wrapper.sh.tmpl",
         "dev/verify": "dev/wrapper.sh.tmpl",
         "dev/smoke": "dev/wrapper.sh.tmpl",
+        "dev/security-check": "dev/wrapper.sh.tmpl",
         "dev/docs-index": "dev/wrapper.sh.tmpl",
         "dev/docs-check": "dev/wrapper.sh.tmpl",
         "dev/plan-check": "dev/wrapper.sh.tmpl",
@@ -713,7 +716,7 @@ def doctor_project(root: Path) -> int:
     required = (
         "AGENTS.md",
         "ARCHITECTURE.md",
-        ".harness-version",
+        ".reporivet-version",
         "docs/README.md",
         "docs/PRODUCT.md",
         "docs/DESIGN.md",
@@ -730,6 +733,7 @@ def doctor_project(root: Path) -> int:
         "dev/check",
         "dev/verify",
         "dev/smoke",
+        "dev/security-check",
         "dev/docs-index",
         "dev/docs-check",
         "dev/plan-check",
@@ -754,7 +758,7 @@ def doctor_project(root: Path) -> int:
         if MANAGED_MARKER not in head:
             warnings.append("dev/harness.py is not marked as managed; upgrades will preserve it")
         if f"version={__version__}" not in head:
-            warnings.append(f"dev/harness.py is not at initializer version {__version__}; run project-harness upgrade --dry-run")
+            warnings.append(f"dev/harness.py is not at initializer version {__version__}; run reporivet upgrade --dry-run")
     if not (root / ".git").exists():
         warnings.append("no .git directory detected; plans and decisions are not yet versioned")
 

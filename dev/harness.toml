@@ -2,7 +2,7 @@
 version = 1
 
 [project]
-name = "Project Harness"
+name = "Reporivet"
 summary = "Initialize and safely maintain repository-local, document-first operating harnesses for coding agents."
 kind = "cli"
 primary_language = "Python"
@@ -34,6 +34,8 @@ generated_docs = ["docs/generated"]
 parallel_writes = false
 agents_max_lines = 140
 stale_plan_days = 21
+security_scan_max_bytes = 2097152
+security_allow_tracked = []
 require_plan_for = [
   "public-api",
   "persistent-data",

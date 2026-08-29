@@ -3,13 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "project-harness"
+name = "reporivet"
 version = "0.1.0"
-description = "Repository-local, document-first agent harness initializer based on OpenAI Harness Engineering"
+description = "Repository-native harness initializer for long-running agent-driven software development"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
-authors = [{name = "Project Harness contributors"}]
+authors = [{name = "gkrtjd99 and Reporivet contributors"}]
 keywords = ["agents", "codex", "harness", "execplan", "repository"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -21,11 +21,34 @@ classifiers = [
 ]
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/gkrtjd99/Reporivet"
+Repository = "https://github.com/gkrtjd99/Reporivet.git"
+Issues = "https://github.com/gkrtjd99/Reporivet/issues"
+
 [project.scripts]
-project-harness = "project_harness.cli:main"
+reporivet = "reporivet.cli:main"
+
+[tool.setuptools]
+include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = false
 
 [tool.setuptools.package-data]
-project_harness = ["assets/**/*"]
+reporivet = [
+  "assets/project/dev/harness.py",
+  "assets/project/dev/*.tmpl",
+  "assets/project/docs/*.tmpl",
+  "assets/project/docs/*/*.tmpl",
+  "assets/project/github/*.tmpl",
+  "assets/project/root/*.tmpl",
+]
+
+[tool.setuptools.exclude-package-data]
+reporivet = [
+  "assets/project/dev/__pycache__/*",
+  "assets/project/dev/*.pyc",
+  "assets/project/dev/*.pyo",
+]
