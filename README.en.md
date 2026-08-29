@@ -24,6 +24,12 @@ dev/               Deterministic context, check, and verification interface
 CI + garden        Enforced invariants and long-term drift reporting
 ```
 
+### Agent entry points
+
+- `AGENTS.md` is the repository operating contract and documentation entry point for every agent.
+- `CLAUDE.md` contains no Claude-specific rules; it only imports `@AGENTS.md`, so Claude Code reads the same canonical source.
+- Even when a tool needs its own entry-point file, `AGENTS.md` remains the single repository authority.
+
 The design background is documented in [`docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md`](docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md), and the generated output is specified in [`docs/product-specs/SPEC-REPORIVET-001-generated-project.md`](docs/product-specs/SPEC-REPORIVET-001-generated-project.md).
 
 ## What Reporivet guarantees

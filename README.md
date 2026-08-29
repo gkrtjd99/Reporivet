@@ -24,6 +24,12 @@ dev/               결정적인 컨텍스트·검사·검증 인터페이스
 CI + garden        불변 조건 강제와 장기 드리프트 보고
 ```
 
+### 에이전트 진입점
+
+- `AGENTS.md`가 모든 에이전트가 따라야 할 저장소 운영 계약과 문서 진입점입니다.
+- `CLAUDE.md`는 Claude 전용 규칙을 담지 않고 `@AGENTS.md`만 불러오는 연결 파일입니다. Claude Code도 동일한 정본을 읽습니다.
+- 도구별 진입점이 별도로 필요하더라도 저장소의 기준은 `AGENTS.md` 하나로 유지합니다.
+
 설계 배경은 [`docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md`](docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md), 생성 결과는 [`docs/product-specs/SPEC-REPORIVET-001-generated-project.md`](docs/product-specs/SPEC-REPORIVET-001-generated-project.md)에 정리되어 있습니다.
 
 ## 보장하는 것
