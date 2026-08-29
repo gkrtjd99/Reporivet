@@ -64,7 +64,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_initializes_repository_local_harness(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root, "--with-ci", checked=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -106,7 +106,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_generated_gitignore_blocks_build_secrets_and_personal_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             second = self.init(root)
@@ -185,7 +185,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_security_check_rejects_force_added_sensitive_material(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
@@ -225,7 +225,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_security_check_rejects_force_added_ignored_build_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
@@ -241,7 +241,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_existing_implementation_gets_baseline_plan_and_requires_command_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "src").mkdir()
             (root / "src" / "main.py").write_text("print('hello')\n", encoding="utf-8")
             result = self.init(root)
@@ -257,7 +257,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_project_owned_documents_survive_reinit_and_upgrade(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             first = self.init(root)
             self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
 
@@ -279,7 +279,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_agents_managed_block_is_idempotent_and_preserves_user_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "AGENTS.md").write_text("# Team note\n\nKeep this section.\n", encoding="utf-8")
             first = self.init(root)
             second = self.init(root)
@@ -292,7 +292,7 @@ class ReporivetTests(unittest.TestCase):
 
     def test_docs_index_catalogs_new_durable_document_and_detects_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             spec = root / "docs" / "product-specs" / "SPEC-IDENTITY-001-account-deletion.md"
@@ -323,7 +323,7 @@ supersedes: []
 
     def test_runtime_plan_tokens_survive_initialization(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -341,7 +341,7 @@ supersedes: []
 
     def test_new_plan_and_task_packet_are_routable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             new_plan = self.run_harness(root, "new-plan", "Login", "lockout", "--area", "identity")
@@ -358,7 +358,7 @@ supersedes: []
 
     def test_established_baseline_rejects_scaffold_markers_and_draft_docs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             config = root / "dev" / "harness.toml"
@@ -372,7 +372,7 @@ supersedes: []
 
     def test_configured_missing_tool_fails_instead_of_skipping(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             config = root / "dev" / "harness.toml"
@@ -386,12 +386,12 @@ supersedes: []
 
     def test_dry_run_does_not_create_or_modify_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            missing = Path(tmp) / "new-project"
+            missing = Path(tmp).resolve() / "new-project"
             dry_init = self.init(missing, "--dry-run")
             self.assertEqual(dry_init.returncode, 0, dry_init.stdout + dry_init.stderr)
             self.assertFalse(missing.exists())
 
-            root = Path(tmp) / "existing"
+            root = Path(tmp).resolve() / "existing"
             root.mkdir()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -403,7 +403,7 @@ supersedes: []
 
     def test_init_refuses_to_replace_existing_project_owned_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             (root / "dev").mkdir()
             (root / "dev" / "check").write_text("#!/bin/sh\necho project-owned\n", encoding="utf-8")
             result = self.init(root)
@@ -414,7 +414,7 @@ supersedes: []
 
     def test_close_plan_binds_verification_to_clean_git_head(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             new_plan = self.run_harness(root, "new-plan", "Close", "test", "--area", "test")

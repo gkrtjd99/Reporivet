@@ -15,6 +15,22 @@ supersedes: []
 
 TODO
 
+## Traceability
+
+### Confirmed
+
+- [confirmed] JRN-001 | TODO: observable user journey.
+- [confirmed] REQ-P0-001 | Journey: JRN-001 | Acceptance: AC-001 | TODO: P0 requirement.
+- [confirmed] AC-001 | P0: REQ-P0-001 | Journey: JRN-001 | TODO: observable acceptance criterion.
+
+### Proposed
+
+- None.
+
+### Open
+
+- None.
+
 ## Requirements
 
 - **REQ-1:** TODO

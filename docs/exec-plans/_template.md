@@ -9,6 +9,12 @@ updated: {{DATE}}
 base_commit: "{{BASE_COMMIT}}"
 integrated_commit: ""
 verified_commit: ""
+traceability: 0
+product_spec: ""
+verification_run: ""
+manifest_sha256: ""
+gate_verdict: ""
+gate_review_reason: ""
 ---
 
 # {{PLAN_TITLE}}
@@ -36,6 +42,14 @@ TODO: explain relevant repository paths, modules, terms, current behavior, and a
 
 - TODO
 
+## Product Trace
+
+Set `traceability: 1` and `product_spec` only when this plan must carry product-to-evidence traceability.
+
+| Product spec | Journey | P0 requirement | Acceptance criteria | Implementation tasks | Verification tasks |
+|---|---|---|---|---|---|
+| TODO | TODO | TODO | AC-1 | T2 | T3 |
+
 ## Acceptance Criteria
 
 - **AC-1:** TODO
@@ -53,6 +67,10 @@ TODO: state the working behavior, implementation outline, and verification. Late
 #### State
 
 ready
+
+#### Task type
+
+support
 
 #### Depends on
 
@@ -100,6 +118,10 @@ TODO: status, findings, evidence, proposed boundary, risks, and exact follow-ups
 
 blocked
 
+#### Task type
+
+implementation
+
 #### Depends on
 
 T1
@@ -145,6 +167,10 @@ TODO: status, changed files, commit, acceptance results, commands and results, r
 #### State
 
 blocked
+
+#### Task type
+
+verification
 
 #### Depends on
 
@@ -225,6 +251,12 @@ Run commands from the repository root. Keep this section current and copy only d
 4. `./dev/verify`
 
 ## Validation and Evidence
+
+### Acceptance closure
+
+| Acceptance criterion | Task | Evidence path | Run ID | Manifest SHA-256 | Verified commit | Gate verdict | Review reason |
+|---|---|---|---|---|---|---|---|
+| AC-1 | T2/T3 | pending | pending | pending | pending | pending | pending |
 
 - Integrated target: pending
 - Verified commit: pending
