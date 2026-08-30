@@ -274,6 +274,41 @@ class DefinitionTests(unittest.TestCase):
                     self.assertFalse((root / "AGENTS.md").exists())
 
     @unittest.skipIf(os.name == "nt", "symlink ownership checks require POSIX semantics")
+    def test_init_and_definition_refuse_symlinked_roots_before_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            outside = base / "outside"
+            outside.mkdir()
+
+            for command, operation in (("init", self.init), ("define", self.define)):
+                with self.subTest(command=command, path="root"):
+                    target = outside / f"{command}-root"
+                    target.mkdir()
+                    root_link = base / f"{command}-root-link"
+                    root_link.symlink_to(target, target_is_directory=True)
+
+                    result = operation(root_link)
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("symlinked project root or parent", result.stderr)
+                    self.assertTrue(root_link.is_symlink())
+                    self.assertEqual(list(target.iterdir()), [])
+
+                with self.subTest(command=command, path="parent"):
+                    parent_target = outside / f"{command}-parent"
+                    parent_target.mkdir()
+                    parent_link = base / f"{command}-parent-link"
+                    parent_link.symlink_to(parent_target, target_is_directory=True)
+                    requested_root = parent_link / "project"
+
+                    result = operation(requested_root)
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("symlinked project root or parent", result.stderr)
+                    self.assertTrue(parent_link.is_symlink())
+                    self.assertFalse((parent_target / "project").exists())
+
+    @unittest.skipIf(os.name == "nt", "symlink ownership checks require POSIX semantics")
     def test_definition_start_refuses_symlink_write_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp).resolve()

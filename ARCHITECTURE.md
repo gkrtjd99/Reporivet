@@ -3,7 +3,7 @@ id: ARCHITECTURE
 kind: architecture
 status: active
 area: repository
-summary: Current package, template, generated-runtime, and verification architecture
+summary: Current package, template, generated-runtime, definition, and verification architecture
 applies_to:
   - "src/**"
   - "tests/**"
@@ -20,71 +20,96 @@ This document describes implemented reality. Proposed structure belongs in an ac
 - Primary language: Python 3.11 or newer.
 - Runtime dependencies: Python standard library only.
 - Distribution: a Python wheel exposing the `reporivet` console command.
+- Generated command surface: POSIX wrappers around one copied standard-library runtime.
 
 ## Repository map
 
 | Path | Responsibility | Public boundary |
 |---|---|---|
-| `src/reporivet/cli.py` | CLI parsing and command dispatch | `reporivet init`, `upgrade`, `doctor` |
-| `src/reporivet/initializer.py` | Safe project inspection, rendering, ownership-aware writes, command inference, upgrades, and diagnostics | Python package internals |
-| `src/reporivet/assets/project/` | Versioned templates and generated repository runtime | Packaged data consumed by the initializer |
-| `src/reporivet/assets/project/dev/harness.py` | Canonical generated runtime for context, documents, plans, checks, verification, and gardening | Copied to target repositories as `dev/harness.py` |
-| `tests/` | End-to-end initializer and generated-runtime regression tests | `python3 -m unittest discover -s tests -v` |
-| `dev/` | This repository's dogfooded harness entry points | `./dev/*` |
-| `docs/` | This repository's current-state and historical operating knowledge | Read through `docs/README.md` |
+| `src/reporivet/cli.py` | CLI parsing and command dispatch | `reporivet init`, `define`, `audit`, `upgrade`, `doctor` |
+| `src/reporivet/initializer.py` | Safe inventory, rendering, ownership-aware writes, adoption, upgrades, and diagnostics | Python package internals |
+| `src/reporivet/assets/project/` | Versioned templates and canonical generated runtime | Packaged data consumed by the initializer |
+| `src/reporivet/assets/project/dev/harness.py` | Definition, audit, context, documents, plans, traceability, checks, Verification Run, Gate, closure, and gardening | Copied as `dev/harness.py` |
+| `tests/` | Package, generated-runtime, security, evidence, closure, and distribution regression tests | `python3 -m unittest discover -s tests -v` |
+| `dev/` | This repository's dogfooded generated-runtime entry points | `./dev/*` |
+| `docs/` | Current-state, protocol, specification, design, planning, and historical knowledge | Read through `docs/README.md` |
 
 ## Components and dependency direction
 
 | Component | Owns | May depend on | Must not depend on |
 |---|---|---|---|
 | CLI | User-facing arguments and exit codes | Initializer public functions | Generated target state |
-| Initializer | File ownership, templates, detection, upgrades | Standard library, packaged assets | Host-specific plugins or LLM APIs |
-| Packaged assets | Target repository contract and runtime source | Template variables only | Initializer process state |
-| Generated runtime | Repository-local context, validation, command execution, Git-bound plan closure | Standard library, target repository files and configured tools | Installed `reporivet` package after generation |
-| Tests | Observable behavior and safety invariants | Public CLI and generated runtime | Network services or user accounts |
+| Initializer | Inventory, ownership, templates, adoption, upgrades | Standard library, packaged assets | Host plugins, LLM APIs, or external state |
+| Packaged assets | Target repository contract and runtime source | Declared template variables | Initializer process state |
+| Generated runtime | Definition validation, audit, routing, plans, checks, evidence, Gate, and closure | Standard library, repository files, Git, configured tools | Installed `reporivet` package after generation |
+| Tests | Observable behavior and safety invariants | Public CLI and generated runtime | Network services, credentials, or model evaluation |
 
-Dependency direction is `CLI -> initializer -> packaged assets`. A generated target runs independently as `wrapper -> dev/harness.py -> repository files/configured commands`.
+Dependency direction is:
 
-## Initialization flow
+```text
+installed CLI -> initializer/package inventory -> rendered repository assets
+repository wrapper -> dev/harness.py -> repository files, local Git, configured commands
+```
+
+The reverse edge from a generated repository to the installed package is forbidden.
+
+## Package-side flows
+
+### Initialization
 
 1. Resolve or create the target root.
-2. Inspect repository markers and infer a draft runtime profile and command set.
-3. Refuse collisions with existing project-owned canonical command paths.
-4. Upsert only marked blocks in `AGENTS.md` and `.gitignore`.
+2. Inspect repository markers and infer a provisional runtime profile and command set.
+3. Refuse symlinked paths and project-owned collisions at canonical managed paths.
+4. Upsert only bounded managed blocks in `AGENTS.md` and `.gitignore`.
 5. Create project-owned documents and `dev/harness.toml` only when missing.
 6. Create or refresh only files carrying a `reporivet:managed` marker.
 7. Generate document catalogs and run structural checks unless explicitly skipped.
 8. For existing implementations, create `PLAN-0000` and require command review.
 
-## Upgrade flow
+### Definition, audit, and adoption
 
-`upgrade` reads the existing project-owned configuration, refreshes marked harness files and blocks, creates newly introduced missing scaffolds, and preserves all unmarked or project-owned content. It never rewrites current-state documents, plans, decisions, runbooks, specifications, or `dev/harness.toml`.
+- `reporivet define --root <path>` explicitly creates the repository harness and project-owned definition draft; `init` and `upgrade` do not start definition implicitly.
+- `reporivet audit --root <path>` inventories authority, manifests, commands, source/test paths, conflicts, and proposed additions without writing files or executing project commands.
+- `reporivet define --root <path> --adopt` audits first, refuses conflicts before writes, preserves existing README, instructions, architecture, CI, and configuration, and leaves inferred commands in review state.
 
-## Generated runtime flow
+### Upgrade and doctor
 
-1. `./dev/context` routes an agent to stable entry documents, relevant durable documents, and active plans.
-2. `./dev/check` validates catalogs, documents, and plans before fast configured commands.
-3. `./dev/verify` adds strict baseline and architecture gates, configured completion commands, and optional smoke commands.
-4. Every configured command is executed without a shell, streamed to the console, and logged under `.harness/runs/`.
-5. `./dev/close-plan` requires a clean Git worktree, verifies current `HEAD`, records its SHA, and archives the plan.
-6. `./dev/garden` reports maintenance candidates without deleting or rewriting content.
+`upgrade` refreshes marked managed files and blocks and creates newly introduced missing scaffolds. It never rewrites current-state documents, specifications, plans, decisions, runbooks, or project-owned `dev/harness.toml`. New configurations receive explicit conservative `[gate]` defaults. Existing configurations without `[gate]` keep their exact bytes; the runtime applies conservative shadow defaults in memory and `doctor` emits an advisory.
+
+## Repository-local runtime flow
+
+1. `./dev/define status|validate|finalize` computes persisted progress, structurally validates evidence, and transactionally produces a final specification plus one first-slice ExecPlan. It does not invent product answers.
+2. `./dev/audit` reproduces the deterministic read-only repository inventory without importing the installed package.
+3. `./dev/code-map` derives a non-authoritative map from actual, configured, or confirmed planned paths. `./dev/context --path|--area|--plan` routes to matching authority, module contracts, maps, specifications, and active plans.
+4. `./dev/check` provides fast structural and configured-command feedback.
+5. One `./dev/verify` invocation creates exactly one `.harness/runs/<utc-run-id>-verify/` and runs security, catalog, documentation, plan, architecture, project, and optional smoke checks in fixed order.
+6. Checks record `pass`, `fail`, `error`, `skipped`, or `unknown`. The run preserves `manifest.json`, `gate.json`, `report.md`, per-check JSON, and available logs even when the candidate fails or infrastructure errors.
+7. Gate evaluates only explicit local base/head/target evidence and changed paths. It emits `PASS`, `REVIEW`, `BLOCK`, or `INCONCLUSIVE` under shadow or enforce mode; it never fetches, assumes a remote, or infers a parent.
+8. `./dev/close-plan` binds a clean current `HEAD` to the plan base, invokes the canonical verification implementation exactly once, records the run/hash/verdict/SHA/criterion evidence, and moves the plan transactionally. `REVIEW` requires a genuine human reason; `BLOCK` and `INCONCLUSIVE` cannot be overridden.
+9. `./dev/garden` reports maintenance candidates without deleting or rewriting content.
+
+## CI and evidence
+
+Generated and dogfood verification workflows retain immutable action SHAs and `contents: read`, fetch full history through checkout, select the explicit PR head or push head, export explicit base/head/target evidence, invoke `./dev/verify` once after bootstrap, append the latest report to the step summary, and upload `.harness/runs/` on success or failure. An all-zero push base is treated as unavailable rather than replaced with an inferred parent.
 
 ## Persistent data and external systems
 
-The initializer writes only to the selected project root. It has no database, daemon, telemetry service, network client, GitHub API client, secret store, plugin protocol, or LLM API dependency.
+The initializer writes only to the selected project root. It has no database, daemon, telemetry service, GitHub API client, secret store, plugin protocol, model client, or LLM API dependency.
 
-The generated runtime may execute only command arrays explicitly committed in the target's `dev/harness.toml`. Those commands inherit the caller's local environment and permissions.
+Configured project commands execute only as argument arrays committed in `dev/harness.toml`. Built-in validation and local Git-evidence operations use fixed argument arrays owned by the copied runtime. Both inherit the caller's local environment and permissions. Verification artifacts are ignored local/CI evidence, not an external state system.
 
 ## Mechanical invariants
 
-- `python3 -m unittest discover -s tests -v` covers ownership, idempotence, sensitive/local/build ignore behavior and safe exceptions, conflict handling, document indexing, plan validation, deterministic command failure, dry-run behavior, and Git-bound closure.
-- `python3 -m compileall -q src tests` checks Python syntax and import compilation.
-- Wheel smoke tests confirm all packaged assets are included and an installed console command can initialize and verify a project.
-- Target repositories enforce current-state document metadata, catalog drift, links, ExecPlan lifecycle, Task Packet fields, strict baseline readiness, executable availability, and clean-Git plan closure.
+- Package version comes from `reporivet.__version__`; wheel metadata and managed markers must agree.
+- Canonical package runtime and dogfood runtime differ only by the rendered version token; every managed wrapper is rendered from one `PYTHON`-aware template and remains executable.
+- Upgrade preserves `dev/harness.toml` byte-for-byte.
+- The regression suite covers definition/resume, audit/adoption, traceability, routing, Verification Run, Gate, closure, CI, ownership, and security boundaries.
+- Wheel tests require a complete packaged-asset inventory with no bytecode, Skill bundle, target bundle, model, or daemon surface.
+- An isolated installed CLI can generate and diagnose a project; after uninstall, repository-local definition, audit, context, planning, checks, verification, closure, and gardening continue to work.
 
 ## Known limits
 
 - Generated shell wrappers target POSIX environments.
-- Command inference is intentionally provisional for an existing implementation and requires explicit review.
-- Semantic design quality, conflicting requirements, and document retirement still require Main or human judgment.
-- Remote repository creation is outside the package; publishing uses ordinary Git or a connected GitHub integration.
+- Command inference is intentionally provisional and requires explicit review.
+- Markdown/frontmatter validators support the committed schema, not arbitrary YAML or semantic product judgment.
+- Remote publication and old-repository lifecycle operations are outside the package and this release work.

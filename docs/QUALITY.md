@@ -3,7 +3,7 @@ id: QUALITY
 kind: quality
 status: active
 area: repository
-summary: Current quality model, test layers, release checks, and residual risks
+summary: Current quality model, verification statuses, Gate policy, release checks, and residual risks
 applies_to:
   - "**"
 ---
@@ -12,52 +12,74 @@ applies_to:
 
 ## Quality model
 
-Quality means a target repository is created safely, remains understandable after sessions change, fails visibly when its configured evidence is unavailable, and can be upgraded without losing project-owned knowledge.
+Quality means a repository is changed safely, remains understandable after sessions and package installation state change, fails visibly when required evidence is unavailable, preserves inspectable artifacts for non-green outcomes, and can be upgraded without losing project-owned knowledge.
 
 ## Verification layers
 
 | Layer | Purpose | Canonical command | Evidence |
 |---|---|---|---|
 | Syntax | Compile Python sources and tests | `python3 -m compileall -q src tests` | Zero exit status |
-| Regression | Exercise initializer and generated runtime end to end | `python3 -m unittest discover -s tests -v` | Fifteen passing tests |
-| Repository fast feedback | Structural checks plus regression suite | `./dev/check` | Catalog, document, plan, and test output |
-| Completion gate | Strict repository checks plus regression suite | `./dev/verify` | Integrated command logs under `.harness/runs/` |
-| Distribution smoke | Build and install a wheel, initialize a project, run its verify and doctor commands | Release procedure | Installed CLI and generated project succeed |
+| Regression | Exercise initializer and copied runtime end to end | `python3 -m unittest discover -s tests -v` | Full unit/integration/regression result |
+| Repository fast feedback | Structural checks plus configured fast commands | `./dev/check` | Catalog, document, plan, architecture preflight, and project output |
+| Completion gate | One fixed shared Verification Run | `./dev/verify` | `.harness/runs/<run>-verify/` manifest, Gate, report, checks, and logs |
+| Distribution | Build/install/uninstall the wheel and exercise generated projects | Distribution regression and release procedure | Complete asset inventory and package-independent operation |
+
+## Verification Run status
+
+One canonical run executes security, docs-index, documentation, plan, architecture, project, and optional smoke checks in that order. Each check records one of:
+
+- `pass`: the declared check completed successfully.
+- `fail`: candidate behavior did not satisfy a required check.
+- `error`: the check could not produce reliable evidence because of configuration or infrastructure.
+- `skipped`: an optional check was correctly not configured.
+- `unknown`: evidence could not be determined and must not be treated as pass.
+
+A required `fail` determines verification failure even when another required stage errors. Otherwise a required `error` or `unknown` determines an error outcome. Optional smoke may be `skipped`; malformed configured smoke is a required error. Artifacts are finalized as far as possible for all outcomes.
+
+## Gate semantics
+
+Changed paths use `contained`, `wide`, `irreversible`, or `unknown` risk. Verdict priority is:
+
+1. Required check failure: `BLOCK`.
+2. Required error/unknown, malformed Gate policy, or target mismatch/error: `INCONCLUSIVE`.
+3. Protected, unknown, wide, irreversible, or policy-required dirty state: `REVIEW`.
+4. Clean explicit contained target with all required checks passing: `PASS`.
+
+In shadow mode, deterministic `PASS` and `REVIEW` return zero; `BLOCK` returns one and `INCONCLUSIVE` returns two. In enforce mode, only `PASS` returns zero. A REVIEW verdict is evidence for human judgment, not an automatic approval.
 
 ## Test ownership
 
-`tests/test_reporivet.py` owns black-box and integration behavior for:
+Focused modules own distinct behavior:
 
-- blank and existing repository initialization;
-- baseline plan and command-review state;
-- project-owned content preservation;
-- managed-block idempotence;
-- sensitive, personal, build-output ignore rules and example/lockfile exceptions;
-- force-added sensitive path and token-signature rejection;
-- durable document catalog drift;
-- future ExecPlan template-token preservation and creation-time rendering;
-- ExecPlan creation and Task Packet routing;
-- strict baseline readiness;
-- missing executable failures;
-- dry-run non-mutation;
-- canonical command path conflicts; and
-- Git-bound plan closure.
+- `tests/test_reporivet.py`: initialization, ownership, wrappers, doctor, CI, security integration, and upgrades.
+- `tests/test_definition.py`: definition start, resume, validation, finalization, and rollback.
+- `tests/test_audit_adoption.py`: deterministic read-only audit, authority-preserving adoption, path safety, and rollback.
+- `tests/test_traceability.py`: product/spec/plan/task/evidence links and legacy-plan compatibility.
+- `tests/test_code_map.py`: justified contracts, deterministic maps, drift, and context routing.
+- `tests/test_verification_run.py`: fixed stages, statuses, artifacts, target evidence, recursion rejection, and Gate matrix.
+- `tests/test_gate_close_plan.py`: PASS/REVIEW/BLOCK/INCONCLUSIVE closure, one-run binding, path safety, and transaction recovery.
+- `tests/test_distribution.py`: wheel inventory, isolated install, generated verify/doctor, uninstall, repository-local commands, and closure.
 
 ## Review expectations
 
-Changes to ownership rules, file replacement behavior, command execution, frontmatter parsing, plan closure, packaged assets, or CI templates require regression tests and independent review of destructive edge cases.
+Changes to ownership, replacement behavior, path handling, command execution, parsing, target evidence, Gate policy, closure, packaged assets, or CI require regression tests and an independent context that attempts to falsify the acceptance claim. Explanations without commands or artifacts are not evidence.
 
-## Release gate
+## Local 0.2.0 release gate
 
-1. Run `./dev/verify` from a clean worktree.
-2. Build a wheel with no build isolation.
-3. Confirm the wheel contains every asset and no bytecode cache.
-4. Install it into an isolated virtual environment.
-5. Initialize a service project with CI.
-6. Run the generated project's `verify` and initializer `doctor` commands.
+1. Compile source and tests and run the full regression suite.
+2. Run strict security, catalog, documentation, plan, architecture, and repository checks.
+3. Build a `0.2.0` wheel with no build isolation, dependency resolution, or network access.
+4. Confirm every package asset is present and bytecode, cache, Skill, target bundle, model, and daemon surfaces are absent.
+5. Install the local wheel into a fresh virtual environment without an index.
+6. Run installed CLI help, fresh initialization/definition/audit, generated verification, and initializer doctor.
+7. Uninstall Reporivet and rerun repository-local definition, audit, context, planning, checks, verification, closure, and gardening fixtures.
+8. Independently review the exact clean candidate and run one final canonical Verification Run with explicit base/head/target evidence.
+
+This is a local release-ready boundary only. It does not publish a wheel or create a GitHub release.
 
 ## Known gaps
 
-- Tests run on the current POSIX environment; Windows-native wrappers are not covered.
-- Frontmatter parsing intentionally supports the limited schema emitted by templates, not arbitrary YAML.
-- Semantic documentation quality remains a review responsibility rather than a parser guarantee.
+- Generated wrappers are POSIX shell scripts; Windows-native wrappers are not covered.
+- Frontmatter and Markdown parsing intentionally supports the committed schema rather than arbitrary YAML/Markdown.
+- Structural evidence does not replace semantic product, architecture, security, or REVIEW judgment.
+- Optional smoke evidence is project-specific and remains skipped when no command is configured.

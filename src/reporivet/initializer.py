@@ -216,16 +216,23 @@ class AuditReport:
 
 
 def validate_root(root: Path, *, create: bool = False, dry_run: bool = False) -> Path:
-    root = root.expanduser().resolve(strict=False)
-    if not root.exists():
+    expanded = root.expanduser()
+    absolute = Path(os.path.abspath(expanded))
+    component = symlink_component(absolute)
+    if component is not None:
+        raise InitError(
+            f"refusing to use a symlinked project root or parent: {root} "
+            f"(via {component})"
+        )
+    if not absolute.exists():
         if not create:
             raise InitError(f"project root does not exist: {root}")
         if not dry_run:
-            root.mkdir(parents=True, exist_ok=False)
-        return root
-    if not root.is_dir():
+            absolute.mkdir(parents=True, exist_ok=False)
+        return absolute
+    if not absolute.is_dir():
         raise InitError(f"project root is not a directory: {root}")
-    return root
+    return absolute
 
 
 def render(text: str, values: dict[str, str]) -> str:
@@ -769,6 +776,7 @@ def project_documents(kind: str) -> dict[str, str]:
         "docs/generated/README.md": "docs/generated/README.md.tmpl",
         "docs/generated/code-map.md": "docs/generated/code-map.md.tmpl",
         "docs/references/README.md": "docs/references/README.md.tmpl",
+        "docs/references/project-definition-protocol.md": "docs/references/project-definition-protocol.md.tmpl",
         "docs/runbooks/index.md": "docs/runbooks/index.md.tmpl",
         "docs/runbooks/_template.md": "docs/runbooks/_template.md.tmpl",
     }
@@ -1948,11 +1956,13 @@ def doctor_project(root: Path) -> int:
         "docs/module-contracts/README.md",
         "docs/module-contracts/_template.md",
         "docs/generated/code-map.md",
+        "docs/references/project-definition-protocol.md",
         "dev/harness.py",
         "dev/harness.toml",
         "dev/bootstrap",
         "dev/context",
         "dev/define",
+        "dev/audit",
         "dev/code-map",
         "dev/run",
         "dev/check",

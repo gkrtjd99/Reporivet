@@ -27,10 +27,76 @@ CI + garden        Enforced invariants and long-term drift reporting
 ### Agent entry points
 
 - `AGENTS.md` is the repository operating contract and documentation entry point for every agent.
-- `CLAUDE.md` contains no Claude-specific rules; it only imports `@AGENTS.md`, so Claude Code reads the same canonical source.
-- Even when a tool needs its own entry-point file, `AGENTS.md` remains the single repository authority.
+- This repository's `CLAUDE.md` is a thin adapter that imports only `@AGENTS.md` instead of duplicating Claude-specific rules.
+- Generated projects do not automatically receive tool-specific `CLAUDE.md`, `.claude/`, or nested `AGENTS.md` files. If a tool requires its own entry point, the project may add a thin adapter that points to the same `AGENTS.md`.
+- Even when a tool-specific entry point exists, `AGENTS.md` remains the single repository authority.
 
-The design background is documented in [`docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md`](docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md), and the generated output is specified in [`docs/product-specs/SPEC-REPORIVET-001-generated-project.md`](docs/product-specs/SPEC-REPORIVET-001-generated-project.md).
+The two-lifetime structure is documented in [`DESIGN-REPORIVET-001`](docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md), definition/adoption/evidence Gate design in [`DESIGN-REPORIVET-002`](docs/design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md), generated behavior in [`SPEC-REPORIVET-001`](docs/product-specs/SPEC-REPORIVET-001-generated-project.md), and detailed requirements in [`SPEC-REPORIVET-002`](docs/product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md).
+
+## Generated repository structure
+
+A normal initialization does not guess application code or infrastructure. It creates the documentation, command, and verification surfaces that let the project operate from its own repository.
+
+```text
+project/
+├── AGENTS.md                    Short operating contract and document router
+├── ARCHITECTURE.md              Source of truth for the implemented structure
+├── .gitignore                   Project content plus a managed security block
+├── .reporivet-version           Managed asset version
+├── dev/
+│   ├── harness.py               Local runtime that works after package removal
+│   ├── harness.toml             Authority for project commands, paths, and policy
+│   └── bootstrap, define, audit, code-map, context, check, verify, ...
+├── docs/
+│   ├── README.md                Knowledge map and reading order
+│   ├── PRODUCT.md               Current purpose, users, requirements, and non-goals
+│   ├── DESIGN.md                Current principles and durable-design routing
+│   ├── QUALITY.md               Tests, Verification Run, and Gate expectations
+│   ├── SECURITY.md              Trust, secrets, command execution, and review boundaries
+│   ├── PLANS.md                 ExecPlan, Task Packet, and closure policy
+│   ├── RELIABILITY.md           Only for service/web/application profiles
+│   ├── product-specs/           Durable behavioral specifications
+│   ├── design-docs/             Durable designs and trade-off records
+│   ├── exec-plans/              Active work and completed history
+│   ├── module-contracts/        Only justified multi-file boundaries
+│   ├── decisions/               Consequential decisions that can be superseded
+│   ├── runbooks/                Operational steps with evidence and rollback
+│   ├── references/              Curated references and the definition protocol
+│   └── generated/code-map.md    Non-authoritative map derived from repository evidence
+├── .harness/runs/               Git-ignored local verification evidence and raw logs
+└── .github/workflows/           Only with --with-ci
+```
+
+When an existing implementation is detected, Reporivet may add `docs/exec-plans/active/PLAN-0000-establish-repository-baseline.md`, and inferred commands remain in `configuration = "review"` until a person confirms them. Neither `init` nor `upgrade` implicitly creates a project-definition draft; it appears only after an explicit `reporivet define --root .`.
+
+### Why the surfaces are separate
+
+| Surface | Responsibility | Reason for separation |
+|---|---|---|
+| `AGENTS.md` | Entry order, scope limits, Main/Sub ownership, and stop conditions | Point to authority without preloading long-lived knowledge |
+| Current-state documents | Product, structure, design, quality, and security that are true now | Prevent plans or historical records from being mistaken for current reality |
+| Durable documents | Long-lived specifications, designs, decisions, and runbooks | Preserve contracts and rationale in Git across sessions and agents |
+| ExecPlan | Scope, non-goals, Tasks, acceptance, and evidence for complex work | Make work restartable and constrain expansion without a separate task database |
+| `dev/` | Deterministic commands shared by every agent and CI | Use observable command results rather than explanations as evidence |
+| `.harness/runs/` | Manifest, Gate, report, check JSON, and available logs | Bind results to a candidate commit while separating raw output from durable knowledge |
+
+### Agent reading order and context use
+
+Files do not enter model context merely because they exist on disk. An agent reads `AGENTS.md` first and then uses the narrowest available router input:
+
+```bash
+./dev/context --path src/example.py
+./dev/context --area identity
+./dev/context --plan PLAN-2026-0001
+```
+
+`context` does not print every document body. It returns paths and one-line summaries for matching module contracts, code-map entries, durable documents, product specifications, and active plans. The agent then reads only what the current Task needs. `AGENTS.md` forbids preloading all documentation, dependencies, generated output, completed plans, caches, or raw logs. A small local change need not read or create a large ExecPlan, and a Sub Agent receives only the exact read/write scope in its Task Packet.
+
+This reduces context use but is not an operating-system read sandbox. Keep document `area` and `applies_to` metadata specific and keep code-map, catalog, and documentation checks green to limit routing drift; Main and human reviewers retain the final semantic scope judgment.
+
+### What initialization does not create
+
+Reporivet does not guess project authority, so normal initialization does not create a project `README.md`, source or test code, `Dockerfile`, Docker Compose, Kubernetes manifests, Helm charts, Terraform, or deployment configuration. Cloud, Kubernetes, or Terraform entries in `.gitignore` and `SECURITY.md` are general safeguards against committing credentials and local state, not infrastructure configuration. Audit and adoption may inventory and preserve existing infrastructure files, but they do not create them.
 
 ## What Reporivet guarantees
 
@@ -39,13 +105,17 @@ The design background is documented in [`docs/design-docs/DESIGN-REPORIVET-001-i
 - Complex work is managed by one ExecPlan in `docs/exec-plans/active/` and its Task Packets.
 - Main owns planning, document lifecycle, integration, verification targets, and completion.
 - Sub performs one task with a bounded read/write scope, acceptance criteria, and stop condition.
-- Only commands committed in `dev/harness.toml` run at the completion gate.
-- A configured executable that is missing causes a failure rather than silently skipping a check.
-- Verification logs are stored in `.harness/runs/` and are not committed to Git.
+- Explicit definition separates Confirmed, Proposed, Open, and Sources evidence and validates `JRN-* -> REQ-P0-* -> AC-*` relationships.
+- `audit` is deterministic and read-only; `define --adopt` preserves existing authority and stops before writes on conflict.
+- Opt-in ExecPlan traceability connects product criteria to Tasks, criterion-level evidence, and a verified commit.
+- Project-configured commands run only as argv arrays committed in `dev/harness.toml`; built-in validation and local Git-evidence operations use fixed argv. A missing configured executable fails rather than disappearing.
+- One `./dev/verify` uses a fixed check order and preserves a manifest, Gate, report, check JSON, and available logs under one `.harness/runs/<run>-verify/`.
+- Gate uses only explicit local base/head/target and changed paths to return `PASS`, `REVIEW`, `BLOCK`, or `INCONCLUSIVE`.
 - The generated `.gitignore` blocks build output, environment files, keys, credentials, and personal IDE settings by default.
 - `./dev/security-check` rejects sensitive paths and high-confidence credential signatures that entered Git through force-add or similar overrides.
 - `garden` reports stale plans, documents, paths, and references as candidates; it does not delete them automatically.
-- Reinitialization and upgrades do not overwrite project-owned documents.
+- Reinitialization and upgrades do not overwrite project-owned documents or existing `dev/harness.toml` bytes.
+- The generated runtime does not import the installed package, so repository-local commands remain usable after Reporivet is removed.
 
 ## Requirements
 
@@ -107,14 +177,42 @@ Command detection for an existing project is only a draft. `dev/harness.toml` st
 
 A new project starts with `baseline = "draft"` and `configuration = "ready"`. When no source exists yet, `./dev/verify` can run using only document, plan, and structure checks. Once source is added, configure the canonical commands.
 
+## Project definition and existing-repository adoption
+
+`init` and `upgrade` never start product definition implicitly. A person starts it explicitly and edits the repository-owned draft.
+
+```bash
+reporivet define --root .
+./dev/define status
+./dev/define validate
+./dev/define finalize
+```
+
+The fourteen sections keep Confirmed, Proposed, Open, and Sources separate. `finalize` rejects blocking Open items, placeholders, contradictions, and invalid stable-ID links, then transactionally creates one final product specification and one first vertical-slice ExecPlan from validated evidence. Follow the [Project Definition Protocol](docs/references/project-definition-protocol.md) for the complete procedure.
+
+For an existing repository, inspect authority and command candidates with a no-write audit before adoption:
+
+```bash
+reporivet audit --root .
+reporivet define --root . --adopt
+./dev/audit
+```
+
+Adoption preserves the existing README, user-owned `AGENTS.md` text, architecture, CI, catalogs, and configuration. Inferred commands remain `configuration = "review"` until a person verifies them.
+
 ## Generated operating commands
 
 ```bash
 ./dev/bootstrap                         # Install from the lockfile, etc.
-./dev/context --path src/example.py    # Route to required docs and active plans
+./dev/define status                     # Report definition progress and next section
+./dev/define validate                   # Validate evidence structure and trace links
+./dev/define finalize                   # Create final spec and first ExecPlan
+./dev/audit                             # Inventory without writes or command execution
+./dev/code-map                          # Refresh the evidence-backed code map
+./dev/context --path src/example.py    # Route to docs, contracts, and active plans
 ./dev/run                               # Run the application
 ./dev/check                             # Fast feedback
-./dev/verify                            # Canonical completion gate
+./dev/verify                            # Only canonical completion gate and evidence run
 ./dev/smoke                             # User-observable path
 ./dev/security-check                    # Block tracked secrets and personal files
 
@@ -140,7 +238,7 @@ Each wrapper calls `dev/harness.py` inside the repository. `dev/harness.toml` is
 4. Commit the candidate changes and the verifying plan together so the worktree is clean.
 5. Run `./dev/close-plan PLAN-...`.
 
-`close-plan` runs the full verification from the current clean `HEAD`, records the actual SHA in `integrated_commit` and `verified_commit`, then moves the plan to `completed/`. The completion record is kept in a separate commit.
+`close-plan` runs the canonical Verification Run exactly once against the plan's explicit base and the current clean `HEAD`. `PASS` closes directly; `REVIEW` requires a reason written by a person through `--accept-review "..."`; `BLOCK` and `INCONCLUSIVE` cannot be overridden. Success records the run ID, finalized manifest SHA-256, Gate verdict, verified SHA, criterion evidence, and applicable REVIEW reason before moving the plan to `completed/`. Commit that historical record separately without running a second `./dev/verify`.
 
 ## Document lifecycle
 
@@ -151,7 +249,7 @@ Each wrapper calls `dev/harness.py` inside the repository. `dev/harness.toml` is
 | `exec-plans/active/` | Current execution state | Main keeps it updated |
 | `exec-plans/completed/`, accepted ADRs | Historical record | Supersede instead of deleting |
 | `generated/` | Regenerable facts | Only the generator edits them |
-| `.harness/runs/` | Raw execution logs | Git-ignored and disposable |
+| `.harness/runs/` | Local Verification Run evidence and raw logs | Git-ignored, review before sharing, disposable |
 
 `docs-index` updates only the explicit catalog block in each index and preserves human-written explanations.
 
@@ -176,7 +274,8 @@ Never overwritten:
 
 - `ARCHITECTURE.md`
 - `docs/PRODUCT.md`, `DESIGN.md`, `QUALITY.md`, `SECURITY.md`, `RELIABILITY.md`
-- Product specs, design documents, ExecPlans, ADRs, and runbooks
+- `dev/harness.toml`
+- Product specs, design documents, ExecPlans, ADRs, runbooks, and definition evidence
 - Human-written areas of document indexes
 
 If an existing project already owns paths such as `dev/check` or `dev/verify`, initialization reports the conflict and stops rather than silently replacing them.
@@ -198,10 +297,11 @@ By contrast, `.env.example`, `*.tfvars.example`, `.vscode/extensions.json`, sour
 
 Using `--with-ci` generates two workflows:
 
-- `bootstrap` and `verify` on pull requests and pushes to `main`
-- A weekly or manually triggered `garden` report upload
+- On pull requests and `main` pushes, bind explicit base/head/target evidence and run `bootstrap` followed by exactly one `verify`
+- Append the report to the step summary and upload `.harness/runs/` regardless of success or failure
+- Upload a weekly or manually triggered `garden` report
 
-If the target project needs additional runtime installation after initialization, extend the workflow for that project. The key requirement is to keep `dev/harness.toml` and CI aligned so they do not perform different verification.
+Actions use immutable SHA pins, `contents: read`, and full checkout history. An all-zero push base remains unavailable instead of triggering parent inference. If the target project needs additional runtime installation after initialization, extend the workflow for that project while keeping `dev/harness.toml` and CI aligned.
 
 ## Testing this repository
 
@@ -209,15 +309,18 @@ If the target project needs additional runtime installation after initialization
 python3 -m unittest discover -s tests -v
 ```
 
-The tests cover initialization, existing-project baselines, preservation of project-owned documents, safe upgrades, sensitive/personal/build-artifact ignore policy and example/lockfile exceptions, force-added sensitive paths and high-confidence credential signature blocking, catalog drift, preservation of future ExecPlan tokens, Task Packets, strict baselines, missing-tool failures, dry runs, command conflicts, and Git commit-bound plan closure.
+The tests cover definition/resume/finalization, deterministic audit/adoption, traceability, conditional contracts/code map/context, Verification Run status and artifacts, Gate/closure, initialization and upgrade ownership, CI structure, security, wheel inventory, isolated installation, and repository-local operation after package uninstall.
+
+The `0.2.0` target is a local release-ready boundary. It builds, inspects, installs, uninstalls, and exercises the wheel without network access; it does not publish to PyPI or create a GitHub Release.
 
 ## Non-goals
 
 - An orchestrator that automatically coordinates multiple Main agents
-- A task database, lease, scheduler, journal, or replay system
-- An unattended pull-request merge bot
-- Plugins or Skills for a particular LLM product
-- Replacing every semantic judgment with scripts
+- A task database, lease, scheduler, journal, replay system, daemon, plugin, or MCP bridge
+- Unattended pull-request creation/merge, package publication, deployment, or another external write
+- Skills, runtime target bundles, or model judges for a particular LLM product
+- Replacing semantic product judgment, conflict resolution, or human REVIEW acceptance with scripts
+- Backup, archive, deprecation writes, deletion, or other operation of the former repository
 
 Mechanically decidable rules are enforced by CI. Decisions that require judgment—simplicity, design validity, and document retirement—remain evidence-based decisions by Main and independent reviewers.
 

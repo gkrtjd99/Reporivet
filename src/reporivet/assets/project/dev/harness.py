@@ -216,6 +216,7 @@ AUDIT_PROJECT_DOCUMENT_PATHS = (
     "docs/decisions/_template.md",
     "docs/generated/README.md",
     "docs/references/README.md",
+    "docs/references/project-definition-protocol.md",
     "docs/runbooks/index.md",
     "docs/runbooks/_template.md",
 )
@@ -290,6 +291,7 @@ REQUIRED_DOCS = (
     Path("docs/runbooks/_template.md"),
     Path("docs/generated/README.md"),
     Path("docs/references/README.md"),
+    Path("docs/references/project-definition-protocol.md"),
     Path("dev/harness.toml"),
 )
 CATALOG_AREAS = {

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# reporivet:managed version=0.1.0
+# reporivet:managed version=0.2.0
 set -eu
 SCRIPT_DIR=$(dirname -- "$0")
 PYTHON=${PYTHON:-python3}

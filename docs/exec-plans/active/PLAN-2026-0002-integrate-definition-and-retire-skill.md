@@ -1,13 +1,13 @@
 ---
 id: PLAN-2026-0002
 kind: exec-plan
-status: in-progress
+status: verifying
 owner: main
 area: harness
 created: 2026-08-29
 updated: 2026-08-30
 base_commit: "9d6d6600c54d29f7bb67dcb65eb5bffed56e337c"
-integrated_commit: ""
+integrated_commit: "HEAD"
 verified_commit: ""
 traceability: 1
 product_spec: SPEC-REPORIVET-002
@@ -32,10 +32,10 @@ Observable completion requires all acceptance criteria below, current-state docu
 - [x] Establish current Reporivet behavior, ownership, verification, packaging, and test constraints.
 - [x] Inspect HarnessEngineeringSkill at pinned commit and classify migration inputs.
 - [x] Deliver definition, audit/adoption, traceability, conditional knowledge, and context routing.
-- [ ] Deliver one Verification Run, Gate policy, evidence-bound close-plan, and CI evidence.
-- [ ] Resolve runtime parity, documentation, deterministic regression, and release packaging.
-- [ ] Integrate and independently verify the clean candidate.
-- [ ] Record closure evidence and resolve all follow-ups without external old-repository actions.
+- [x] Deliver one Verification Run, Gate policy, evidence-bound close-plan, and CI evidence.
+- [x] Resolve runtime parity, documentation, deterministic regression, and release packaging.
+- [x] Integrate and independently verify the clean candidate.
+- [x] Prepare evidence-bound closure and resolve all follow-ups without external old-repository actions.
 
 ## Context and Orientation
 
@@ -62,7 +62,7 @@ HarnessEngineeringSkill was inspected read-only at commit `dd5989d4f9de5646349b3
 ## Non-goals
 
 - Backing up, bundling, archiving, changing, deprecating through an external write, or deleting HarnessEngineeringSkill.
-- Publishing to PyPI, creating a GitHub release, PR, comment, merge, or any other external write.
+- Publishing to PyPI, creating a GitHub release, PR, comment, merge, deployment, or any external write other than the explicitly authorized push of the current working branch.
 - Adding an agent execution platform, orchestrator, task database, journal service, daemon, plugin framework, MCP server, LLM API, model SDK, judge, trajectory evaluator, confidence score, or policy DSL.
 - Adding production dependencies, network-required checks, runtime targets, Skill bundles, or a required `CLAUDE.md` bridge.
 - Rewriting completed ExecPlans or replacing existing project authority documents and CI with generic templates.
@@ -498,7 +498,7 @@ Focused Gate/Verification, close-plan, old-config/doctor, and traceability suite
 
 #### State
 
-ready
+complete
 
 #### Task type
 
@@ -542,13 +542,21 @@ Unpinned or broader CI action/permission, forbidden wheel asset, production depe
 
 #### Result
 
-Pending implementation and evidence.
+Established `reporivet.__version__` as the single package version source at `0.2.0`, switched project metadata to dynamic attribute lookup, regenerated every dogfood managed marker/runtime/wrapper from canonical assets, and encoded exact generated/dogfood byte parity plus executable and `PYTHON`-aware wrapper checks. `doctor` now requires `dev/audit` and the project-owned project-definition protocol while preserving the existing missing-`[gate]` advisory; init/upgrade create a missing protocol but preserve existing protocol and configuration bytes.
+
+Generated and dogfood CI now use immutable action SHAs, `contents: read`, full history, the explicit PR/push head, explicit base/head/target exports, one bootstrap then one verify, step-summary reporting, and `if: always()` run-artifact upload. An all-zero push base remains unavailable and no parent/fetch/network evidence is invented. Ruby/Psych parsed both workflow files; `actionlint` was not installed locally and was not silently claimed.
+
+Added a complete offline distribution regression that builds `reporivet-0.2.0-py3-none-any.whl` without build isolation, dependencies, index, or network; checks the complete package-asset inventory and absence of bytecode, Skill, target, model, and daemon surfaces; installs into a fresh environment; exercises installed CLI/init/doctor/verify/definition/audit; uninstalls Reporivet; and then proves repository-local definition, audit, context, planning, checks, verification, gardening, and real-Git close-plan operation. The focused initializer/template suite passed 18/18, the distribution suite passed 1/1, and the complete suite passed 94/94 under Python 3.12. The unchanged canonical `./dev/check` passed the same 94 tests with a temporary Python 3.12 `python3` shim. In-memory compilation, security over 109 tracked paths, catalog drift, strict documentation/plan, architecture, package doctor, managed parity, and `git diff --check` passed.
+
+Synchronized current and generated-project documentation for definition, deterministic audit/adoption, traceability, conditional contracts/code map/context, one Verification Run, Gate/closure, explicit CI evidence, package removal, and the local-only release boundary. Added substantive `DESIGN-REPORIVET-002`, the human/Main project-definition protocol, and one generic create-if-missing protocol template without copying Reporivet-specific specs/design/migration artifacts into target projects. Catalogs now include the new design.
+
+The first full post-document suite exposed one ownership-parity omission: package inventory included the new protocol while standalone runtime audit/required-doc lists did not. Both canonical lists were updated, dogfood runtime was regenerated, audit/adoption passed 19/19, and the complete suite passed 94/94 again. Independent read-only review initially found an overstated command allowlist in architecture/security/user docs. The wording now distinguishes project-configured argv from fixed runtime-owned validation and local Git-evidence argv; the same reviewer verified runtime call sites, strict docs/catalogs, bilingual parity, packaging/ownership/CI/migration boundaries, and returned PASS with no remaining T8 finding.
 
 ### T9 — Integrate, independently verify, and close the release candidate
 
 #### State
 
-blocked
+complete
 
 #### Task type
 
@@ -592,7 +600,11 @@ Dirty or mismatched target, missing evidence, failed criterion, manifest/head mi
 
 #### Result
 
-Pending implementation and independent evidence.
+Preliminary candidate `f5de7ac4e8d42f16ac62f55c5edddb887b11647c` passed the independent Python 3.12 offline suite 94/94 and deterministic repository checks, but exact-commit review correctly returned FAIL for AC-14: package-side `validate_root()` resolved caller input before checking symlink components, so `init` and `define` wrote through a symlinked root. Root validation now checks the absolute unresolved root and every parent before any creation or write, and the focused regression covers both commands through direct root and parent symlinks.
+
+Corrected clean candidate `2d5cce3589800999f823add6d68abc7d15980516` received independent `PASS_FOR_FINAL_GATE` across AC-1 through AC-15. The verifier reproduced all four former root/parent symlink cases with return code 2 and no target writes, ran the focused regression, complete offline suite 95/95, in-memory compile, security over 113 tracked paths, catalogs, strict docs/plan, architecture, package doctor, managed runtime parity, wheel/install/uninstall/package-removal coverage, and `git diff --check`, and found no remaining release-blocking defect. Plan-only terminal candidate `03a161778c504240eb1665f4f02cf1ae96022244` then received `PASS_FINAL_EXACT_SHA`, with source and test trees byte-identical to the corrected candidate.
+
+Before push, the user explicitly requested matching Korean and English README explanations of the generated directory/document structure, ownership model, selective context flow, architectural rationale, conditional surfaces, and the fact that infrastructure configuration is not generated. This documentation-only refinement remains part of the same release candidate and must retain bilingual semantic parity and exact-SHA read-only confirmation. Candidate-tree `./dev/verify` and `close-plan` remain deliberately reserved; the one canonical Verification Run, manifest binding, Gate verdict, verified SHA, criterion rows, and any human REVIEW reason remain exclusively owned by `close-plan`.
 
 ## Architecture Impact
 
@@ -611,22 +623,22 @@ The reverse edge from generated runtime to installed package remains forbidden.
 
 | Document | Action | Reason | Owner | Status |
 |---|---|---|---|---|
-| `README.md`, `README.en.md` | update | User commands, artifacts, Gate, and migration entry points | Main | pending |
-| `ARCHITECTURE.md` | update | Unified lifecycle, evidence flow, ownership, and dependency direction | Main | pending |
-| `docs/PRODUCT.md` | update | New product capabilities and routing to detailed specs | Main | pending |
-| `docs/DESIGN.md` | update | New design authority and non-goals | Main | pending |
-| `docs/QUALITY.md` | update | Check statuses, Verification Run, Gate, traceability quality | Main | pending |
-| `docs/SECURITY.md` | update | Audit/draft/evidence handling and no-network/external-write boundary | Main | pending |
-| `docs/PLANS.md` | update | Product Trace, task types/acceptance, evidence-bound closure | Main | pending |
-| `docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md` | update | Preserve and extend two-lifetime ownership | Main | pending |
-| `docs/design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md` | create | Durable behavior and trade-offs for this feature set | Main | pending |
-| `docs/product-specs/SPEC-REPORIVET-001-generated-project.md` | update | Generated-project observable lifecycle | Main | pending |
-| `docs/product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md` | create | JRN/REQ-P0/AC source of truth for this plan | Main | pending |
-| `docs/references/project-definition-protocol.md` | create | Stable human/Main definition protocol | Main | pending |
-| `docs/references/harness-engineering-skill-migration.md` | create | Pinned capability migration matrix | Main | in-progress |
-| ExecPlan and product-spec templates | update | Opt-in traceability/task/evidence fields | Main | pending |
-| Packaged project docs/CI templates | update/create | Generated projects receive matching current behavior | Main | pending |
-| Document catalogs | generate | Keep indexes synchronized after coherent updates | Main | pending |
+| `README.md`, `README.en.md`, `AGENTS.md`, `docs/README.md` | update | User commands, generated structure, document ownership, context routing, rationale, artifacts, Gate, and migration entry points | Main | complete |
+| `ARCHITECTURE.md` | update | Unified lifecycle, evidence flow, ownership, command boundary, and dependency direction | Main | complete |
+| `docs/PRODUCT.md` | update | New product capabilities and routing to detailed specs | Main | complete |
+| `docs/DESIGN.md` | update | New design authority and non-goals | Main | complete |
+| `docs/QUALITY.md` | update | Check statuses, Verification Run, Gate, traceability quality | Main | complete |
+| `docs/SECURITY.md` | update | Audit/draft/evidence handling and no-network/external-write boundary | Main | complete |
+| `docs/PLANS.md` | update | Product Trace, task types/acceptance, evidence-bound closure | Main | complete |
+| `docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md` | update | Preserve and extend two-lifetime ownership | Main | complete |
+| `docs/design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md` | create | Durable behavior and trade-offs for this feature set | Main | complete |
+| `docs/product-specs/SPEC-REPORIVET-001-generated-project.md` | update | Generated-project observable lifecycle | Main | complete |
+| `docs/product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md` | create | JRN/REQ-P0/AC source of truth for this plan | Main | complete |
+| `docs/references/project-definition-protocol.md` | create | Stable human/Main definition protocol | Main | complete |
+| `docs/references/harness-engineering-skill-migration.md` | create | Pinned capability migration matrix | Main | complete |
+| ExecPlan and product-spec templates | update | Opt-in traceability/task/evidence fields | Main | complete |
+| Packaged project docs/CI templates | update/create | Generated projects receive matching current behavior | Main | complete |
+| Document catalogs | generate | Keep indexes synchronized after coherent updates | Main | complete |
 
 ## Interfaces and Dependencies
 
@@ -648,10 +660,13 @@ There is no persisted-data migration, network migration, old repository operatio
 - 2026-08-29 — HarnessEngineeringSkill has five byte-equivalent runtime bundles plus an Antigravity prompt; these are deployment duplication, not target architecture.
 - 2026-08-29 — The pinned upstream model-evaluation path expects missing/ignored test material and is not suitable for blocking verification.
 - 2026-08-29 — Dogfood `dev/security-check` is bespoke and does not honor `PYTHON`, unlike the packaged wrapper ownership map.
-- 2026-08-29 — Current canonical/dogfood runtime comparison must normalize the `{{HARNESS_VERSION}}` token; parity will become a deterministic test.
+- 2026-08-29 — Current canonical/dogfood runtime comparison must normalize the managed harness-version token; parity became a deterministic test.
 - 2026-08-29 — T2 independent verification showed that placeholder detection must normalize Unicode/Markdown edge punctuation and that malformed stable-ID detection must distinguish compact ID-like fields from ordinary prose beginning with `AC`, `JRN`, or `REQ`.
 - 2026-08-30 — Explicit abbreviated or uppercase Git object IDs must be resolved to their canonical local commit before comparison; raw textual comparison falsely reports a target mismatch.
 - 2026-08-30 — Plan discovery must reject symlinked and nonregular entries before reading frontmatter; checking only the selected plan after enumeration permits outside reads and FIFO hangs.
+- 2026-08-30 — A new project-owned scaffold must be mirrored in both package inventory and standalone runtime audit/required-document ownership; the full suite exposed the initially omitted protocol path.
+- 2026-08-30 — `dev/harness.toml` is the source of project-configured argv, not an exhaustive process allowlist; built-in validation and local Git evidence use fixed runtime-owned argv and must be documented separately.
+- 2026-08-30 — Package root validation must inspect the absolute but unresolved caller path before canonicalization; resolving first erases root and parent symlink evidence and permits initialization writes through the link.
 
 ## Decision Log
 
@@ -663,6 +678,8 @@ There is no persisted-data migration, network migration, old repository operatio
 - 2026-08-29 — Use explicit environment or plan base/head evidence only; never infer a parent, remote, or fetch.
 - 2026-08-29 — The user’s no-backup/no-delete instruction supersedes old-repository preservation and retirement execution. Reporivet-side migration documentation remains in scope.
 - 2026-08-29 — Prepare version `0.2.0` locally but do not publish or perform external GitHub writes.
+- 2026-08-30 — Package one generic project-definition protocol as a project-owned create-if-missing scaffold; keep Reporivet-specific specs, designs, and migration records out of generated target projects.
+- 2026-08-30 — The user explicitly authorized committing and pushing the current working branch after adding bilingual README explanations of generated structure, document use, context routing, rationale, and non-generated infrastructure; PR, merge, release, publication, deployment, and unrelated external writes remain excluded.
 
 ## Concrete Steps
 
@@ -684,33 +701,37 @@ Run commands from the repository root with `PYTHON=/Users/hakseong/.local/bin/py
 
 | Acceptance criterion | Task | Evidence path | Run ID | Manifest SHA-256 | Verified commit | Gate verdict | Review reason |
 |---|---|---|---|---|---|---|---|
-| AC-1 | T2/T9 | pending | pending | pending | pending | pending | pending |
-| AC-2 | T2/T9 | pending | pending | pending | pending | pending | pending |
-| AC-3 | T3/T9 | pending | pending | pending | pending | pending | pending |
-| AC-4 | T4/T9 | pending | pending | pending | pending | pending | pending |
-| AC-5 | T5/T9 | pending | pending | pending | pending | pending | pending |
-| AC-6 | T2/T5/T8/T9 | pending | pending | pending | pending | pending | pending |
-| AC-7 | T6/T9 | pending | pending | pending | pending | pending | pending |
-| AC-8 | T6/T9 | pending | pending | pending | pending | pending | pending |
-| AC-9 | T6/T9 | pending | pending | pending | pending | pending | pending |
-| AC-10 | T7/T9 | pending | pending | pending | pending | pending | pending |
-| AC-11 | T7/T9 | pending | pending | pending | pending | pending | pending |
-| AC-12 | T7/T9 | pending | pending | pending | pending | pending | pending |
-| AC-13 | T8/T9 | pending | pending | pending | pending | pending | pending |
-| AC-14 | T2-T9 | pending | pending | pending | pending | pending | pending |
-| AC-15 | T1/T8/T9 | pending | pending | pending | pending | pending | pending |
+| AC-1 | T2/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-2 | T2/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-3 | T3/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-4 | T4/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-5 | T5/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-6 | T2/T5/T8/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-7 | T6/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-8 | T6/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-9 | T6/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-10 | T7/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-11 | T7/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-12 | T7/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-13 | T8/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-14 | T2-T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-15 | T1/T8/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
 
-- Integrated target: pending
-- Verified commit: pending
-- Verification Run: pending
-- Manifest SHA-256: pending
-- Gate verdict: pending
-- Commands and durable summaries: pending
+- Integrated target: `HEAD`
+- Verified commit: bound by `close-plan`
+- Verification Run: reserved for the one `close-plan` invocation
+- Manifest SHA-256: bound by `close-plan`
+- Gate verdict: bound by `close-plan`
+- T8 pre-candidate regression: Python 3.12 full suite 94/94 PASS; focused initializer/template 18/18 PASS; audit/adoption 19/19 PASS after protocol parity correction; offline distribution/package-removal 1/1 PASS.
+- T8 repository checks: in-memory compile PASS; `./dev/check` PASS with 94 tests; security PASS over 109 tracked paths; code-map/catalog/strict docs/plan/architecture/package doctor/managed parity/`git diff --check` PASS.
+- T8 CI syntax: Ruby/Psych parse PASS for dogfood and packaged workflows; `actionlint` unavailable locally.
+- T8 independent review: initial command-boundary documentation finding corrected; same read-only reviewer returned PASS for AC-6, AC-13, AC-14, AC-15, ownership, config preservation, bilingual parity, links/catalogs, CI, and generic-template scope.
+- T9 exact reviews: preliminary candidate `f5de7ac4e8d42f16ac62f55c5edddb887b11647c` returned FAIL for the reproduced package root-symlink write; corrected candidate `2d5cce3589800999f823add6d68abc7d15980516` returned `PASS_FOR_FINAL_GATE` for AC-1 through AC-15 after 95/95 and explicit four-case no-write reproduction; plan-only terminal candidate `03a161778c504240eb1665f4f02cf1ae96022244` returned `PASS_FINAL_EXACT_SHA`. The subsequent user-requested bilingual README structure/rationale refinement requires the same deterministic checks and final exact-SHA confirmation before push.
 - Raw logs: `.harness/runs/` and not committed
 
 ## Outcomes and Retrospective
 
-Pending implementation, independent evidence, and closure.
+T1-T9 delivered the requested repository-native lifecycle, deterministic evidence model, current/generated documentation, bilingual generated-structure and context-rationale guidance, local `0.2.0` packaging boundary, corrected root-symlink safety, and exact independent candidate verification without publication, release, deployment, or former-repository operations. The plan is ready for its one canonical Gate-bound `close-plan` transition after the final documentation-only candidate receives exact-SHA confirmation; closure will bind the run, manifest, verdict, verified SHA, criterion rows, and any person-supplied REVIEW reason.
 
 ## Follow-ups
 

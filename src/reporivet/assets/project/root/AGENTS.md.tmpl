@@ -19,6 +19,7 @@ Do not preload all documentation, dependencies, generated output, caches, or raw
 ## Sources of truth
 
 - Product intent and current requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)
+- Project-definition procedure: [`docs/references/project-definition-protocol.md`](docs/references/project-definition-protocol.md)
 - Current system structure: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Design principles and durable design documents: [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/design-docs/`](docs/design-docs/)
 - Quality, security, and reliability: [`docs/QUALITY.md`](docs/QUALITY.md), [`docs/SECURITY.md`](docs/SECURITY.md), and `docs/RELIABILITY.md` when present
@@ -68,6 +69,9 @@ Record out-of-scope discoveries in the active plan or [`docs/exec-plans/tech-deb
 ## Deterministic commands
 
 - Setup: `./dev/bootstrap`
+- Definition status/validation/finalization: `./dev/define`
+- Read-only repository inventory: `./dev/audit`
+- Derived path map: `./dev/code-map`
 - Routed context: `./dev/context`
 - Fast feedback: `./dev/check`
 - Canonical completion gate: `./dev/verify`

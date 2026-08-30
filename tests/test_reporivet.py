@@ -4,9 +4,11 @@ import contextlib
 import io
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from datetime import date
 from pathlib import Path
@@ -15,6 +17,7 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
 sys.path.insert(0, str(SRC))
 
+from reporivet import __version__, initializer
 from reporivet.cli import main as cli_main
 
 
@@ -87,6 +90,7 @@ class ReporivetTests(unittest.TestCase):
                 "docs/PLANS.md",
                 "docs/exec-plans/_template.md",
                 "docs/exec-plans/tech-debt-tracker.md",
+                "docs/references/project-definition-protocol.md",
                 ".github/workflows/harness-verify.yml",
                 ".github/workflows/harness-garden.yml",
             )
@@ -108,6 +112,107 @@ class ReporivetTests(unittest.TestCase):
 
             verify = self.run_harness(root, "verify")
             self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
+
+    def test_release_version_and_managed_assets_are_in_sync(self) -> None:
+        metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+        self.assertEqual(__version__, "0.2.0")
+        self.assertNotIn("version", metadata["project"])
+        self.assertEqual(metadata["project"]["dynamic"], ["version"])
+        self.assertEqual(
+            metadata["tool"]["setuptools"]["dynamic"]["version"],
+            {"attr": "reporivet.__version__"},
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            generated = Path(tmp).resolve()
+            result = self.init(generated)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            for destination, asset in initializer.managed_files(False).items():
+                values = {"HARNESS_VERSION": __version__}
+                if asset == "dev/wrapper.sh.tmpl":
+                    values["COMMAND"] = Path(destination).name
+                expected = initializer.read_asset(asset, values).rstrip() + "\n"
+                for root in (REPOSITORY, generated):
+                    path = root / destination
+                    self.assertEqual(path.read_text(encoding="utf-8"), expected, str(path))
+                    if destination.startswith("dev/"):
+                        self.assertTrue(
+                            stat.S_IMODE(path.stat().st_mode) & 0o111,
+                            f"not executable: {path}",
+                        )
+
+        security_wrapper = (REPOSITORY / "dev" / "security-check").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('PYTHON=${PYTHON:-python3}', security_wrapper)
+        self.assertIn('exec "$PYTHON"', security_wrapper)
+
+    def test_ci_workflows_bind_explicit_target_and_preserve_evidence(self) -> None:
+        workflows = (
+            (REPOSITORY / ".github" / "workflows" / "ci.yml").read_text(
+                encoding="utf-8"
+            ),
+            initializer.read_asset(
+                "github/harness-verify.yml.tmpl",
+                {"HARNESS_VERSION": __version__},
+            ),
+        )
+        required = (
+            "permissions:\n  contents: read",
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0",
+            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
+            "fetch-depth: 0",
+            "format('refs/pull/{0}/head', github.event.pull_request.number)",
+            "github.event.pull_request.base.sha",
+            "github.event.pull_request.head.sha",
+            "github.event.before",
+            "REPORIVET_BASE_SHA=%s",
+            "REPORIVET_HEAD_SHA=%s",
+            "REPORIVET_TARGET=%s",
+            "0000000000000000000000000000000000000000",
+            "actual_head=$(git rev-parse HEAD)",
+            "cat \"$report\" >> \"$GITHUB_STEP_SUMMARY\"",
+            "path: .harness/runs/",
+        )
+        for workflow in workflows:
+            for fragment in required:
+                self.assertIn(fragment, workflow)
+            self.assertEqual(workflow.count("run: ./dev/verify"), 1)
+            self.assertGreaterEqual(workflow.count("if: always()"), 2)
+            self.assertLess(
+                workflow.index("run: ./dev/bootstrap"),
+                workflow.index("run: ./dev/verify"),
+            )
+            self.assertNotIn("HEAD^", workflow)
+            self.assertNotIn("git fetch", workflow)
+
+    def test_doctor_requires_audit_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            (root / "dev" / "audit").unlink()
+
+            doctor = self.run_cli("doctor", "--root", str(root))
+            self.assertEqual(doctor.returncode, 2)
+            self.assertIn("missing dev/audit", doctor.stderr)
+
+    def test_doctor_requires_definition_protocol(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            protocol = root / "docs" / "references" / "project-definition-protocol.md"
+            protocol.unlink()
+
+            doctor = self.run_cli("doctor", "--root", str(root))
+            self.assertEqual(doctor.returncode, 2)
+            self.assertIn(
+                "missing docs/references/project-definition-protocol.md",
+                doctor.stderr,
+            )
 
     def test_generated_gitignore_blocks_build_secrets_and_personal_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -268,9 +373,11 @@ class ReporivetTests(unittest.TestCase):
 
             product = root / "docs" / "PRODUCT.md"
             architecture = root / "ARCHITECTURE.md"
+            protocol = root / "docs" / "references" / "project-definition-protocol.md"
             config = root / "dev" / "harness.toml"
             product.write_text("# Project-owned product truth\n", encoding="utf-8")
             architecture.write_text("# Project-owned architecture truth\n", encoding="utf-8")
+            protocol.write_text("# Project-owned definition protocol\n", encoding="utf-8")
             config.write_text(config.read_text(encoding="utf-8") + "\n# user-owned\n", encoding="utf-8")
 
             second = self.init(root, "--skip-check")
@@ -280,6 +387,10 @@ class ReporivetTests(unittest.TestCase):
 
             self.assertEqual(product.read_text(encoding="utf-8"), "# Project-owned product truth\n")
             self.assertEqual(architecture.read_text(encoding="utf-8"), "# Project-owned architecture truth\n")
+            self.assertEqual(
+                protocol.read_text(encoding="utf-8"),
+                "# Project-owned definition protocol\n",
+            )
             self.assertIn("# user-owned", config.read_text(encoding="utf-8"))
 
     def test_agents_managed_block_is_idempotent_and_preserves_user_text(self) -> None:

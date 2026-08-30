@@ -20,7 +20,10 @@ This directory is the version-controlled record system for product intent, archi
 | Quality expectations and gaps | [`QUALITY.md`](QUALITY.md) |
 | Security boundaries and controls | [`SECURITY.md`](SECURITY.md) |
 | Reliability and operations, when applicable | `RELIABILITY.md`, [`runbooks/`](runbooks/) |
-| Complex work and Task Packets | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/) |
+| Project definition draft and operating protocol | `product-specs/project-definition.draft.md` when present, [`references/project-definition-protocol.md`](references/project-definition-protocol.md) |
+| Complex work, Product Trace, and Task Packets | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/) |
+| Module ownership and derived path map | [`module-contracts/`](module-contracts/), [`generated/code-map.md`](generated/code-map.md) |
+| Verification Run and Gate evidence | `.harness/runs/<run>-verify/report.md`, [`QUALITY.md`](QUALITY.md), [`SECURITY.md`](SECURITY.md) |
 | Durable decisions | [`decisions/`](decisions/) |
 | Known follow-ups and debt | [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md) |
 | Generated facts | [`generated/`](generated/) |
@@ -30,9 +33,11 @@ This directory is the version-controlled record system for product intent, archi
 
 | Change | Minimum context |
 |---|---|
+| New product definition or first milestone | Project-definition protocol, persisted draft, current product specs |
+| Existing-repository adoption | Audit output, current authority files, security and ownership design |
 | User-visible behavior | Product overview, relevant product spec, current flow, tests |
 | UX or interaction | Product overview, design overview, relevant design document |
-| Module or dependency boundary | Architecture, related ADR, architecture checks |
+| Module or dependency boundary | Architecture, matching module contract/code-map row, related ADR, architecture checks |
 | Public API or persistent data | Product, architecture, security, ADRs, approved ExecPlan |
 | Production operations | Reliability, runbook, deployment configuration, approved ExecPlan |
 | Local bug | Reproduction, nearby code and tests; create a plan only if scope grows |

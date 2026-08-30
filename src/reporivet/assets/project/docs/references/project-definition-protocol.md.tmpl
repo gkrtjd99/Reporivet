@@ -1,0 +1,149 @@
+---
+id: REF-PROJECT-DEFINITION-PROTOCOL
+kind: reference
+status: active
+owner: main
+area: product
+updated: {{DATE}}
+---
+
+# Project Definition Protocol
+
+## Purpose and authority
+
+This protocol explains how a human or Main Agent records enough confirmed product evidence to hand work to an implementation ExecPlan without hiding uncertainty. It is an operating procedure, not a semantic interviewer or product authority.
+
+The project-owned draft and finalized product specification are authoritative for this project. Commands validate their declared structure and relationships; they do not decide what the product should be.
+
+## Roles
+
+- **Human or Main Agent:** asks and answers consequential questions, records evidence, distinguishes fact from proposal, resolves contradictions, chooses scope, and approves semantic completeness.
+- **`reporivet define`:** installs the repository-local definition surface and creates the draft only when explicitly invoked.
+- **`./dev/define status`:** computes progress and the next unresolved consequential section without editing evidence.
+- **`./dev/define validate`:** checks structure, evidence states, stable IDs, completeness, contradictions, and link reciprocity.
+- **`./dev/define finalize`:** validates again and transactionally creates the final specification and one first vertical-slice ExecPlan.
+
+Commands do not invent answers, promote proposals, choose architecture, or accept REVIEW on behalf of a person.
+
+## Ordered definition sections
+
+Keep these fourteen sections exactly once and in order:
+
+1. Project Identity
+2. Problem and Current Alternative
+3. Target Users
+4. Value Proposition and Solution
+5. MVP Capabilities and Priority
+6. User Journeys
+7. Scope Boundaries
+8. Success Signals
+9. Non-Functional Requirements
+10. Stack and Architecture Constraints
+11. Agent Operating Model
+12. Repository Boundaries and Context
+13. Verification and Handoff
+14. First Milestone, Dependencies, and Risks
+
+The draft at `docs/product-specs/project-definition.draft.md` contains section-specific prompts after definition starts. This protocol defines how to operate it; it does not duplicate every prompt.
+
+## Evidence states
+
+Every numbered section contains these headings in order.
+
+### Confirmed
+
+Use `- [confirmed] ...` for evidence that the human or Main accepts as current truth. Only confirmed declarations can satisfy final traceability.
+
+### Proposed
+
+Use `- [proposed] ...` for a hypothesis or option still requiring confirmation. Proposed content remains visible and cannot silently become a confirmed fact.
+
+### Open
+
+Use `- [blocking] ...` when finalization must wait, or `- [non-blocking] ...` when the unresolved item may remain explicitly labeled in the finalized record. Blocking Open items prevent validation and finalization.
+
+### Sources
+
+Use `- [source] ...` for provenance such as an existing document, observed behavior, user statement, issue, test, or repository path. A source does not become confirmed merely by being cited.
+
+Use `- None.` only when that evidence state is genuinely empty. Do not leave template markers or vague placeholders.
+
+## Stable identifiers and links
+
+Use searchable stable IDs:
+
+- Journey: `JRN-001 | description`
+- P0 requirement: `REQ-P0-001 | Journey: JRN-001 | Acceptance: AC-001 | description`
+- Acceptance criterion: `AC-001 | P0: REQ-P0-001 | Journey: JRN-001 | observable criterion`
+
+Each confirmed P0 requirement references a known confirmed journey and at least one known confirmed criterion. Each confirmed criterion references the matching P0 and journey. IDs are unique; duplicate or contradictory declarations fail validation.
+
+Acceptance criteria describe observable behavior or evidence, not implementation activity. Proposed or Open IDs cannot satisfy a confirmed relationship.
+
+## Start and resume
+
+Start explicitly:
+
+```bash
+reporivet define --root .
+```
+
+Then edit `docs/product-specs/project-definition.draft.md` as a human/Main-owned document. At any point:
+
+```bash
+./dev/define status
+```
+
+Use the persisted `progress`, `next`, and `continuation` values to resume. Read already confirmed sections for context, but do not repeat their questions unless new evidence contradicts them. Record contradictions openly and resolve them before finalization.
+
+## Validate
+
+Run:
+
+```bash
+./dev/define validate
+```
+
+Validation requires exact sections and headings, known evidence markers, well-formed unique IDs, complete core fields, no unresolved placeholders, no blocking Open items, no contradictory duplicate evidence, and reciprocal Journey -> P0 -> Acceptance links. It verifies structure and declared relationships, not whether a product decision is good.
+
+## Existing-repository adoption
+
+Before adding definition to an existing repository:
+
+```bash
+reporivet audit --root .
+reporivet define --root . --adopt
+```
+
+Adoption inventories existing instructions, docs, manifests, lockfiles, CI, scripts, source/tests, runtime/configuration, and commands without execution. It preserves existing README, `AGENTS.md` text outside managed blocks, architecture, CI, catalogs, and configuration. Authority conflicts stop before writes. Inferred commands remain `configuration = "review"` until a person verifies them.
+
+Repository-local `./dev/audit` remains available after package removal.
+
+## Finalize and handoff
+
+When validation is green:
+
+```bash
+./dev/define finalize
+```
+
+Finalization:
+
+1. revalidates the current draft;
+2. materializes confirmed evidence into `docs/product-specs/SPEC-PROJECT-001-product-definition.md`;
+3. retains proposed and non-blocking Open material under explicit labels;
+4. creates exactly one first vertical-slice ExecPlan with Product Trace and task acceptance IDs;
+5. updates catalogs; and
+6. rolls back every generated target if a write or catalog step fails.
+
+It refuses existing output targets and never overwrites `docs/PRODUCT.md` or another project-owned specification. Main reviews the resulting specification and plan, then follows normal plan approval and implementation policy.
+
+## Semantic limits and non-goals
+
+This protocol does not authorize:
+
+- a model-driven interview or judge;
+- command-generated product answers, confidence scores, or human acceptance reasons;
+- hidden session state, external task databases, plugins, or daemons;
+- remote reads or writes, package publication, pull requests, deployment, backup, archive, or deletion; or
+- replacement of existing project authority during adoption or upgrade.
