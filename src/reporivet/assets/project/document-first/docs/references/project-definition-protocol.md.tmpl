@@ -1,0 +1,52 @@
+# Project Definition Protocol
+
+This protocol converts a deterministic repository scan and plain-language human input into the canonical document-first bundle. The default entry point is integrated `reporivet setup`; lower-level `reporivet define` remains available, while `reporivet init` is structure-only. It does not use an LLM to rewrite answers, choose filenames, or promote repository inference into authority.
+
+## Evidence model
+
+Every guided topic preserves these areas distinctly and in this order:
+
+1. **Confirmed** — explicit human input, inserted verbatim apart from whitespace normalization.
+2. **Proposed** — deterministic scanner observations or user-supplied candidate statements awaiting review.
+3. **Open** — unanswered, uncertain, or conflicting questions.
+4. **Sources** — provenance for the entries above.
+
+Blank answers remain Open. The visible Markdown draft is the only resume state; Reporivet creates no hidden interview database, journal, or task state.
+
+## Topics
+
+The fixed interview asks about:
+
+- product, users, problem, and observable success;
+- design direction, accessibility, and internationalization;
+- project-owned test, lint, type, build, package, and smoke commands;
+- running, release, observation, backup, rollback, recovery, and incidents;
+- authentication, authorization, sensitive data, secrets, permissions, exposure, and retention;
+- Main, implementation, and verification working agreements;
+- repeatable procedures that deserve a runbook or optional Skill.
+
+Users answer facts and procedures, not canonical filenames.
+
+## Package-side flow
+
+The default onboarding entry point is integrated `reporivet setup`. `reporivet init` remains structure-only. The lower-level `reporivet define` flow remains available for explicit staged definition and finalization.
+
+```text
+reporivet setup --root .
+reporivet init --root .
+reporivet define --root . start
+reporivet define --root . status
+reporivet define --root . resume [--answers answers.json] [--dry-run]
+reporivet define --root . finalize [--with-claude-settings]
+reporivet define --root . finalize --apply --approve-preview <sha256> [--with-claude-settings]
+```
+
+`setup` is the default integrated flow: it audits once, presents and resumes the visible draft, reports actual Open items, renders the exact preview, and applies only after explicit approval. `init` only creates missing structure without guided onboarding. `define` remains the lower-level interface. Setup and init create no Plan or runtime, execute no project commands, and do not spawn or dispatch Agents. The Main Skill creates or resumes the first ordinary Markdown Plan. `resume` updates only the visible draft. `status` and finalize preview are read-only. Apply recomputes the complete target preview, requires the exact unchanged fingerprint, creates missing files, updates only bounded managed blocks, and preserves existing project-owned documents, `CLAUDE.md`, Skills, and settings.
+
+## Procedure Skill boundary
+
+A procedure is Skill-eligible only when one complete, user-confirmed, strict structured record is present in `Confirmed`. The record must contain exactly these nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. All nine fields are required; no additional fields or aliases are accepted, and no values or defaults are inferred. Only such records can produce an instruction-only `.claude/skills/<slug>/SKILL.md` through resumed setup. Generic, inferred, incomplete, Proposed, Open, or Sources-only procedure records never create a Skill; no procedure is inferred or executed. Dynamic procedure Skills are project-owned; this package does not pre-generate a project-specific Skill. Any generated Skill is instruction-only, removable, and contains no command execution, Agent spawn/dispatch, hidden state, or privilege-bearing frontmatter. Existing, differing, stale, or arbitrary project Skills are preserved and never deleted. Keep Skill frontmatter instruction-only and least privilege, with only the identity and description needed to guide the procedure; do not add settings grants, hooks, tools, shell, executor, or other runtime metadata.
+
+Main—not package runtime—creates or resumes Plans and keeps their state in visible Markdown. Reporivet installs no scheduler, dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+
+Live `.claude/settings.json` is absent by default. The optional deny-only template is installed only when it is included in the exact approved preview and the path is missing. Reporivet never merges or rewrites existing settings; command-text denials are defense in depth, not a sandbox.

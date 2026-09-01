@@ -1,7 +1,7 @@
 ---
 id: DESIGN-REPORIVET-001
 kind: design-doc
-status: active
+status: superseded
 area: harness
 summary: Separation between the installed initializer and independent repository-local runtime
 applies_to:
@@ -10,6 +10,7 @@ applies_to:
   - "src/reporivet/assets/project/root/**"
   - "src/reporivet/assets/project/docs/**"
 supersedes: []
+superseded_by: DESIGN-REPORIVET-003
 ---
 
 # Initializer and repository-local runtime

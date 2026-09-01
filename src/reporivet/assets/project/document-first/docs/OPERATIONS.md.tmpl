@@ -1,0 +1,44 @@
+# Operations
+
+This is the single current authority for running, releasing, observing, backing up, rolling back, recovering, and handling incidents. Put repeatable step-by-step procedures in `runbooks/` and link them here.
+
+## Operating model
+
+{{OPERATIONS_EVIDENCE}}
+
+## Onboarding and package lifecycle
+
+The default onboarding entry point is integrated `reporivet setup`. `reporivet init` remains structure-only, and the lower-level `reporivet define` flow remains available for staged definition and approved finalization. No procedure is inferred or executed by onboarding.
+
+Only complete Confirmed structured procedure records can produce an instruction-only `.claude/skills/<slug>/SKILL.md` through resumed setup. Dynamic procedure Skills are project-owned; existing differing, stale, or arbitrary Skills are preserved and never deleted. Main—not package runtime—creates or resumes Plans in visible Markdown.
+
+Installation is pipx-primary: `pipx install` and `pip install` use the same wheel. Uninstalling Reporivet leaves repository artifacts useful, including documents, Plans, Skills, Git history, project commands, CI, and operational tools.
+
+Reporivet installs no scheduler, dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+
+## Required operational knowledge
+
+### Confirmed
+
+- None.
+
+### Proposed
+
+- None.
+
+### Open
+
+- How is each supported environment started, configured, deployed, and stopped?
+- Which signals show health, degradation, saturation, data loss, or security impact?
+- What is backed up, where, how often, for how long, and how is restore tested?
+- What is the rollback trigger, mechanism, authority, and point of no return?
+- How is service and data recovered, and what recovery objectives apply?
+- Who responds to an incident, how is impact contained, and how are decisions recorded?
+
+### Sources
+
+- None.
+
+## Procedure requirements
+
+Every release, backup, rollback, recovery, or incident runbook should state prerequisites, authorization, exact project-owned commands, expected observations, stop conditions, rollback, evidence, and escalation. Do not invent missing operational facts.

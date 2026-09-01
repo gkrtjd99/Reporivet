@@ -1,88 +1,136 @@
 ---
-id: DESIGN
-kind: design
+owner: design
 status: active
-area: repository
-summary: Current interaction, ownership, knowledge, and verification conventions for Reporivet
-applies_to:
-  - "src/**"
-  - "tests/**"
-  - "docs/**"
+last_reviewed: 2026-08-31
 ---
 
 # Design
 
-## Design intent
+## Design direction and accessibility
 
-The repository, not a hidden conversation or external control plane, is the operating system for agent work. Durable facts needed to define, resume, constrain, verify, or maintain work are discoverable through a short entry map and version-controlled artifacts.
+Reporivet favors rich, inspectable repository knowledge and thin execution. The installed package helps a maintainer establish or migrate the contract; the repository then explains itself through Markdown and runs through project-owned tools.
 
-## Interaction conventions
+The previously verified document-first source behavior exists. For source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4`, the recorded isolated pipx and pip install/use/uninstall lifecycle passed. The verification artifacts are temporary and are not a durable or downloadable evidence archive; this design does not establish publication, signing, release, deployment, or CI readiness.
 
-- CLI commands use explicit subcommands, visible exit codes, and actionable errors.
-- `--dry-run` does not create or modify a target path.
-- Definition starts only when explicitly requested; initialization and upgrade do not invent product work.
-- Audit is deterministic and read-only. Adoption audits before writing and fails closed on authority conflicts.
-- Commands compute progress and validate structure; human or Main supplies semantic answers and resolves conflicts.
-- Potentially destructive ambiguity, unsafe paths, malformed evidence, and target mismatch fail closed rather than guessing.
-- Generated entry points use stable names under `dev/` so agents do not invent project commands.
+The default onboarding design is integrated `reporivet setup`; `reporivet init` remains structure-only and `reporivet define` remains the lower-level resumable interface. Setup does not create a Plan or runtime, spawn or dispatch Agents, or execute project commands. Main Skill creates or resumes the first ordinary Markdown Plan. Complete user-confirmed structured procedures may create instruction-only project Skills only through resumed setup.
 
-## Ownership conventions
+The design optimizes for safe adoption, agent legibility, human review, and useful operation after package removal.
 
-- The installed initializer and copied repository runtime are separate lifetimes.
-- Project-owned files are created only when absent. This includes current-state knowledge, product definitions, plans, and `dev/harness.toml`.
-- Harness-owned files have `reporivet:managed` in their first lines and are rendered from canonical package assets.
-- Shared files use bounded paired markers; malformed or fenced lookalike markers do not grant ownership.
-- Upgrade refreshes only marked files and blocks. Existing configuration without `[gate]` remains byte-identical while conservative defaults apply in memory.
-- Unmarked canonical path collisions, symlink traversal, and nonregular inputs are errors.
+## Durable defaults
 
-## Knowledge conventions
+### Canonical authority over duplicated instructions
 
-- `AGENTS.md` remains a compact routing contract.
-- Current-state documents describe implemented reality and verified intent.
-- Confirmed, Proposed, Open, and Sources evidence remain distinct throughout definition. Only confirmed declarations satisfy traceability.
-- Stable `JRN-*`, `REQ-P0-*`, and `AC-*` identifiers connect product intent to plans, tasks, and criterion evidence when traceability is enabled.
-- Module contracts exist only for justified durable boundaries. `docs/generated/code-map.md` is derived and non-authoritative.
-- Active ExecPlans are living execution state; completed plans and accepted decisions are history.
-- Structured Verification Run artifacts are inspectable evidence. Raw command logs remain ignored and disposable.
+- `AGENTS.md` is the host-neutral entry point.
+- `docs/README.md` maps current authority and generated surfaces.
+- One matching active Plan carries substantive work state.
+- Versioned specifications, designs, decisions, and completed Plans preserve durable context without becoming general startup material.
+- Host adapters remain thin and removable; they must not become alternate product authority.
 
-## Main and Sub conventions
+### Rich content over hidden state
 
-- Main defines intent, acceptance, non-goals, allowed writes, protected paths, integration order, verification target, and completion.
-- Sub Agents receive one bounded Task Packet and cannot broaden scope, delegate again, change acceptance, or approve their own work.
-- Read-heavy work may be parallelized; mutable work is sequential unless paths, interfaces, and worktrees are isolated.
-- Implementation explanation is not verification evidence. REVIEW acceptance remains human-owned.
+- Product intent, system structure, quality, security, operations, decisions, work state, and evidence stay in readable Markdown.
+- A Plan contains one task table and matching Task Packets rather than referring to a separate task database.
+- Main records decisions, discoveries, integration, verification, and terminal outcome in the Plan.
+- Generated documents remain useful with ordinary repository tools.
 
-## Implementation conventions
+### Thin execution over copied machinery
 
-- Use the Python standard library unless a production dependency materially reduces total lifecycle complexity and is explicitly approved.
-- Execute configured commands as argument arrays without shell interpolation.
-- Keep command detection separate from command approval.
-- Prefer narrow parsers, fixed data structures, and deterministic schemas over a registry, plugin system, policy DSL, or compatibility framework.
-- Add a mechanical rule only when it is objective, stable, and produces an actionable repair path.
-- Preserve explicit local evidence rather than inferring Git parents, remotes, or network state.
+- Reporivet supplies package-side integrated setup, lower-level definition, diagnosis, and explicit migration only while installed.
+- The target project owns commands, CI, deployment, observability, backup, recovery, incidents, secrets, and evidence retention; Reporivet does not execute project commands or operate CI/deployment.
+- Setup does not create command wrappers, generated workflows, background services, evidence stores, Plans, or a target runtime.
+- A complete user-confirmed structured procedure may produce a deterministic, instruction-only project Skill through resumed setup; incomplete or inferred procedures do not. Such Skills may summarize a supported procedure, but they may not spawn/dispatch Agents, embed an executor, copied model bundle, hidden state, or alternate completion authority.
 
-## Verification and Gate
+### Visible evidence over inference
 
-One `./dev/verify` invocation owns one shared run and fixed check order. Checks record `pass`, `fail`, `error`, `skipped`, or `unknown`; required failure takes precedence over required infrastructure error. Manifest, Gate, report, per-check JSON, and available logs survive non-green outcomes.
+Every guided definition draft separates:
 
-Gate classifies explicit changed paths as `contained`, `wide`, `irreversible`, or `unknown` and returns:
+- **Confirmed**: facts explicitly supported by user input or cited repository evidence;
+- **Proposed**: suggestions awaiting approval;
+- **Open**: unresolved questions, unavailable facts, and assumptions that must not drive mutation;
+- **Sources**: paths or references that support confirmed statements.
 
-1. `BLOCK` for a required check failure.
-2. `INCONCLUSIVE` for required error/unknown, malformed policy, or target mismatch/error.
-3. `REVIEW` for protected, unknown, wide, irreversible, or policy-required dirty conditions.
-4. `PASS` only for a clean, confirmed, contained target with every required check passing.
+Deterministic scan results remain observations until a person approves their use. A model is not required for scanning, drafting, previewing, or applying setup.
 
-Shadow mode allows deterministic `PASS` and `REVIEW` to return success while preserving the verdict. Enforce mode allows only `PASS`. Neither mode can override `BLOCK` or `INCONCLUSIVE`. `close-plan` reuses this canonical implementation once and transactionally binds closure evidence to one clean commit.
+### Exact preview over implicit mutation
 
-Detailed trade-offs are recorded in [`DESIGN-REPORIVET-002`](design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md).
+- The user sees the complete Markdown draft before setup.
+- The user sees exact path actions before apply.
+- Apply revalidates the approved inputs instead of trusting an old preview.
+- Existing project-owned or ambiguous content is preserved.
+- Migration requires an external backup and refuses unsafe rollback.
+- Optional host settings are shown exactly and never merged into an existing file.
 
-## Accessibility and internationalization
+### Bounded roles over self-approval
 
-The CLI emits plain UTF-8 text and accepts Unicode project names, summaries, areas, plan titles, and safe REVIEW reasons. Generated operational documents use stable English headings for predictable parsing; project content may use any UTF-8 language.
+- Main owns intent, acceptance, decomposition, host-native dispatch instructions, integration, serialized Plan edits, and evidence judgment; Reporivet does not spawn or dispatch Agents.
+- An implementation Sub changes only assigned paths under one bounded Task Packet and uses project-owned commands when its host directs it.
+- A Verification Sub starts fresh, identifies the integrated candidate, and checks each acceptance criterion independently; Reporivet does not execute those project checks.
+- Verification narration is not evidence; command output, inspected behavior, and explicit residual risks are.
+
+## Change protocol
+
+1. Validate the selected repository root and classify relevant paths without following unsafe links.
+2. Present deterministic observations in understandable language.
+3. Ask guided questions in plain language; do not require the user to know the documentation schema.
+4. Render one visible draft covering identity and goals, users and workflows, system boundary, quality, security, operations, and Plan working agreements.
+5. Keep uncertain claims in Proposed or Open.
+6. Show exact create, preserve, refuse, and opt-in actions.
+7. Apply only the preview the user approved.
+8. Return a concise summary and route future work through canonical repository documents.
+
+Resume must preserve the visible draft and evidence separation. Finalization must reject unresolved required fields rather than manufacture answers.
+
+## Information design
+
+- Use descriptive headings and explicit relative links.
+- Keep current summaries short enough to route readers, while versioned records hold detail.
+- Keep terminal history immutable except for explicit supersession metadata.
+- Use searchable role names, task identifiers, acceptance identifiers, and path names.
+- Put exact commands in `QUALITY.md` or `OPERATIONS.md`, not in generic agent instructions.
+- Label unavailable facts Open instead of substituting placeholders that look authoritative.
+
+## Accessibility
+
+- Do not rely on color, icon shape, or interface position alone to convey status.
+- Prefer plain text labels such as Confirmed, Proposed, Open, accepted, failed, and not run.
+- Keep headings hierarchical and tables readable as linear text.
+- Give actions descriptive names and include complete command text where execution is required.
+- Make errors actionable by naming the unsafe path, failed condition, and non-destructive next step.
+- Avoid unnecessary jargon; define package-specific terms where first used.
 
 ## Non-goals
 
-- External backup, archive, deletion, deprecation writes, package publication, or repository mutation.
-- Host-specific Skill/runtime target bundles, model-backed judges, plugins, daemons, or external orchestration state.
-- A second completion gate, confidence score, semantic interviewer, or automatic human-approval substitute.
-- Speculative abstractions or broad compatibility layers beyond current requirements.
+The design does not introduce:
+
+- a general orchestration platform;
+- hidden agent memory or autonomous Plan mutation;
+- project-independent build, deployment, or incident procedures;
+- provider-specific authority in canonical documents;
+- a compatibility layer that silently preserves retired behavior;
+- speculative configuration for projects that have not supplied facts.
+
+### Confirmed
+
+- Integrated `setup` is the default onboarding path; `init` is structure-only and `define` remains lower-level.
+- Current setup and migration are preview-first and path-safe; setup creates no Plan or runtime.
+- Canonical documents, ordinary Plans, project Skills, Git, and project commands remain useful without an installed Reporivet package.
+- Claude integration and confirmed-procedure Skills are instruction-only and removable; deny-only settings are opt-in.
+- Source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4` passed the recorded isolated pipx and pip install/use/uninstall lifecycle. The verification artifacts are temporary and are not a durable or downloadable evidence archive.
+
+### Proposed
+
+- None.
+
+### Open
+
+- Publication, signing, release, deployment, CI readiness, and durable evidence archival remain unestablished or outside this design's authority.
+- No release, publication, signing, or deployment readiness is established by this candidate.
+- No additional host adapter is currently defined.
+- Project-specific interface or service accessibility requirements are not applicable until such a surface is introduced and documented.
+
+### Sources
+
+- [`design-docs/DESIGN-REPORIVET-003-document-first-harness.md`](design-docs/DESIGN-REPORIVET-003-document-first-harness.md)
+- [`product-specs/SPEC-REPORIVET-003-document-first-harness.md`](product-specs/SPEC-REPORIVET-003-document-first-harness.md)
+- [`decisions/ADR-0001-document-first-product-boundary.md`](decisions/ADR-0001-document-first-product-boundary.md)
+- [`references/project-definition-protocol.md`](references/project-definition-protocol.md)

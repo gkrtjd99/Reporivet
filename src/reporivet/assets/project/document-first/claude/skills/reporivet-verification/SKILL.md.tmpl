@@ -1,0 +1,18 @@
+---
+name: reporivet-verification
+description: Independently judge an integrated candidate against Plan acceptance criteria using project-owned checks and fresh context. Use when assigned verification, review, test analysis, or completion evidence for a candidate.
+---
+
+Use a fresh context. Read `AGENTS.md`, the Plan goal and acceptance criteria, current authority, and the exact integrated candidate. Every fresh verification node depends on the integrated candidate. Treat implementer narration as unverified input rather than evidence.
+
+Dynamic procedure Skills are project-owned under `.claude/skills/<slug>/SKILL.md`; they are not pre-generated package assets. Only complete Confirmed structured procedure records can produce one through resumed `reporivet setup`. Do not pre-generate a project-specific Skill. Keep it instruction-only and least privilege, with frontmatter limited to `name` and `description`. Never infer or execute a procedure, and preserve rather than delete any existing differing, stale, or arbitrary Skill.
+
+For every milestone classified as broad, apply this common installed-project rule:
+
+`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+
+This rule does not apply to inherently single or serial milestones. If a child is itself broad, only a packet marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendants such as `T<n>-A-1`; ordinary leaf Agents do not delegate.
+
+Read-only verification leaves may run concurrently. Default verification leaves do not delegate. Run the applicable project-owned commands named by `docs/QUALITY.md`, `docs/OPERATIONS.md`, or the verification packet and inspect observable behavior and non-goals criterion by criterion.
+
+Do not change the candidate, acceptance criteria, historical evidence, or project configuration merely to make a check pass. Return candidate identity, criterion-level pass/fail/unknown, exact commands and outcomes, material findings, missing evidence, and residual risks. Keep raw logs out of Main's context unless a short excerpt is necessary to decide a failure. Stop and invalidate the evidence if the candidate changes or required evidence cannot be obtained.

@@ -1,0 +1,31 @@
+---
+name: reporivet-main
+description: Route a substantive repository goal through AGENTS.md, current authority, one durable active Plan, bounded Sub Agents, integration, and evidence judgment. Use when acting as Main for planning, dispatch, integration, handoff, or Plan lifecycle work.
+---
+
+Read `AGENTS.md`, `docs/README.md`, and the authority needed for intent, scope, acceptance, and decomposition. The default onboarding entry point is integrated `reporivet setup`; `reporivet init` remains structure-only, and the lower-level `reporivet define` flow remains available.
+
+Before the first dispatch for a substantive goal, perform this first-Plan handoff:
+
+1. Search both `docs/exec-plans/active/` and `docs/exec-plans/completed/` for ordinary Markdown Plans (`*.md`) matching the goal; do not treat `_template.md` or hidden state as a Plan.
+2. If exactly one matching active Plan exists, resume exactly one matching active Plan. Stop if multiple active Plans match. Completed Plans are historical and are not resumed.
+3. Otherwise choose the lowest unused current-year numeric ID across both directories, and copy `_template.md` (`docs/exec-plans/_template.md`) to a new active Plan path. Never overwrite/reuse an ID.
+4. Keep state in visible Markdown. Main—not package runtime—creates/resumes Plans; never use a Plan CLI/hidden state/automatic dispatcher/closure.
+
+Dynamic procedure Skill ownership is project-owned. Only complete Confirmed structured procedure records can produce an instruction-only `.claude/skills/<slug>/SKILL.md` through resumed `reporivet setup`. Do not pre-generate a project-specific Skill. Keep the Skill instruction-only and least privilege, with frontmatter limited to `name` and `description`; no procedure is inferred or executed. Preserve and never delete any existing differing, stale, or arbitrary Skill.
+
+For every milestone classified as broad, apply this common installed-project rule:
+
+`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+
+This rule does not apply to inherently single or serial milestones. If a child is itself broad, only a packet marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendants such as `T<n>-A-1`; ordinary leaf Agents do not delegate.
+
+Main owns the overall task tree: the original goal, observable acceptance criteria, non-goals, dependencies, hierarchical Task Packets, dispatch, integration order, decisions, current checkpoint, exact next action, documentation impact, verification sufficiency, and terminal Plan transition. Main alone serializes Plan edits.
+
+Keep the Main context small. Using only the host's native Agent execution, dispatch the complete dependency-ready leaf set concurrently for each broad milestone and preserve declared linear order for inherently single or serial milestones. Enforce the Task Owner exception above. Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher; it also installs no dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+
+Before dispatch, name the outcome, non-goals, exact reads, allowed writes, protected paths, acceptance criteria, project-owned verification commands, stop conditions, and compact return evidence. Concurrent mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Route siblings through their explicit integration node, then dispatch fresh verification nodes that depend on the integrated candidate.
+
+Ask Sub Agents for Plan-ready evidence instead of concurrent Plan writes. For meaningful behavior changes, use separate implementation and fresh verification contexts. Do not normally repeat a Verification Sub's detailed command run.
+
+At each durable checkpoint, update the active Plan so a new Main can continue without reconstructing chat history. Move it to `completed/` only with actual status `complete`, `cancelled`, or `superseded` after the outcome is terminal.

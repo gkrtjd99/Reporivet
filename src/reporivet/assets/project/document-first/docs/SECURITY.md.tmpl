@@ -1,0 +1,33 @@
+# Security
+
+This document records current security boundaries and non-negotiable handling rules. It is not a substitute for project-specific threat modeling, platform controls, or an operating-system sandbox.
+
+## Authentication, authorization, data, secrets, and permissions
+
+{{SECURITY_EVIDENCE}}
+
+## Durable rules
+
+- Never commit, print, copy into prompts, or persist secret values in Plans, logs, fixtures, Skills, or settings.
+- Use least privilege and explicit authorization for external writes, destructive operations, production access, and disclosure.
+- Treat authentication, authorization, sensitive data, persistence, permissions, and externally reachable interfaces as escalation points requiring an approved Plan.
+- Preserve project-owned security tooling and CI. Reporivet does not install a secret scanner or claim security completion.
+- Claude permission patterns, if explicitly installed, filter command text only. They are defense in depth, not semantic policy, detection-evasion protection, or an OS sandbox.
+
+## Open security work
+
+### Confirmed
+
+- None.
+
+### Proposed
+
+- None.
+
+### Open
+
+- Identify trust boundaries, threat actors, protected assets, sensitive data lifecycle, secret stores, permission model, audit requirements, disclosure process, and required project-owned security checks.
+
+### Sources
+
+- None.

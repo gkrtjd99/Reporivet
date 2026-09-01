@@ -1,23 +1,83 @@
 from __future__ import annotations
 
-import json
+import contextlib
+import io
 import os
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
-import zipfile
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-ASSETS = REPOSITORY / "src" / "reporivet" / "assets" / "project"
+SRC = REPOSITORY / "src"
+ASSETS = SRC / "reporivet" / "assets" / "project"
+sys.path.insert(0, str(SRC))
+
+from reporivet.cli import main as cli_main
 
 
-@unittest.skipIf(os.name == "nt", "generated repository commands are POSIX shell wrappers")
+EXPECTED_PACKAGE_DATA = [
+    "assets/project/document-first/root/*.tmpl",
+    "assets/project/document-first/docs/*.tmpl",
+    "assets/project/document-first/docs/*/*.tmpl",
+    "assets/project/document-first/claude/*.tmpl",
+    "assets/project/document-first/claude/skills/*/*.tmpl",
+    "assets/project/document-first/optional/*.tmpl",
+    "assets/project/root/reporivet-version.tmpl",
+]
+
+EXPECTED_ASSETS = {
+    "document-first/claude/CLAUDE.md.tmpl",
+    "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl",
+    "document-first/claude/skills/reporivet-main/SKILL.md.tmpl",
+    "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl",
+    "document-first/docs/DESIGN.md.tmpl",
+    "document-first/docs/OPERATIONS.md.tmpl",
+    "document-first/docs/PLANS.md.tmpl",
+    "document-first/docs/PRODUCT.md.tmpl",
+    "document-first/docs/QUALITY.md.tmpl",
+    "document-first/docs/README.md.tmpl",
+    "document-first/docs/SECURITY.md.tmpl",
+    "document-first/docs/decisions/README.md.tmpl",
+    "document-first/docs/decisions/_template.md.tmpl",
+    "document-first/docs/design-docs/_template.md.tmpl",
+    "document-first/docs/design-docs/core-beliefs.md.tmpl",
+    "document-first/docs/design-docs/index.md.tmpl",
+    "document-first/docs/exec-plans/_template.md.tmpl",
+    "document-first/docs/exec-plans/tech-debt-tracker.md.tmpl",
+    "document-first/docs/product-specs/_template.md.tmpl",
+    "document-first/docs/product-specs/index.md.tmpl",
+    "document-first/docs/references/README.md.tmpl",
+    "document-first/docs/references/project-definition-protocol.md.tmpl",
+    "document-first/docs/runbooks/_template.md.tmpl",
+    "document-first/docs/runbooks/index.md.tmpl",
+    "document-first/optional/claude-settings.deny-only.json.tmpl",
+    "document-first/root/AGENTS.md.tmpl",
+    "document-first/root/ARCHITECTURE.md.tmpl",
+    "document-first/root/gitignore.block.tmpl",
+    "root/reporivet-version.tmpl",
+}
+
+RETIRED_ASSET_PARTS = {
+    "dev",
+    "github",
+    "generated",
+    "module-contracts",
+}
+
+
 class DistributionTests(unittest.TestCase):
     maxDiff = None
+
+    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            returncode = cli_main(list(args))
+        return subprocess.CompletedProcess(list(args), returncode, stdout.getvalue(), stderr.getvalue())
 
     def run_command(
         self,
@@ -25,299 +85,113 @@ class DistributionTests(unittest.TestCase):
         cwd: Path | None = None,
         env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        result = subprocess.run(
+        return subprocess.run(
             [str(part) for part in command],
             cwd=cwd,
             env=env,
             text=True,
             capture_output=True,
             check=False,
-            timeout=120,
-        )
-        return result
-
-    def assert_success(self, result: subprocess.CompletedProcess[str]) -> None:
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-    def isolated_environment(self, python: Path) -> dict[str, str]:
-        environment = os.environ.copy()
-        environment.pop("PYTHONPATH", None)
-        environment.update(
-            {
-                "PIP_DISABLE_PIP_VERSION_CHECK": "1",
-                "PIP_NO_INDEX": "1",
-                "PYTHON": str(python),
-            }
-        )
-        return environment
-
-    def copy_build_source(self, destination: Path) -> None:
-        shutil.copy2(REPOSITORY / "pyproject.toml", destination / "pyproject.toml")
-        shutil.copy2(REPOSITORY / "README.md", destination / "README.md")
-        shutil.copytree(
-            REPOSITORY / "src",
-            destination / "src",
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.egg-info"),
+            timeout=30,
         )
 
-    def expected_asset_names(self) -> set[str]:
-        names: set[str] = set()
-        for path in ASSETS.rglob("*"):
-            if not path.is_file():
-                continue
-            relative = path.relative_to(REPOSITORY / "src").as_posix()
-            if "__pycache__" in path.parts or path.suffix in {".pyc", ".pyo"}:
-                continue
-            names.add(relative)
-        return names
+    def test_project_metadata_uses_spdx_license_and_explicit_license_file(self) -> None:
+        metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+        self.assertEqual(metadata["build-system"]["requires"], ["setuptools>=77"])
+        project = metadata["project"]
+        self.assertEqual(project["license"], "MIT")
+        self.assertEqual(project["license-files"], ["LICENSE"])
+        self.assertNotIn("License :: OSI Approved :: MIT License", project["classifiers"])
 
-    def activate_fixture(self, root: Path) -> None:
-        for relative in (
-            "ARCHITECTURE.md",
-            "docs/PRODUCT.md",
-            "docs/DESIGN.md",
-            "docs/QUALITY.md",
-            "docs/SECURITY.md",
-            "docs/RELIABILITY.md",
-        ):
-            path = root / relative
-            if not path.exists():
-                continue
-            text = path.read_text(encoding="utf-8")
-            path.write_text(
-                text.replace("status: draft", "status: active").replace(
-                    "TODO", "Established"
-                ),
+    def test_static_package_data_inventory_contains_only_document_first_assets_and_marker(self) -> None:
+        metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
+        package_data = metadata["tool"]["setuptools"]["package-data"]["reporivet"]
+        self.assertEqual(package_data, EXPECTED_PACKAGE_DATA)
+        self.assertNotIn("exclude-package-data", metadata["tool"]["setuptools"])
+
+        actual = {
+            path.relative_to(ASSETS).as_posix()
+            for path in ASSETS.rglob("*")
+            if path.is_file()
+            and "__pycache__" not in path.parts
+            and path.suffix not in {".pyc", ".pyo"}
+        }
+        self.assertEqual(actual, EXPECTED_ASSETS)
+        for relative in actual:
+            parts = set(Path(relative).parts)
+            self.assertTrue(parts.isdisjoint(RETIRED_ASSET_PARTS), relative)
+            self.assertNotIn("harness", Path(relative).name.casefold(), relative)
+            self.assertNotIn("code-map", Path(relative).name.casefold(), relative)
+            self.assertNotIn("reliability", Path(relative).name.casefold(), relative)
+
+    def test_document_first_repository_remains_useful_without_package_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            project_command = root / "project-check.py"
+            project_command.write_text(
+                "from pathlib import Path\n"
+                "assert Path('docs/PRODUCT.md').is_file()\n"
+                "assert Path('docs/exec-plans/_template.md').is_file()\n"
+                "print('project-check-ok')\n",
                 encoding="utf-8",
             )
-        config = root / "dev" / "harness.toml"
-        config.write_text(
-            config.read_text(encoding="utf-8").replace(
-                'baseline = "draft"',
-                'baseline = "established"',
-            ),
-            encoding="utf-8",
-        )
-
-    def initialize_git(self, root: Path) -> None:
-        self.assert_success(self.run_command("git", "init", "-b", "main", cwd=root))
-        self.assert_success(
-            self.run_command("git", "config", "user.name", "Distribution Fixture", cwd=root)
-        )
-        self.assert_success(
-            self.run_command(
-                "git",
-                "config",
-                "user.email",
-                "distribution@example.invalid",
-                cwd=root,
-            )
-        )
-
-    def commit_all(self, root: Path, message: str) -> str:
-        self.assert_success(self.run_command("git", "add", ".", cwd=root))
-        self.assert_success(self.run_command("git", "commit", "-m", message, cwd=root))
-        result = self.run_command("git", "rev-parse", "HEAD", cwd=root)
-        self.assert_success(result)
-        return result.stdout.strip()
-
-    def resolve_plan(self, path: Path) -> str:
-        text = path.read_text(encoding="utf-8")
-        text = text.replace("status: proposed", "status: verifying")
-        text = text.replace('integrated_commit: ""', 'integrated_commit: "HEAD"')
-        text = text.replace("TODO", "resolved")
-        text = re.sub(r"\bpending\b", "resolved", text, flags=re.IGNORECASE)
-        text = text.replace("- [ ]", "- [x]")
-        text = re.sub(r"(#### State\n\n)(ready|blocked)", r"\1complete", text)
-        path.write_text(text, encoding="utf-8")
-        match = re.search(r"^id:\s*(\S+)", text, re.MULTILINE)
-        self.assertIsNotNone(match)
-        return match.group(1)
-
-    def test_wheel_install_and_repository_operation_after_uninstall(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            temporary = Path(tmp).resolve()
-            source = temporary / "source"
-            source.mkdir()
-            self.copy_build_source(source)
-            wheel_directory = temporary / "wheelhouse"
-            wheel_directory.mkdir()
-            build_environment = self.isolated_environment(Path(sys.executable))
-
-            built = self.run_command(
-                sys.executable,
-                "-m",
-                "pip",
-                "wheel",
-                source,
-                "--no-build-isolation",
-                "--no-deps",
-                "--no-index",
-                "--wheel-dir",
-                wheel_directory,
-                env=build_environment,
-            )
-            self.assert_success(built)
-            wheels = sorted(wheel_directory.glob("*.whl"))
-            self.assertEqual([path.name for path in wheels], ["reporivet-0.2.0-py3-none-any.whl"])
-            wheel = wheels[0]
-
-            with zipfile.ZipFile(wheel) as archive:
-                names = set(archive.namelist())
-                packaged_assets = {
-                    name for name in names if name.startswith("reporivet/assets/project/")
-                }
-                self.assertEqual(packaged_assets, self.expected_asset_names())
-                for name in names:
-                    parts = tuple(part.lower() for part in Path(name).parts)
-                    self.assertNotIn("__pycache__", parts)
-                    self.assertFalse(name.endswith((".pyc", ".pyo")), name)
-                    self.assertNotEqual(Path(name).name.lower(), "skill.md")
-                    self.assertTrue(
-                        set(parts).isdisjoint(
-                            {"target", "targets", "model", "models", "daemon", "daemons"}
-                        ),
-                        name,
-                    )
-                metadata_name = next(
-                    name for name in names if name.endswith(".dist-info/METADATA")
-                )
-                metadata = archive.read(metadata_name).decode("utf-8")
-                self.assertIn("\nVersion: 0.2.0\n", metadata)
-                self.assertNotIn("\nRequires-Dist:", metadata)
-
-            virtualenv = temporary / "venv"
-            self.assert_success(self.run_command(sys.executable, "-m", "venv", virtualenv))
-            bin_directory = virtualenv / "bin"
-            python = bin_directory / "python"
-            reporivet = bin_directory / "reporivet"
-            environment = self.isolated_environment(python)
-            installed = self.run_command(
-                python,
-                "-m",
-                "pip",
-                "install",
-                "--no-index",
-                "--no-deps",
-                wheel,
-                env=environment,
-            )
-            self.assert_success(installed)
-            self.assert_success(self.run_command(reporivet, "--help", env=environment))
-
-            project = temporary / "project"
-            initialized = self.run_command(
-                reporivet,
+            initialized = self.run_cli(
                 "init",
                 "--root",
-                project,
+                str(root),
                 "--name",
                 "Distribution Fixture",
                 "--summary",
-                "A generated repository that survives package removal.",
-                "--project-kind",
-                "service",
-                "--with-ci",
-                "--skip-check",
+                "A document-first repository that survives package removal.",
+            )
+            self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
+            self.assertFalse((root / "dev").exists())
+            self.assertFalse((root / ".harness").exists())
+
+            environment = os.environ.copy()
+            environment.pop("PYTHONPATH", None)
+            command = self.run_command(
+                sys.executable,
+                "-I",
+                project_command,
+                cwd=root,
                 env=environment,
             )
-            self.assert_success(initialized)
-            self.assertNotIn(
-                "import reporivet",
-                (project / "dev" / "harness.py").read_text(encoding="utf-8"),
-            )
-            self.assert_success(self.run_command(reporivet, "doctor", "--root", project, env=environment))
-            self.assert_success(
-                self.run_command(project / "dev" / "verify", cwd=project, env=environment)
-            )
+            self.assertEqual(command.returncode, 0, command.stdout + command.stderr)
+            self.assertEqual(command.stdout, "project-check-ok\n")
 
-            definition = temporary / "definition"
-            self.assert_success(
-                self.run_command(reporivet, "define", "--root", definition, env=environment)
-            )
-            self.assert_success(
-                self.run_command(reporivet, "audit", "--root", definition, env=environment)
-            )
-
-            uninstalled = self.run_command(
-                python,
-                "-m",
-                "pip",
-                "uninstall",
-                "-y",
-                "reporivet",
-                env=environment,
-            )
-            self.assert_success(uninstalled)
-            missing_package = self.run_command(
-                python,
+            independent = self.run_command(
+                sys.executable,
                 "-I",
                 "-c",
-                "import reporivet",
-                env=environment,
-            )
-            self.assertNotEqual(missing_package.returncode, 0)
-
-            for command in (
-                (project / "dev" / "audit",),
-                (project / "dev" / "context",),
-                (project / "dev" / "check",),
-                (project / "dev" / "verify",),
-                (project / "dev" / "garden",),
-                (definition / "dev" / "define", "status"),
-                (definition / "dev" / "audit",),
-                (definition / "dev" / "context", "--path", "docs/product-specs/project-definition.draft.md"),
-            ):
-                self.assert_success(self.run_command(*command, cwd=command[0].parents[1], env=environment))
-
-            self.activate_fixture(project)
-            self.initialize_git(project)
-            self.commit_all(project, "base")
-            created = self.run_command(
-                project / "dev" / "new-plan",
-                "Distribution",
-                "closure",
-                "--area",
-                "test",
-                cwd=project,
-                env=environment,
-            )
-            self.assert_success(created)
-            plan_path = project / created.stdout.strip()
-            plan_id = self.resolve_plan(plan_path)
-            task = self.run_command(
-                project / "dev" / "task",
-                plan_id,
-                "T1",
-                cwd=project,
-                env=environment,
-            )
-            self.assert_success(task)
-            candidate = self.commit_all(project, "candidate")
-            closed = self.run_command(
-                project / "dev" / "close-plan",
-                plan_id,
-                cwd=project,
-                env=environment,
-            )
-            self.assert_success(closed)
-            completed = project / "docs" / "exec-plans" / "completed" / plan_path.name
-            self.assertTrue(completed.is_file())
-            text = completed.read_text(encoding="utf-8")
-            self.assertRegex(
-                text,
-                re.compile(
-                    rf'^verified_commit:\s*"?{re.escape(candidate)}"?$',
-                    re.MULTILINE,
+                (
+                    "from pathlib import Path; "
+                    "root=Path('.'); "
+                    "assert (root/'AGENTS.md').read_text().count('<!-- reporivet:start -->') == 1; "
+                    "assert (root/'CLAUDE.md').read_text() == '@AGENTS.md\\n'; "
+                    "skills=sorted((root/'.claude/skills').glob('*/SKILL.md')); "
+                    "assert len(skills) == 3; "
+                    "template=(root/'docs/exec-plans/_template.md').read_text(); "
+                    "assert 'format: 2' in template and '## Task Packets' in template; "
+                    "target=root/'docs/exec-plans/active/PLAN-2099-0001-package-free.md'; "
+                    "target.write_text(template.replace('PLAN-YYYY-NNNN','PLAN-2099-0001',1)); "
+                    "assert target.is_file()"
                 ),
+                cwd=root,
+                env=environment,
             )
-            self.assertRegex(
-                text,
-                re.compile(r'^gate_verdict:\s*"?PASS"?$', re.MULTILINE),
-            )
-            gates = sorted((project / ".harness" / "runs").glob("*-verify/gate.json"))
-            gate = json.loads(gates[-1].read_text(encoding="utf-8"))
-            self.assertEqual(gate["verdict"], "PASS")
+            self.assertEqual(independent.returncode, 0, independent.stdout + independent.stderr)
+
+            if shutil.which("git") is not None:
+                initialized_git = self.run_command("git", "init", "-b", "main", cwd=root)
+                self.assertEqual(
+                    initialized_git.returncode,
+                    0,
+                    initialized_git.stdout + initialized_git.stderr,
+                )
+                status = self.run_command("git", "status", "--short", cwd=root)
+                self.assertEqual(status.returncode, 0, status.stdout + status.stderr)
+                self.assertIn("AGENTS.md", status.stdout)
 
 
 if __name__ == "__main__":

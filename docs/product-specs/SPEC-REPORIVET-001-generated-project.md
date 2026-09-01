@@ -1,13 +1,14 @@
 ---
 id: SPEC-REPORIVET-001
 kind: product-spec
-status: active
+status: superseded
 area: harness
 summary: Observable structure and lifecycle of a generated repository harness
 applies_to:
   - "src/reporivet/assets/project/**"
   - "src/reporivet/initializer.py"
 supersedes: []
+superseded_by: SPEC-REPORIVET-003
 ---
 
 # Generated repository harness

@@ -1,76 +1,138 @@
 ---
-id: PRODUCT
-kind: product
+owner: product
 status: active
-area: product
-summary: Current users, capabilities, requirements, and non-goals of Reporivet
-applies_to:
-  - "src/**"
-  - "tests/**"
+last_reviewed: 2026-08-31
 ---
 
 # Product
 
-## Purpose
+## Product, users, problem, and success
 
-Reporivet initializes and safely maintains a repository-local, document-first operating environment for coding agents. It supports explicit project definition, read-only inventory and adoption, restartable implementation, and evidence-bound completion. A generated project remains understandable and operable from version-controlled repository artifacts after the installed package is removed.
+Reporivet is a Python package that helps establish and safely maintain a repository-local, document-first operating contract for coding agents. It performs deterministic discovery, guided definition, setup, explicit migration, and diagnosis from the installed package. The durable result is rich project-owned Markdown authority, compact Plans, and optional thin host adapters.
 
-## Users and jobs
+Reporivet is not a permanent executor inside the target repository. The project retains ownership of commands, tests, CI, deployment, secrets, operations, and acceptance evidence.
 
-- A developer starting a project needs a structured definition that separates confirmed facts, proposals, open questions, and sources.
-- A maintainer adopting existing code needs a deterministic audit and additive installation that preserves repository authority.
-- A Main Agent needs a small entry map, explicit sources of truth, one living ExecPlan, bounded Task Packets, traceability, and evidence-bound completion.
-- A Sub Agent needs exact read/write scope, acceptance IDs, verification commands, and stop conditions.
-- A release or verification maintainer needs one canonical run, inspectable artifacts, an explicit Git target, conservative risk judgment, and package-removal evidence.
+## Default onboarding and handoff
 
-## Current capabilities
+`reporivet setup` is the default integrated onboarding path. It coordinates deterministic audit, visible guided definition, resumable answers, exact preview, and explicitly approved application. `reporivet init` remains a structure-only, non-overwriting create-if-missing path. Lower-level `reporivet define` remains available for direct draft/resume/status/finalize work.
 
-- Initialize a new or existing project through `reporivet init` without overwriting project-owned authority.
-- Start or resume a fourteen-section project definition with `reporivet define`, persisted progress, stable `JRN-*`, `REQ-P0-*`, and `AC-*` identifiers, and separate Confirmed, Proposed, Open, and Sources evidence.
-- Validate and transactionally finalize confirmed definition evidence into one product specification and one first-slice ExecPlan.
-- Inventory an existing repository deterministically through `reporivet audit` or `./dev/audit` without writes or project-command execution.
-- Adopt through `reporivet define --adopt`, preserving README, instructions, architecture, CI, configuration, and other authority while keeping inferred commands in review.
-- Generate a short `AGENTS.md`, current-state documents, durable templates, one-plan Task Packets, technical-debt tracking, and repository-local command entry points.
-- Validate opt-in product-to-plan-to-task-to-evidence traceability while leaving historical non-opt-in plans unchanged.
-- Create module contracts only for justified boundaries, generate a non-authoritative actual-path code map, and route context by path, area, or plan.
-- Run exactly one shared Verification Run per `./dev/verify`, preserving check JSON, logs, `manifest.json`, `gate.json`, and `report.md` on success, candidate failure, or infrastructure error.
-- Evaluate explicit local target evidence and changed paths under conservative Gate policy with `PASS`, `REVIEW`, `BLOCK`, and `INCONCLUSIVE` verdicts in shadow or enforce mode.
-- Close a plan only against one clean verified commit and persist the run ID, manifest SHA-256, verdict, verified SHA, criterion evidence, and any genuine human REVIEW reason.
-- Generate CI that verifies an explicit head/base target once and uploads `.harness/runs/` on success or failure.
-- Diagnose ownership and configuration through `reporivet doctor`, and report maintenance candidates through `garden` without automatic deletion.
-- Preserve repository-local definition, audit, context, planning, checks, verification, closure, and gardening after uninstalling Reporivet.
-- Block common secret, personal, raw-log, cache, infrastructure-state, and build-output files and reject force-added tracked sensitive material.
+Setup does not execute project commands, spawn or dispatch Agents, or create a Plan or runtime. The Main Skill searches active and completed history, resumes one matching active ordinary Markdown Plan, or creates the first Plan with the lowest unused current-year ID from the project template. A complete user-confirmed structured procedure may generate one deterministic, instruction-only project Skill only through resumed setup; incomplete, inferred, generic, Proposed, Open, and Sources-only records generate none.
 
-Detailed journey, P0 requirement, and acceptance authority for definition, adoption, traceability, evidence, Gate, and migration is [`SPEC-REPORIVET-002`](product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md).
+Public installation guidance is pipx-primary (`pipx install reporivet`), with pip supported from the same wheel (`python -m pip install reporivet`). Source-checkout commands are contributor-only.
 
-## Requirements and invariants
+## Users and needs
 
-- **REQ-OWN-1:** Project-owned documents and `dev/harness.toml` are created only when absent and are never overwritten by upgrade.
-- **REQ-MAN-1:** Upgradable files and shared blocks carry explicit managed ownership markers.
-- **REQ-DEF-1:** Commands validate persisted definition structure; they do not invent semantic product answers or promote proposals to facts.
-- **REQ-AUD-1:** Audit is deterministic, read-only, path-safe, and does not execute project commands.
-- **REQ-CMD-1:** Configured completion commands are argument arrays and missing tools fail visibly rather than disappearing.
-- **REQ-PLAN-1:** Complex work remains restartable from one ExecPlan and the repository without chat history or another task system.
-- **REQ-TRACE-1:** Confirmed opt-in traceability must connect product journeys and P0 requirements to criteria, tasks, evidence, and the verified commit.
-- **REQ-AGENT-1:** Main owns scope, integration, document lifecycle, verification target, and completion; Sub work remains bounded.
-- **REQ-VERIFY-1:** `./dev/verify` is the only completion gate and produces one shared run with deterministic check and Gate artifacts.
-- **REQ-GIT-1:** Gate and closure use only explicit local base/head/target evidence; they never infer a parent, assume a remote, or fetch.
-- **REQ-CLOSE-1:** Missing or mismatched evidence cannot produce PASS, and BLOCK or INCONCLUSIVE cannot be overridden.
-- **REQ-PORT-1:** The copied generated runtime has no dependency on the initializer package after generation.
-- **REQ-SAFE-1:** Initialization and adoption refuse symlinked, nonregular, or unmarked canonical command collisions before writes.
-- **REQ-SAFE-2:** Ignore and tracked-file controls protect local secrets and artifacts while preserving source, examples, migrations, and lockfiles.
+- **Repository maintainers** need an inspectable operating contract that survives package removal.
+- **Main agents** need canonical routing, one durable work record, bounded delegation, and explicit evidence ownership.
+- **Implementation agents** need narrow Task Packets with exact reads, allowed writes, protected paths, acceptance criteria, and stop conditions.
+- **Verification agents and reviewers** need fresh-context, criterion-level evidence tied to an identifiable integrated candidate.
+
+## Current scope
+
+The installed package may:
+
+- scan a repository deterministically without sending project content to a model;
+- coordinate the default integrated `setup` flow while retaining lower-level `define`;
+- collect plain-language answers through guided definition;
+- render a visible Markdown draft with separated evidence classes;
+- show an exact setup or migration preview;
+- apply only the approved preview after safety revalidation;
+- create missing document-first assets and optional host adapters;
+- render an instruction-only project Skill only for a complete user-confirmed structured procedure during resumed setup;
+- diagnose structural drift without mutating the target;
+- back up and explicitly migrate recognized legacy surfaces.
+
+The durable repository contains:
+
+- a host-neutral `AGENTS.md` entry point;
+- current product, architecture, design, quality, operations, security, and Plan authority;
+- versioned specifications, designs, decisions, Plans, references, and optional runbooks;
+- optional instruction-only host adapters and complete-procedure project Skills;
+- ordinary Markdown Plans created or resumed by the Main Skill, not by setup;
+- project-owned source, tests, commands, CI, deployment, secrets, and evidence.
+
+The product does not install a copied command executor, command registry, generated CI workflow, task database, journal, evidence archive, or package-independent Reporivet maintenance command into the target repository.
+
+## Core workflow
+
+1. **Set up** the target with the integrated `reporivet setup` flow; use structure-only `init` only when guided onboarding is not wanted.
+2. **Scan** the target deterministically and keep observations attributable.
+3. **Define** the project in plain language through setup or lower-level `define`, preserving uncertainty rather than guessing.
+4. **Preview** the complete Markdown draft and exact filesystem changes.
+5. **Apply** only after explicit approval and immediate revalidation.
+6. **Hand off** to the Main Skill, which creates or resumes the first ordinary Markdown Plan; setup creates no Plan.
+7. **Work** through canonical documents, bounded Task Packets, and project-owned commands; the host, not Reporivet, performs Agent dispatch and command execution.
+8. **Verify** the integrated candidate from a fresh context and record criterion-level evidence in the Plan.
+9. **Maintain or migrate** with package-side diagnosis, non-destructive updates, and explicit backup-backed transactions.
+
+## Requirements
+
+### Rich content
+
+- Current authority must explain product intent, system boundaries, quality, security, operations, and Plan lifecycle without requiring package internals.
+- Durable records must preserve decisions, historical execution, and unresolved follow-ups.
+- Confirmed facts, proposals, open questions, and sources must remain visibly distinct.
+- Historical and superseded records must not become accidental current authority.
+
+### Thin execution
+
+- Project-owned commands and CI are authoritative for execution; Reporivet does not execute them.
+- Reporivet may run its own package-side setup behavior while installed, but generated Markdown, Plans, Skills, Git, and project commands must remain useful after uninstall.
+- Host adapters and confirmed-procedure Skills may route a host into canonical Markdown; they must not duplicate product authority, spawn/dispatch Agents, or embed a copied executor.
+- A fresh setup must not create legacy command wrappers, runtime configuration, run-state directories, evidence stores, or workflows.
+
+### Safety
+
+- Reads and writes must stay beneath a validated repository root.
+- Mutating operations must reject unsafe symlinked or nonregular targets.
+- Existing project-owned or ambiguous files must be preserved unless an explicit, fingerprinted migration owns the change.
+- A migration must use an external backup, revalidate the approved preview before mutation, restore automatically after an apply failure when safe, and refuse rollback that would overwrite later user changes.
+- Optional settings require exact preview approval and must not merge with or rewrite an existing settings file.
+
+## Success criteria
+
+- A maintainer can identify current authority from `AGENTS.md` and `docs/README.md`.
+- A substantive change can be coordinated using only one compact Markdown Plan and its Task Packets.
+- A verifier can tie results to an integrated candidate and each acceptance criterion.
+- Removing Reporivet leaves generated Markdown, ordinary Plans, Skills, Git, and project commands useful; only package-side maintenance capability disappears.
+- Package diagnosis reports structural problems without silently repairing or deleting project state.
+- The generated surface stays bounded to current documents, templates, metadata, selected host adapters, and complete-procedure Skills.
 
 ## Non-goals
 
-- Running or supervising autonomous agents, model judges, or an LLM evaluation service.
-- Providing a task database, lease service, scheduler, daemon, journal, replay engine, plugin, MCP bridge, or external control plane.
-- Generating host-specific Skill/runtime target bundles or maintaining duplicate completion gates.
-- Automatically deciding semantic product quality, resolving requirement conflicts, or manufacturing REVIEW acceptance.
-- Creating, reviewing, merging, or publishing GitHub changes or packages.
-- Backing up, archiving, deprecating through an external write, deleting, or otherwise operating the former repository.
-- Rewriting historical completed plans or project-owned authority to retrofit new behavior.
+Reporivet does not aim to:
 
-## Open questions
+- replace project-specific build, test, release, deployment, observability, backup, recovery, or incident systems;
+- provide a general workflow engine, scheduler, queue, lock manager, policy server, or evidence database;
+- infer project facts or promote scanner observations to confirmed requirements;
+- install model bundles, prompts that encode project authority outside Markdown, or hidden agent memory;
+- support arbitrary compatibility layers for retired repository layouts;
+- claim that a source checkout, package artifact, release, installation, or deployment has been verified without direct evidence;
+- spawn or dispatch Agents, execute project commands, operate CI or deployment, manage execution evidence, or move Plans to terminal states automatically;
+- publish, sign, or release packages as part of package-side behavior.
 
-- Native Windows wrapper generation is not implemented.
-- Additional project profiles should be added only when repeated repository evidence cannot be expressed in `dev/harness.toml`.
+## Evidence model
+
+### Confirmed
+
+- The source tree implements the package-side scan, guided definition, document-first setup, diagnosis, compact Plan checks, and explicit migration boundary through the previously verified document-first candidate.
+- Historical verification of that candidate passed AC-1 through AC-10 and AC-12; this is historical evidence, not evidence for a later integrated product candidate.
+- Python 3.11 or newer is required and the package declares no production dependencies.
+- The console entry point is `reporivet`.
+- Completed PLAN-2026-0003 records that source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and exact wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4` passed the recorded isolated pipx and pip install/use/uninstall lifecycle. The verification artifacts are temporary and are not a durable or downloadable evidence archive.
+
+### Proposed
+
+- None.
+
+### Open
+
+- Publication, signing, release, deployment, CI repair/readiness, and a permanent evidence archive remain unestablished and outside this product boundary.
+- Project-specific deployment, service-level, backup, and recovery requirements remain undefined because Reporivet is currently a local CLI/package rather than a documented deployed service.
+
+### Sources
+
+- [`product-specs/SPEC-REPORIVET-003-document-first-harness.md`](product-specs/SPEC-REPORIVET-003-document-first-harness.md)
+- [`design-docs/DESIGN-REPORIVET-003-document-first-harness.md`](design-docs/DESIGN-REPORIVET-003-document-first-harness.md)
+- [`decisions/ADR-0001-document-first-product-boundary.md`](decisions/ADR-0001-document-first-product-boundary.md)
+- [`../pyproject.toml`](../pyproject.toml)

@@ -19,6 +19,8 @@ verification:
 
 # Module boundary title
 
+> Historical/superseded template retained for readability. Current document-first setup does not generate module contracts; route through [`../README.md`](../README.md), current authority documents, and the active Markdown Plan.
+
 ## Boundary
 
 State why this durable multi-file boundary needs a contract and cite the actual, configured, or confirmed-planned evidence for each applicable path.
@@ -34,4 +36,4 @@ State why this durable multi-file boundary needs a contract and cite the actual,
 
 ## Verification
 
-Run the frontmatter `verification` commands and `./dev/code-map --check`.
+The historical verification commands are retained as record metadata only. Use current project-owned checks in [`../QUALITY.md`](../QUALITY.md); this template is not a current setup or routing requirement.

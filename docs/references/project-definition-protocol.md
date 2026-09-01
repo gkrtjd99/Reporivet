@@ -1,150 +1,46 @@
----
-id: REF-REPORIVET-003
-kind: reference
-status: active
-owner: main
-area: product
-updated: 2026-08-30
----
-
 # Project Definition Protocol
 
-## Purpose and authority
+This protocol converts a deterministic repository scan and plain-language human input into the canonical document-first bundle. The default entry point is integrated `reporivet setup`; lower-level `reporivet define` remains available, while `reporivet init` is structure-only. It does not use an LLM to rewrite answers, choose filenames, or promote repository inference into authority.
 
-This protocol defines how a human or Main Agent records enough confirmed product evidence to hand work to an implementation ExecPlan without hiding uncertainty. It is an operating procedure, not a semantic interviewer or product authority.
+## Evidence model
 
-Current Reporivet requirements are authoritative in [`SPEC-REPORIVET-002`](../product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md). A target project's project-owned draft and finalized specification become authority for that target.
+Every guided topic preserves these areas distinctly and in this order:
 
-## Roles
+1. **Confirmed** — explicit human input, inserted verbatim apart from whitespace normalization.
+2. **Proposed** — deterministic scanner observations or user-supplied candidate statements awaiting review.
+3. **Open** — unanswered, uncertain, or conflicting questions.
+4. **Sources** — provenance for the entries above.
 
-- **Human or Main Agent:** asks and answers consequential product questions, records evidence, distinguishes fact from proposal, resolves contradictions, chooses scope, and approves semantic completeness.
-- **`reporivet define`:** installs the repository-local definition surface and creates the draft only when explicitly invoked.
-- **`./dev/define status`:** computes progress and the next unresolved consequential section without editing evidence.
-- **`./dev/define validate`:** checks structure, evidence states, stable IDs, completeness, contradictions, and link reciprocity.
-- **`./dev/define finalize`:** validates again and transactionally creates the final specification and one first vertical-slice ExecPlan.
+Blank answers remain Open. The visible Markdown draft is the only resume state; Reporivet creates no hidden interview database, journal, or task state.
 
-Commands do not invent answers, promote proposals, choose architecture, or accept REVIEW on behalf of a person.
+## Topics
 
-## Ordered definition sections
+The fixed interview asks about:
 
-Keep these fourteen sections exactly once and in order:
+- product, users, problem, and observable success;
+- design direction, accessibility, and internationalization;
+- project-owned test, lint, type, build, package, and smoke commands;
+- running, release, observation, backup, rollback, recovery, and incidents;
+- authentication, authorization, sensitive data, secrets, permissions, exposure, and retention;
+- Main, implementation, and verification working agreements;
+- repeatable procedures that deserve a runbook or optional Skill.
 
-1. Project Identity
-2. Problem and Current Alternative
-3. Target Users
-4. Value Proposition and Solution
-5. MVP Capabilities and Priority
-6. User Journeys
-7. Scope Boundaries
-8. Success Signals
-9. Non-Functional Requirements
-10. Stack and Architecture Constraints
-11. Agent Operating Model
-12. Repository Boundaries and Context
-13. Verification and Handoff
-14. First Milestone, Dependencies, and Risks
+A procedure is Skill-eligible only when one complete, user-confirmed, strict structured record is present in `Confirmed`. The record must contain exactly these nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. All nine fields are required; no additional fields or aliases are accepted, and no values or defaults are inferred. Only such records can produce an instruction-only `.claude/skills/<slug>/SKILL.md` through resumed setup. Generic, inferred, incomplete, Proposed, Open, or Sources-only procedure records never create a Skill; no procedure is inferred or executed. Dynamic procedure Skills are project-owned; this package does not pre-generate a project-specific Skill. Any generated Skill is instruction-only, removable, and contains no command execution, Agent spawn/dispatch, hidden state, or privilege-bearing frontmatter. Existing, differing, stale, or arbitrary project Skills are preserved and never deleted.
 
-The packaged [draft template](../../src/reporivet/assets/project/docs/product-specs/project-definition.draft.md.tmpl) contains the section-specific prompts. This protocol defines how to operate it; it does not duplicate every prompt.
+Users answer facts and procedures, not canonical filenames.
 
-## Evidence states
+## Package-side flow
 
-Every numbered section contains these headings in order:
-
-### Confirmed
-
-Use `- [confirmed] ...` for evidence that the human or Main accepts as current truth. Only confirmed declarations can satisfy final traceability.
-
-### Proposed
-
-Use `- [proposed] ...` for a hypothesis or option still requiring confirmation. Proposed content remains visible and cannot be silently copied into confirmed facts.
-
-### Open
-
-Use `- [blocking] ...` when finalization must wait, or `- [non-blocking] ...` when the unresolved item may remain explicitly labeled in the finalized record. Blocking Open items prevent validation/finalization.
-
-### Sources
-
-Use `- [source] ...` for provenance such as an existing document, observed behavior, user statement, issue, test, or repository path. A source does not become confirmed merely by being cited.
-
-Use `- None.` only when that evidence state is genuinely empty. Do not leave template markers or vague placeholders.
-
-## Stable identifiers and links
-
-Use searchable stable IDs:
-
-- Journey: `JRN-001 | description`
-- P0 requirement: `REQ-P0-001 | Journey: JRN-001 | Acceptance: AC-001 | description`
-- Acceptance criterion: `AC-001 | P0: REQ-P0-001 | Journey: JRN-001 | observable criterion`
-
-Each confirmed P0 requirement references a known confirmed journey and at least one known confirmed criterion. Each confirmed criterion references the matching P0 and journey. IDs are unique; duplicate or contradictory declarations fail validation.
-
-Acceptance criteria describe observable behavior or evidence, not implementation activity. Proposed/Open IDs cannot satisfy a confirmed relationship.
-
-## Start and resume
-
-Start explicitly:
-
-```bash
-reporivet define --root .
+```text
+reporivet setup --root .
+reporivet init --root .
+reporivet define --root . start
+reporivet define --root . status
+reporivet define --root . resume [--answers answers.json] [--dry-run]
+reporivet define --root . finalize [--with-claude-settings]
+reporivet define --root . finalize --apply --approve-preview <sha256> [--with-claude-settings]
 ```
 
-Then edit `docs/product-specs/project-definition.draft.md` as a human/Main-owned document. At any point:
+`setup` is the default integrated flow: it audits once, presents and resumes the visible draft, reports actual Open items, renders the exact preview, and applies only after explicit approval. `init` only creates missing structure without guided onboarding. `define` remains the lower-level interface. Setup and init create no Plan or runtime, execute no project commands, and do not spawn or dispatch Agents. The Main Skill creates or resumes the first ordinary Markdown Plan. `resume` updates only the visible draft. `status` and finalize preview are read-only. Apply recomputes the complete target preview, requires the exact unchanged fingerprint, creates missing files, updates only bounded managed blocks, and preserves existing project-owned documents, `CLAUDE.md`, Skills, and settings.
 
-```bash
-./dev/define status
-```
-
-Use the persisted `progress`, `next`, and `continuation` values to resume. Read already confirmed sections for context, but do not repeat their questions unless new evidence contradicts them. Record contradictions openly and resolve them before finalization.
-
-## Validate
-
-Run:
-
-```bash
-./dev/define validate
-```
-
-Validation requires exact sections/headings, known evidence markers, well-formed unique IDs, complete core fields, no unresolved placeholders, no blocking Open items, no contradictory duplicate evidence, and reciprocal Journey -> P0 -> Acceptance links. It verifies structure and declared relationships, not whether the product decision is good.
-
-## Existing-repository adoption
-
-Before adding definition to an existing repository:
-
-```bash
-reporivet audit --root .
-reporivet define --root . --adopt
-```
-
-Adoption inventories existing instructions, docs, manifests, lockfiles, CI, scripts, source/tests, runtime/config, and commands without execution. It preserves existing README, `AGENTS.md` text outside managed blocks, architecture, CI, catalogs, and configuration. Authority conflicts stop before writes. Inferred commands remain `configuration = "review"` until a person verifies them.
-
-Repository-local `./dev/audit` remains available after package removal.
-
-## Finalize and handoff
-
-When validation is green:
-
-```bash
-./dev/define finalize
-```
-
-Finalization:
-
-1. revalidates the current draft;
-2. materializes confirmed evidence into `docs/product-specs/SPEC-PROJECT-001-product-definition.md`;
-3. retains proposed and non-blocking open material under explicit labels;
-4. creates exactly one first vertical-slice ExecPlan with Product Trace and task acceptance IDs;
-5. updates catalogs; and
-6. rolls back all generated targets if any write or catalog step fails.
-
-It refuses existing output targets and never overwrites `docs/PRODUCT.md` or another project-owned specification. Main reviews the resulting specification and plan, then follows normal plan approval and implementation policy.
-
-## Semantic limits and non-goals
-
-This protocol does not authorize:
-
-- a model-driven interview or judge;
-- command-generated product answers, confidence scores, or human acceptance reasons;
-- hidden session state, external task databases, plugins, or daemons;
-- remote reads/writes, package publication, pull requests, or deployment;
-- backup, archive, deprecation writes, deletion, or other old-repository operations; or
-- replacement of existing project authority during adoption or upgrade.
+Live `.claude/settings.json` is absent by default. The optional deny-only template is installed only when it is included in the exact approved preview and the path is missing. Reporivet never merges or rewrites existing settings; command-text denials are defense in depth, not a sandbox.

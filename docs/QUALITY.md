@@ -1,85 +1,137 @@
 ---
-id: QUALITY
-kind: quality
+owner: quality
 status: active
-area: repository
-summary: Current quality model, verification statuses, Gate policy, release checks, and residual risks
-applies_to:
-  - "**"
+last_reviewed: 2026-08-31
 ---
 
 # Quality
 
-## Quality model
+## Required checks and commands
 
-Quality means a repository is changed safely, remains understandable after sessions and package installation state change, fails visibly when required evidence is unavailable, preserves inspectable artifacts for non-green outcomes, and can be upgraded without losing project-owned knowledge.
+This file is the sole current authority for Reporivet's project-owned local checks and acceptance evidence. Commands run directly through Git and a selected Python 3.11-or-newer interpreter; no repository wrapper or retained configuration file is an execution authority. Reporivet does not execute project commands or CI; a project/host owns that execution.
 
-## Verification layers
+Public installation guidance is pipx-primary (`pipx install reporivet`), with pip supported from the same wheel (`python -m pip install reporivet`). Completed PLAN-2026-0003 records that source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and exact wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4` passed the recorded isolated pipx and pip install/use/uninstall lifecycle. The verification artifacts are temporary and are not a durable or downloadable evidence archive.
 
-| Layer | Purpose | Canonical command | Evidence |
-|---|---|---|---|
-| Syntax | Compile Python sources and tests | `python3 -m compileall -q src tests` | Zero exit status |
-| Regression | Exercise initializer and copied runtime end to end | `python3 -m unittest discover -s tests -v` | Full unit/integration/regression result |
-| Repository fast feedback | Structural checks plus configured fast commands | `./dev/check` | Catalog, document, plan, architecture preflight, and project output |
-| Completion gate | One fixed shared Verification Run | `./dev/verify` | `.harness/runs/<run>-verify/` manifest, Gate, report, checks, and logs |
-| Distribution | Build/install/uninstall the wheel and exercise generated projects | Distribution regression and release procedure | Complete asset inventory and package-independent operation |
+Set `PYTHON` explicitly before running checks:
 
-## Verification Run status
+```bash
+PYTHON=/absolute/path/to/python3.11-or-newer
+"$PYTHON" --version
+```
 
-One canonical run executes security, docs-index, documentation, plan, architecture, project, and optional smoke checks in that order. Each check records one of:
+Use an external bytecode cache so validation does not create repository state:
 
-- `pass`: the declared check completed successfully.
-- `fail`: candidate behavior did not satisfy a required check.
-- `error`: the check could not produce reliable evidence because of configuration or infrastructure.
-- `skipped`: an optional check was correctly not configured.
-- `unknown`: evidence could not be determined and must not be treated as pass.
+```bash
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX="${TMPDIR:-/tmp}/reporivet-pycache"
+export PYTHONPATH=src
+```
 
-A required `fail` determines verification failure even when another required stage errors. Otherwise a required `error` or `unknown` determines an error outcome. Optional smoke may be `skipped`; malformed configured smoke is a required error. Artifacts are finalized as far as possible for all outcomes.
+## Contributor-only source checks
 
-## Gate semantics
+The following commands are for contributors working from a source checkout. They are not the public installation or artifact-readiness path.
 
-Changed paths use `contained`, `wide`, `irreversible`, or `unknown` risk. Verdict priority is:
+### Unit and integration behavior
 
-1. Required check failure: `BLOCK`.
-2. Required error/unknown, malformed Gate policy, or target mismatch/error: `INCONCLUSIVE`.
-3. Protected, unknown, wide, irreversible, or policy-required dirty state: `REVIEW`.
-4. Clean explicit contained target with all required checks passing: `PASS`.
+```bash
+"$PYTHON" -m unittest discover -s tests -v
+```
 
-In shadow mode, deterministic `PASS` and `REVIEW` return zero; `BLOCK` returns one and `INCONCLUSIVE` returns two. In enforce mode, only `PASS` returns zero. A REVIEW verdict is evidence for human judgment, not an automatic approval.
+The suite covers root and path safety, deterministic audit, guided setup, Claude adapters, package-data boundaries, compact Plan lifecycle, migration transactions, CLI behavior, and document usefulness after package removal.
 
-## Test ownership
+### Syntax and import surface
 
-Focused modules own distinct behavior:
+```bash
+"$PYTHON" -m compileall -q src tests
+```
 
-- `tests/test_reporivet.py`: initialization, ownership, wrappers, doctor, CI, security integration, and upgrades.
-- `tests/test_definition.py`: definition start, resume, validation, finalization, and rollback.
-- `tests/test_audit_adoption.py`: deterministic read-only audit, authority-preserving adoption, path safety, and rollback.
-- `tests/test_traceability.py`: product/spec/plan/task/evidence links and legacy-plan compatibility.
-- `tests/test_code_map.py`: justified contracts, deterministic maps, drift, and context routing.
-- `tests/test_verification_run.py`: fixed stages, statuses, artifacts, target evidence, recursion rejection, and Gate matrix.
-- `tests/test_gate_close_plan.py`: PASS/REVIEW/BLOCK/INCONCLUSIVE closure, one-run binding, path safety, and transaction recovery.
-- `tests/test_distribution.py`: wheel inventory, isolated install, generated verify/doctor, uninstall, repository-local commands, and closure.
+### Distribution boundary
 
-## Review expectations
+```bash
+"$PYTHON" -m unittest tests.test_distribution -v
+```
 
-Changes to ownership, replacement behavior, path handling, command execution, parsing, target evidence, Gate policy, closure, packaged assets, or CI require regression tests and an independent context that attempts to falsify the acceptance claim. Explanations without commands or artifacts are not evidence.
+This focused check asserts the expected package-data inventory, absence of retired copied execution assets, current adapter bytes, compact Plan template, and a document-first repository that remains useful after package removal.
 
-## Local 0.2.0 release gate
+### Repository diagnosis
 
-1. Compile source and tests and run the full regression suite.
-2. Run strict security, catalog, documentation, plan, architecture, and repository checks.
-3. Build a `0.2.0` wheel with no build isolation, dependency resolution, or network access.
-4. Confirm every package asset is present and bytecode, cache, Skill, target bundle, model, and daemon surfaces are absent.
-5. Install the local wheel into a fresh virtual environment without an index.
-6. Run installed CLI help, fresh initialization/definition/audit, generated verification, and initializer doctor.
-7. Uninstall Reporivet and rerun repository-local definition, audit, context, planning, checks, verification, closure, and gardening fixtures.
-8. Independently review the exact clean candidate and run one final canonical Verification Run with explicit base/head/target evidence.
+```bash
+"$PYTHON" -m reporivet doctor --root .
+```
 
-This is a local release-ready boundary only. It does not publish a wheel or create a GitHub release.
+Doctor is read-only. Findings must be resolved or reported; do not weaken structural rules to obtain a passing result.
 
-## Known gaps
+### Patch hygiene
 
-- Generated wrappers are POSIX shell scripts; Windows-native wrappers are not covered.
-- Frontmatter and Markdown parsing intentionally supports the committed schema rather than arbitrary YAML/Markdown.
-- Structural evidence does not replace semantic product, architecture, security, or REVIEW judgment.
-- Optional smoke evidence is project-specific and remains skipped when no command is configured.
+```bash
+git diff --check
+```
+
+For a bounded task, also inspect `git status --short` and the final changed-path list so protected and unrelated files are not accidentally included.
+
+## Change-specific evidence
+
+| Change | Minimum additional evidence |
+| --- | --- |
+| CLI arguments or output | Exercise the affected command and relevant error path using the selected interpreter. |
+| Root/path safety or mutation | Run the focused safety tests plus the full suite; use temporary repositories only. |
+| Integrated setup or adapters | Verify one audit, actual Open-state reporting, exact preview/apply behavior, generated path inventory, preservation of existing content, and no setup-created Plan. |
+| Confirmed procedure Skills | Verify complete structured Confirmed records alone render deterministic instruction-only Skills; unresolved or generic records render none and no command executes. |
+| Plan lifecycle | Verify Main Skill first-Plan resume/create behavior, compact frontmatter, required headings, state consistency, candidate identity, and manual terminal movement rules. |
+| Migration | Verify preview/apply/rollback, external backup, fingerprint revalidation, failed-apply restoration, and refusal after later user changes. |
+| Current documentation or templates | Run doctor, link resolution, bilingual claim parity when public READMEs change, bounded retired-authority scan, full tests, and `git diff --check`. |
+| Security-sensitive behavior | Apply [`SECURITY.md`](SECURITY.md), inspect exact paths and permissions, and record residual threats. |
+
+Main defines the applicable target in the Plan. A fresh Verification Sub runs the checks against the identifiable integrated candidate and reports each acceptance criterion as accepted, failed, or not established.
+
+## Evidence contract
+
+- A passing command is evidence only for the exact candidate and environment where it ran.
+- Implementation narration, previous-task output, and a clean-looking diff are not substitutes for independent checks.
+- Record the command, exit status, relevant result, candidate identity, and residual risks in the active Plan.
+- Distinguish not run, unavailable, and failed. Do not report any of them as passing.
+- Do not weaken a test, doctor rule, or acceptance criterion merely to make the candidate pass.
+- Historical artifacts are not current evidence for a later candidate.
+
+## Quality gaps
+
+Building a wheel requires the declared Setuptools backend to be available in the selected environment. When release preparation explicitly requires a local artifact and the backend is available, the source-tree wheel check is:
+
+```bash
+WHEEL_DIR="$(mktemp -d)"
+"$PYTHON" -m pip wheel . \
+  --no-build-isolation \
+  --no-deps \
+  --no-index \
+  --wheel-dir "$WHEEL_DIR"
+```
+
+A successful source check does not by itself establish wheel installation, uninstall, publication, or deployment. For this candidate, completed PLAN-2026-0003 records the exact wheel lifecycle described above. The verification artifacts are temporary and are not a durable or downloadable evidence archive. Publication, signing, release, deployment, and CI repair/readiness remain unestablished and outside this documentation-only scope. Do not substitute a networked build or publication action without explicit authorization.
+
+## CI status
+
+The checked-in `.github/workflows/ci.yml` is project-owned and retained, but its current commands do not match this document-first authority. Until separately repaired and verified, its result is not accepted as current completion evidence. Reporivet does not generate or rewrite project CI.
+
+### Confirmed
+
+- Python 3.11 or newer is the supported interpreter boundary.
+- The full source test suite and compile check run without production dependencies.
+- Doctor and patch-hygiene checks are read-only with respect to project content.
+- Source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and exact wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4` passed the recorded isolated pipx and pip install/use/uninstall lifecycle. The verification artifacts are temporary and are not a durable or downloadable evidence archive.
+
+### Proposed
+
+- None.
+
+### Open
+
+- Durable evidence archival is not provided; the recorded lifecycle verification artifacts are temporary and are not a durable or downloadable archive.
+- Publication, signing, release, deployment, and CI repair/readiness remain unestablished and outside Reporivet.
+- Project-owned CI requires separate repair outside this documentation-only change.
+
+### Sources
+
+- [`../pyproject.toml`](../pyproject.toml)
+- [`../tests/`](../tests/)
+- [`product-specs/SPEC-REPORIVET-003-document-first-harness.md`](product-specs/SPEC-REPORIVET-003-document-first-harness.md)
+- [`design-docs/DESIGN-REPORIVET-003-document-first-harness.md`](design-docs/DESIGN-REPORIVET-003-document-first-harness.md)

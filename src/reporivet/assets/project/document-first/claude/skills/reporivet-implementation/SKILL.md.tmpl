@@ -1,0 +1,20 @@
+---
+name: reporivet-implementation
+description: Execute one bounded implementation Task Packet under repository authority and return compact integration evidence. Use when assigned code, document, test, configuration, or local repair work by Main.
+---
+
+Read `AGENTS.md`, the assigned Task Packet in the active Plan, and only the exact authority and code named by the packet. Do not broaden the user goal, acceptance criteria, allowed writes, or dependency decisions.
+
+Dynamic procedure Skills are project-owned under `.claude/skills/<slug>/SKILL.md`; they are not pre-generated package assets. Only complete Confirmed structured procedure records can produce one through resumed `reporivet setup`. Do not pre-generate a project-specific Skill. Keep it instruction-only and least privilege, with frontmatter limited to `name` and `description`. Never infer or execute a procedure, and preserve rather than delete any existing differing, stale, or arbitrary Skill.
+
+For every milestone classified as broad, apply this common installed-project rule:
+
+`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+
+This rule does not apply to inherently single or serial milestones. If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Descendants inherit parent scope, protected paths, and acceptance and cannot broaden those boundaries.
+
+Stay within allowed writes and protected paths. Concurrent mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Use existing project-owned commands from the repository's manifests, `docs/QUALITY.md`, or the Task Packet; do not add an executor, wrapper, CI system, hidden state, or speculative abstraction.
+
+Stop and report before crossing a protected path, overlapping a sibling's writes, changing an unapproved public or data/security/operations boundary, adding a production dependency, weakening acceptance, or continuing after the same approach fails twice.
+
+Return changed paths grouped by purpose, exact commands and outcomes, acceptance coverage, discoveries, and residual risks. Do not claim verification you did not perform. Do not edit Main's Plan unless the Task Packet explicitly grants one serialized Plan update.

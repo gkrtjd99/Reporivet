@@ -1,0 +1,58 @@
+# Plans
+
+A Plan is Main's durable cross-session memory for one substantive user goal. Native host task state and chat history are temporary; the active Markdown Plan records what must survive compaction, a new session, or a new Main Agent.
+
+## When to use a Plan
+
+Create or resume one active Plan for cross-cutting, risky, long-running, multi-agent, public-contract, persistent-data, security, infrastructure, deployment, or otherwise substantive work. Small local reversible changes may proceed without one.
+
+Do not create a second task database, packet directory, lease, journal, scheduler, or orchestration layer.
+
+## Ownership and lifecycle
+
+- Main alone serializes Plan edits and owns goal, scope, non-goals, acceptance, decomposition, dispatch, integration, decisions, checkpoint, exact next action, verification judgment, and terminal transition.
+- Sub Agents receive one bounded Task Packet and return Plan-ready evidence; they do not concurrently edit the Plan.
+- One substantive goal maps to one file in `exec-plans/active/`.
+- Terminal Plans move to `exec-plans/completed/` with actual status `complete`, `cancelled`, or `superseded`.
+- Historical Plans remain readable. Supersede or annotate history; do not rewrite old results to match a new process.
+
+## First-Plan handoff
+
+Main—not package runtime—creates and resumes Plans. Before dispatching a substantive goal, Main searches both `exec-plans/active/` and `exec-plans/completed/` for ordinary Markdown Plans matching the goal. Resume exactly one matching active Plan; stop if multiple active Plans match. Completed Plans are historical and are searched to prevent ID reuse, not resumed.
+
+Otherwise choose the lowest unused current-year numeric ID across both directories, copy `_template.md` (`exec-plans/_template.md`) to a new file in `exec-plans/active/`, and never overwrite/reuse an ID. Keep state in visible Markdown. Never use a Plan CLI/hidden state/automatic dispatcher/closure.
+
+## Dynamic procedure Skills
+
+Only complete Confirmed structured procedure records can produce a project-owned instruction-only `.claude/skills/<slug>/SKILL.md` through resumed `reporivet setup`. Do not pre-generate a project-specific Skill. Keep its frontmatter instruction-only and least privilege; no procedure is inferred or executed, and existing differing, stale, or arbitrary Skills are preserved rather than deleted.
+
+## Broad-milestone native-Agent dispatch
+
+For every milestone classified as broad, this is a common installed-project rule:
+
+`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+
+Every child row retains an explicit owner and matching bounded packet. Main owns the overall task tree, Main alone serializes Plan edits, and Main dispatches the complete dependency-ready leaf set concurrently using only the host's native Agent execution. This rule does not apply to inherently single or serial milestones.
+
+If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Descendants inherit parent scope, protected paths, and acceptance and cannot broaden them.
+
+Parallel mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Read-only review and verification lanes may run concurrently. Siblings converge on an explicit integration node; fresh verification nodes depend on the integrated candidate.
+
+Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher; it also installs no dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+
+## Minimum active Plan content
+
+Use `exec-plans/_template.md`. Keep it concise but restartable:
+
+- original goal and observable acceptance criteria;
+- scope and non-goals;
+- task rows retaining Owner, State, Depends on, Outcome, Result, and an optional Parallel group;
+- decisions and discoveries;
+- current checkpoint and exact next action;
+- integration and verification summaries, candidate identity, and residual risks.
+
+A Task Packet names outcome, non-goals, exact reads, allowed writes, protected paths, acceptance criteria, verification commands, stop conditions, and compact return evidence. Broad-milestone child packets also name Role, Parent, Parallel group, May delegate, inherited boundaries/write isolation, and Return; an inherently single or serial milestone may omit hierarchy-only fields.
+
+## Completion
+
+Completion requires observable acceptance, integrated project-owned verification, independent review when required, current-state documentation parity, recorded follow-ups, and Main or human evidence judgment. No repository-local completion engine, model judge, automatic closure command, or evidence archive decides completion.

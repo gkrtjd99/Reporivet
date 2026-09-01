@@ -1,0 +1,63 @@
+<!-- reporivet:start -->
+# Repository Agent Operating Contract
+
+`AGENTS.md` is the canonical, host-neutral entry point for repository work. Host adapters may import it, but they do not replace its authority.
+
+## Start here
+
+1. Read [`docs/README.md`](docs/README.md) for the knowledge map.
+2. For a substantive goal, create or resume exactly one matching Plan in [`docs/exec-plans/active/`](docs/exec-plans/active/).
+3. Read only the current authority and code named by that Plan or the local task.
+4. Use commands already owned by this project. Reporivet documents commands; it does not wrap or execute them.
+
+The default onboarding entry point is integrated `reporivet setup`. `reporivet init` remains structure-only, and the lower-level `reporivet define` flow remains available for staged definition work.
+
+## Sources of truth
+
+- Product intent and requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)
+- Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Design and accessibility: [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/design-docs/`](docs/design-docs/)
+- Quality and project-owned checks: [`docs/QUALITY.md`](docs/QUALITY.md)
+- Operations, deployment, backup, rollback, recovery, and incidents: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) and [`docs/runbooks/`](docs/runbooks/)
+- Security: [`docs/SECURITY.md`](docs/SECURITY.md)
+- Plan lifecycle: [`docs/PLANS.md`](docs/PLANS.md)
+
+When current sources conflict, stop and report the conflict. Do not silently choose the easiest interpretation.
+
+## Main, implementation, and verification
+
+- **Main** owns user intent, scope, acceptance criteria, decomposition, dispatch, integration order, decisions, the serialized Plan lifecycle, and final evidence judgment. Main keeps context small and does not normally repeat a Verification Sub's detailed command run.
+- **Implementation Sub** receives one bounded Task Packet, reads only named authority, stays within allowed writes and protected paths, uses project-owned commands, and returns changed paths, command results, discoveries, and residual risks.
+- **Verification Sub** uses a fresh context, reads the Plan goal and acceptance criteria plus current authority and the integrated candidate, treats implementer narration as unverified, runs project-owned checks, and returns criterion-level pass/fail, candidate identity, and residual risks.
+
+### Broad-milestone native-Agent dispatch
+
+For every milestone classified as broad, this is a common installed-project rule:
+
+`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+
+Every child row retains an explicit owner and matching bounded packet. Main owns the overall task tree, Main alone serializes Plan edits, and Main dispatches the complete dependency-ready leaf set concurrently using only the host's native Agent execution. This rule does not apply to inherently single or serial milestones.
+
+If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Descendants inherit parent scope, protected paths, and acceptance and cannot broaden them.
+
+Parallel mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Read-only review and verification lanes may run concurrently. Siblings converge on an explicit integration node; fresh verification nodes depend on the integrated candidate.
+
+Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher; it also installs no dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+
+Meaningful behavior changes should separate implementation and verification contexts. Explanations are not evidence.
+
+Dynamic procedure Skills are project-owned under `.claude/skills/<slug>/SKILL.md`. Only complete Confirmed structured procedure records can produce an instruction-only Skill through resumed `reporivet setup`; no project-specific Skill is pre-generated. Keep frontmatter instruction-only and least privilege. No procedure is inferred or executed, and an existing differing, stale, or arbitrary Skill is preserved rather than deleted. Main—not package runtime—creates/resumes Plans and keeps their state in visible Markdown.
+
+## Working boundaries
+
+- Prefer the smallest durable change that satisfies current requirements.
+- Preserve explicit ownership and dependency direction.
+- Do not add speculative infrastructure, compatibility shims, generated command runners, CI, deployment engines, task databases, journals, Gates, evidence archives, or hidden orchestration state. Reporivet installs no scheduler, dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+- Stop before changing public APIs, persisted data, authentication, authorization, payments, infrastructure, or production deployment unless the approved Plan explicitly covers the change.
+- Do not weaken acceptance tests, rewrite unrelated code, add production dependencies, or perform external actions without explicit authority.
+- Record out-of-scope discoveries in the active Plan; do not implement them implicitly.
+
+## Project-specific working agreements
+
+{{AGENT_EVIDENCE}}
+<!-- reporivet:end -->

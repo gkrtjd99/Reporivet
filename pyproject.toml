@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,12 +8,12 @@ dynamic = ["version"]
 description = "Repository-native harness initializer for long-running agent-driven software development"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "gkrtjd99 and Reporivet contributors"}]
 keywords = ["agents", "codex", "harness", "execplan", "repository"]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -41,17 +41,11 @@ namespaces = false
 
 [tool.setuptools.package-data]
 reporivet = [
-  "assets/project/dev/harness.py",
-  "assets/project/dev/*.tmpl",
-  "assets/project/docs/*.tmpl",
-  "assets/project/docs/*/*.tmpl",
-  "assets/project/github/*.tmpl",
-  "assets/project/root/*.tmpl",
-]
-
-[tool.setuptools.exclude-package-data]
-reporivet = [
-  "assets/project/dev/__pycache__/*",
-  "assets/project/dev/*.pyc",
-  "assets/project/dev/*.pyo",
+  "assets/project/document-first/root/*.tmpl",
+  "assets/project/document-first/docs/*.tmpl",
+  "assets/project/document-first/docs/*/*.tmpl",
+  "assets/project/document-first/claude/*.tmpl",
+  "assets/project/document-first/claude/skills/*/*.tmpl",
+  "assets/project/document-first/optional/*.tmpl",
+  "assets/project/root/reporivet-version.tmpl",
 ]

@@ -1,7 +1,7 @@
 ---
 id: DESIGN-REPORIVET-002
 kind: design-doc
-status: active
+status: superseded
 area: harness
 summary: Design of project definition, adoption, traceability, Verification Run, Gate, and evidence-bound closure
 applies_to:
@@ -11,6 +11,7 @@ applies_to:
   - "src/reporivet/assets/project/docs/**"
   - ".github/workflows/**"
 supersedes: []
+superseded_by: DESIGN-REPORIVET-003
 ---
 
 # Project definition, adoption, and evidence Gate

@@ -2,23 +2,71 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
-import re
-import stat
 import subprocess
 import sys
 import tempfile
 import tomllib
 import unittest
-from datetime import date
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
 sys.path.insert(0, str(SRC))
 
-from reporivet import __version__, initializer
-from reporivet.cli import main as cli_main
+from reporivet import __version__
+from reporivet.cli import build_parser, main as cli_main
+
+
+EXPECTED_FRESH_FILES = {
+    ".claude/skills/reporivet-implementation/SKILL.md",
+    ".claude/skills/reporivet-main/SKILL.md",
+    ".claude/skills/reporivet-verification/SKILL.md",
+    ".gitignore",
+    ".reporivet-version",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "CLAUDE.md",
+    "docs/DESIGN.md",
+    "docs/OPERATIONS.md",
+    "docs/PLANS.md",
+    "docs/PRODUCT.md",
+    "docs/QUALITY.md",
+    "docs/README.md",
+    "docs/SECURITY.md",
+    "docs/decisions/README.md",
+    "docs/decisions/_template.md",
+    "docs/design-docs/_template.md",
+    "docs/design-docs/core-beliefs.md",
+    "docs/design-docs/index.md",
+    "docs/exec-plans/_template.md",
+    "docs/exec-plans/active/.gitkeep",
+    "docs/exec-plans/completed/.gitkeep",
+    "docs/exec-plans/tech-debt-tracker.md",
+    "docs/product-specs/_template.md",
+    "docs/product-specs/index.md",
+    "docs/references/README.md",
+    "docs/references/project-definition-protocol.md",
+    "docs/runbooks/_template.md",
+    "docs/runbooks/index.md",
+}
+
+EXPECTED_FRESH_DIRECTORIES = {
+    parent.as_posix()
+    for relative in EXPECTED_FRESH_FILES
+    for parent in Path(relative).parents
+    if parent.as_posix() != "."
+}
+
+RETIRED_FRESH_PATHS = {
+    ".github",
+    ".harness",
+    "dev",
+    "docs/RELIABILITY.md",
+    "docs/generated",
+    "docs/module-contracts",
+}
 
 
 class ReporivetTests(unittest.TestCase):
@@ -37,12 +85,7 @@ class ReporivetTests(unittest.TestCase):
             os.chdir(previous)
         return subprocess.CompletedProcess(list(args), returncode, stdout.getvalue(), stderr.getvalue())
 
-    def init(
-        self, root: Path, *extra: str, checked: bool = False
-    ) -> subprocess.CompletedProcess[str]:
-        options = list(extra)
-        if not checked and "--skip-check" not in options:
-            options.append("--skip-check")
+    def init(self, root: Path, *extra: str) -> subprocess.CompletedProcess[str]:
         return self.run_cli(
             "init",
             "--root",
@@ -50,70 +93,63 @@ class ReporivetTests(unittest.TestCase):
             "--name",
             "Test Project",
             "--summary",
-            "A test project with an agent-readable repository harness.",
-            "--project-kind",
-            "service",
-            *options,
+            "A document-first repository fixture.",
+            *extra,
         )
 
-    def run_harness(self, root: Path, command: str, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, str(root / "dev" / "harness.py"), command, *args],
-            cwd=root,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+    def snapshot(self, root: Path) -> tuple[tuple[str, str, bytes | None], ...]:
+        entries: list[tuple[str, str, bytes | None]] = []
+        for current_text, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
+            current = Path(current_text)
+            for name in sorted(directory_names):
+                path = current / name
+                relative = path.relative_to(root).as_posix()
+                entries.append((relative, "symlink" if path.is_symlink() else "directory", None))
+            for name in sorted(file_names):
+                path = current / name
+                relative = path.relative_to(root).as_posix()
+                entries.append(
+                    (
+                        relative,
+                        "symlink" if path.is_symlink() else "file",
+                        None if path.is_symlink() else path.read_bytes(),
+                    )
+                )
+        return tuple(sorted(entries))
 
-    def test_initializes_repository_local_harness(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root, "--with-ci", checked=True)
+    def test_initializes_exact_document_first_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-            expected = (
-                "AGENTS.md",
-                "ARCHITECTURE.md",
-                ".reporivet-version",
-                "dev/harness.toml",
-                "dev/harness.py",
-                "dev/context",
-                "dev/verify",
-                "dev/security-check",
-                "dev/garden",
-                "docs/README.md",
-                "docs/PRODUCT.md",
-                "docs/DESIGN.md",
-                "docs/QUALITY.md",
-                "docs/SECURITY.md",
-                "docs/RELIABILITY.md",
-                "docs/PLANS.md",
-                "docs/exec-plans/_template.md",
-                "docs/exec-plans/tech-debt-tracker.md",
-                "docs/references/project-definition-protocol.md",
-                ".github/workflows/harness-verify.yml",
-                ".github/workflows/harness-garden.yml",
+            files = {
+                path.relative_to(root).as_posix()
+                for path in root.rglob("*")
+                if path.is_file()
+            }
+            directories = {
+                path.relative_to(root).as_posix()
+                for path in root.rglob("*")
+                if path.is_dir()
+            }
+            self.assertEqual(files, EXPECTED_FRESH_FILES)
+            self.assertEqual(directories, EXPECTED_FRESH_DIRECTORIES)
+            for relative in RETIRED_FRESH_PATHS:
+                self.assertFalse((root / relative).exists(), relative)
+
+            self.assertEqual((root / "CLAUDE.md").read_bytes(), b"@AGENTS.md\n")
+            self.assertEqual(
+                (root / ".reporivet-version").read_text(encoding="utf-8"),
+                "# reporivet:managed version=0.2.0\n0.2.0\n",
             )
-            for relative in expected:
-                self.assertTrue((root / relative).exists(), relative)
+            agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertEqual(agents.count("<!-- reporivet:start -->"), 1)
+            self.assertEqual(agents.count("<!-- reporivet:end -->"), 1)
+            self.assertNotIn("./dev/", agents)
+            self.assertNotIn(".harness/runs", agents)
 
-            self.assertLessEqual(len((root / "AGENTS.md").read_text(encoding="utf-8").splitlines()), 140)
-            self.assertFalse(any(path.name == "SKILL.md" for path in root.rglob("*")))
-            config = (root / "dev" / "harness.toml").read_text(encoding="utf-8")
-            self.assertIn('baseline = "draft"', config)
-            self.assertIn('configuration = "ready"', config)
-            self.assertIn("[gate]", config)
-            self.assertIn('mode = "shadow"', config)
-            self.assertIn('default_risk = "unknown"', config)
-            self.assertIn("require_clean = true", config)
-            self.assertIn('protected_paths = [".github/workflows/**", "AGENTS.md", "dev/harness.py", "dev/harness.toml", "docs/SECURITY.md"]', config)
-            self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1", (root / ".github/workflows/harness-verify.yml").read_text())
-            self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1", (root / ".github/workflows/harness-garden.yml").read_text())
-
-            verify = self.run_harness(root, "verify")
-            self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
-
-    def test_release_version_and_managed_assets_are_in_sync(self) -> None:
+    def test_release_version_and_version_marker_are_in_sync(self) -> None:
         metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(__version__, "0.2.0")
         self.assertNotIn("version", metadata["project"])
@@ -123,410 +159,121 @@ class ReporivetTests(unittest.TestCase):
             {"attr": "reporivet.__version__"},
         )
 
-        with tempfile.TemporaryDirectory() as tmp:
-            generated = Path(tmp).resolve()
-            result = self.init(generated)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-            for destination, asset in initializer.managed_files(False).items():
-                values = {"HARNESS_VERSION": __version__}
-                if asset == "dev/wrapper.sh.tmpl":
-                    values["COMMAND"] = Path(destination).name
-                expected = initializer.read_asset(asset, values).rstrip() + "\n"
-                for root in (REPOSITORY, generated):
-                    path = root / destination
-                    self.assertEqual(path.read_text(encoding="utf-8"), expected, str(path))
-                    if destination.startswith("dev/"):
-                        self.assertTrue(
-                            stat.S_IMODE(path.stat().st_mode) & 0o111,
-                            f"not executable: {path}",
-                        )
-
-        security_wrapper = (REPOSITORY / "dev" / "security-check").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn('PYTHON=${PYTHON:-python3}', security_wrapper)
-        self.assertIn('exec "$PYTHON"', security_wrapper)
-
-    def test_ci_workflows_bind_explicit_target_and_preserve_evidence(self) -> None:
-        workflows = (
-            (REPOSITORY / ".github" / "workflows" / "ci.yml").read_text(
-                encoding="utf-8"
-            ),
-            initializer.read_asset(
-                "github/harness-verify.yml.tmpl",
-                {"HARNESS_VERSION": __version__},
-            ),
-        )
-        required = (
-            "permissions:\n  contents: read",
-            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
-            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0",
-            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
-            "fetch-depth: 0",
-            "format('refs/pull/{0}/head', github.event.pull_request.number)",
-            "github.event.pull_request.base.sha",
-            "github.event.pull_request.head.sha",
-            "github.event.before",
-            "REPORIVET_BASE_SHA=%s",
-            "REPORIVET_HEAD_SHA=%s",
-            "REPORIVET_TARGET=%s",
-            "0000000000000000000000000000000000000000",
-            "actual_head=$(git rev-parse HEAD)",
-            "cat \"$report\" >> \"$GITHUB_STEP_SUMMARY\"",
-            "path: .harness/runs/",
-        )
-        for workflow in workflows:
-            for fragment in required:
-                self.assertIn(fragment, workflow)
-            self.assertEqual(workflow.count("run: ./dev/verify"), 1)
-            self.assertGreaterEqual(workflow.count("if: always()"), 2)
-            self.assertLess(
-                workflow.index("run: ./dev/bootstrap"),
-                workflow.index("run: ./dev/verify"),
-            )
-            self.assertNotIn("HEAD^", workflow)
-            self.assertNotIn("git fetch", workflow)
-
-    def test_doctor_requires_audit_wrapper(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            (root / "dev" / "audit").unlink()
+            marker = (root / ".reporivet-version").read_text(encoding="utf-8")
+            self.assertEqual(marker.count(__version__), 2)
 
-            doctor = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(doctor.returncode, 2)
-            self.assertIn("missing dev/audit", doctor.stderr)
-
-    def test_doctor_requires_definition_protocol(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            protocol = root / "docs" / "references" / "project-definition-protocol.md"
-            protocol.unlink()
-
-            doctor = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(doctor.returncode, 2)
-            self.assertIn(
-                "missing docs/references/project-definition-protocol.md",
-                doctor.stderr,
-            )
-
-    def test_generated_gitignore_blocks_build_secrets_and_personal_state(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            second = self.init(root)
-            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-            gitignore = (root / ".gitignore").read_text(encoding="utf-8")
-            self.assertEqual(gitignore.count("# reporivet:start"), 1)
-            self.assertEqual(gitignore.count("# reporivet:end"), 1)
-            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
-
-            ignored = (
-                ".harness/runs/verify.log",
-                ".env",
-                ".env.production",
-                "secrets.env",
-                "credentials.json",
-                "service-account-prod.json",
-                ".vault-token",
-                ".dev.vars",
-                ".mcp.json",
-                ".cursor/mcp.json",
-                ".docker/config.json",
-                ".config/gh/hosts.yml",
-                ".bundle/config",
-                ".cargo/credentials.toml",
-                "key.properties",
-                "id_ed25519",
-                "certificate.p12",
-                "terraform.tfstate",
-                ".idea/workspace.xml",
-                ".vscode/settings.json",
-                "dist/reporivet.whl",
-                ".venv/bin/python",
-                "node_modules/package/index.js",
-                "target/debug/app",
-                ".vite/deps/chunk.js",
-                ".dart_tool/package_config.json",
-                ".serverless/state.json",
-                ".wrangler/state.json",
-                ".supabase/state.json",
-                "local.properties",
-            )
-            for relative in ignored:
-                check = subprocess.run(
-                    ["git", "check-ignore", "-q", relative],
-                    cwd=root,
-                    check=False,
-                )
-                self.assertEqual(check.returncode, 0, f"expected ignored: {relative}")
-
-            allowed_examples = (
-                ".env.example",
-                ".env.production.example",
-                "service-account.example.json",
-                "terraform.tfvars.example",
-                ".vscode/extensions.json",
-                ".reporivet-version",
-                "uv.lock",
-                "poetry.lock",
-                "package-lock.json",
-                "pnpm-lock.yaml",
-                "Cargo.lock",
-                ".docker/Dockerfile",
-                ".cursor/rules/project.mdc",
-                ".codex/config.toml",
-                "Package.resolved",
-                "site/index.html",
-                "README.md",
-            )
-            for relative in allowed_examples:
-                check = subprocess.run(
-                    ["git", "check-ignore", "-q", relative],
-                    cwd=root,
-                    check=False,
-                )
-                self.assertEqual(check.returncode, 1, f"expected trackable: {relative}")
-
-    def test_security_check_rejects_force_added_sensitive_material(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
-
-            secret = root / ".env"
-            secret.write_text("API_TOKEN=not-a-real-token\n", encoding="utf-8")
-            subprocess.run(["git", "add", "-f", ".env"], cwd=root, check=True)
-            path_failure = self.run_harness(root, "security-check")
-            self.assertNotEqual(path_failure.returncode, 0)
-            self.assertIn("tracked sensitive local configuration", path_failure.stderr)
-
-            config = root / "dev" / "harness.toml"
-            config.write_text(
-                config.read_text(encoding="utf-8").replace(
-                    "security_allow_tracked = []", 'security_allow_tracked = [".env"]'
-                ),
-                encoding="utf-8",
-            )
-            allowlisted = self.run_harness(root, "security-check")
-            self.assertEqual(allowlisted.returncode, 0, allowlisted.stdout + allowlisted.stderr)
-
-            subprocess.run(["git", "rm", "--cached", "-f", ".env"], cwd=root, check=True, capture_output=True)
-            secret.unlink()
-            dockerfile = root / ".docker" / "Dockerfile"
-            dockerfile.parent.mkdir()
-            dockerfile.write_text("FROM scratch\n", encoding="utf-8")
-            subprocess.run(["git", "add", ".docker/Dockerfile"], cwd=root, check=True)
-            docker_allowed = self.run_harness(root, "security-check")
-            self.assertEqual(docker_allowed.returncode, 0, docker_allowed.stdout + docker_allowed.stderr)
-
-            token_file = root / "notes.txt"
-            token_file.write_text("temporary=" + "AK" + "IA" + "A" * 16 + "\n", encoding="utf-8")
-            subprocess.run(["git", "add", "notes.txt"], cwd=root, check=True)
-            content_failure = self.run_harness(root, "security-check")
-            self.assertNotEqual(content_failure.returncode, 0)
-            self.assertIn("AWS access key signature", content_failure.stderr)
-
-    def test_security_check_rejects_force_added_ignored_build_output(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
-
-            artifact = root / "dist" / "reporivet.whl"
-            artifact.parent.mkdir()
-            artifact.write_bytes(b"not-a-real-wheel")
-            subprocess.run(["git", "add", "-f", "dist/reporivet.whl"], cwd=root, check=True)
-
-            failure = self.run_harness(root, "security-check")
-            self.assertNotEqual(failure.returncode, 0)
-            self.assertIn("tracked path is ignored by a repository .gitignore", failure.stderr)
-
-    def test_existing_implementation_gets_baseline_plan_and_requires_command_review(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            (root / "src").mkdir()
-            (root / "src" / "main.py").write_text("print('hello')\n", encoding="utf-8")
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-            baseline = root / "docs" / "exec-plans" / "active" / "PLAN-0000-establish-repository-baseline.md"
-            self.assertTrue(baseline.exists())
-            config = (root / "dev" / "harness.toml").read_text(encoding="utf-8")
-            self.assertIn('configuration = "review"', config)
-            check = self.run_harness(root, "check")
-            self.assertNotEqual(check.returncode, 0)
-            self.assertIn("configuration = 'review'", check.stderr)
-
-    def test_project_owned_documents_survive_reinit_and_upgrade(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            first = self.init(root)
-            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
-
-            product = root / "docs" / "PRODUCT.md"
-            architecture = root / "ARCHITECTURE.md"
-            protocol = root / "docs" / "references" / "project-definition-protocol.md"
-            config = root / "dev" / "harness.toml"
-            product.write_text("# Project-owned product truth\n", encoding="utf-8")
-            architecture.write_text("# Project-owned architecture truth\n", encoding="utf-8")
-            protocol.write_text("# Project-owned definition protocol\n", encoding="utf-8")
-            config.write_text(config.read_text(encoding="utf-8") + "\n# user-owned\n", encoding="utf-8")
-
-            second = self.init(root, "--skip-check")
-            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-            upgrade = self.run_cli("upgrade", "--root", str(root), "--skip-check")
-            self.assertEqual(upgrade.returncode, 0, upgrade.stdout + upgrade.stderr)
-
-            self.assertEqual(product.read_text(encoding="utf-8"), "# Project-owned product truth\n")
-            self.assertEqual(architecture.read_text(encoding="utf-8"), "# Project-owned architecture truth\n")
-            self.assertEqual(
-                protocol.read_text(encoding="utf-8"),
-                "# Project-owned definition protocol\n",
-            )
-            self.assertIn("# user-owned", config.read_text(encoding="utf-8"))
-
-    def test_agents_managed_block_is_idempotent_and_preserves_user_text(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            (root / "AGENTS.md").write_text("# Team note\n\nKeep this section.\n", encoding="utf-8")
-            first = self.init(root)
-            second = self.init(root)
-            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
-            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-            text = (root / "AGENTS.md").read_text(encoding="utf-8")
-            self.assertIn("Keep this section.", text)
-            self.assertEqual(text.count("<!-- reporivet:start -->"), 1)
-            self.assertEqual(text.count("<!-- reporivet:end -->"), 1)
-
-    def test_docs_index_catalogs_new_durable_document_and_detects_drift(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            spec = root / "docs" / "product-specs" / "SPEC-IDENTITY-001-account-deletion.md"
-            spec.write_text(
-                """---
-id: SPEC-IDENTITY-001
-kind: product-spec
-status: active
-area: identity
-summary: Account deletion behavior
-applies_to:
-  - "src/identity/**"
-supersedes: []
----
-
-# Account deletion
-""",
-                encoding="utf-8",
-            )
-            stale = self.run_harness(root, "docs-index", "--check")
-            self.assertNotEqual(stale.returncode, 0)
-            update = self.run_harness(root, "docs-index")
-            self.assertEqual(update.returncode, 0, update.stdout + update.stderr)
-            self.assertIn("SPEC-IDENTITY-001", (root / "docs" / "README.md").read_text(encoding="utf-8"))
-            self.assertIn("SPEC-IDENTITY-001", (root / "docs" / "product-specs" / "index.md").read_text(encoding="utf-8"))
-            current = self.run_harness(root, "docs-index", "--check")
-            self.assertEqual(current.returncode, 0, current.stdout + current.stderr)
-
-    def test_runtime_plan_tokens_survive_initialization(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-            template = (root / "docs" / "exec-plans" / "_template.md").read_text(encoding="utf-8")
-            runtime = (root / "dev" / "harness.py").read_text(encoding="utf-8")
-            self.assertIn("created: {{DATE}}", template)
-            self.assertIn('"{{DATE}}": date.today().isoformat()', runtime)
-            self.assertNotIn(f'"{date.today().isoformat()}": date.today().isoformat()', runtime)
-
-            new_plan = self.run_harness(root, "new-plan", "Future", "plan", "--area", "test")
-            self.assertEqual(new_plan.returncode, 0, new_plan.stdout + new_plan.stderr)
-            plan = (root / new_plan.stdout.strip()).read_text(encoding="utf-8")
-            self.assertIn(f"created: {date.today().isoformat()}", plan)
-            self.assertNotIn("{{DATE}}", plan)
-
-    def test_new_plan_and_task_packet_are_routable(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            new_plan = self.run_harness(root, "new-plan", "Login", "lockout", "--area", "identity")
-            self.assertEqual(new_plan.returncode, 0, new_plan.stdout + new_plan.stderr)
-            relative = new_plan.stdout.strip()
-            self.assertTrue((root / relative).exists(), relative)
-            self.assertIn("docs/exec-plans/active/", relative)
-            plan_id = Path(relative).name.split("-login-lockout.md")[0]
-            task = self.run_harness(root, "task", plan_id, "T2")
-            self.assertEqual(task.returncode, 0, task.stdout + task.stderr)
-            self.assertIn("#### Allowed writes", task.stdout)
-            plan_check = self.run_harness(root, "plan-check")
-            self.assertEqual(plan_check.returncode, 0, plan_check.stdout + plan_check.stderr)
-
-    def test_established_baseline_rejects_scaffold_markers_and_draft_docs(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            config = root / "dev" / "harness.toml"
-            config.write_text(
-                config.read_text(encoding="utf-8").replace('baseline = "draft"', 'baseline = "established"'),
-                encoding="utf-8",
-            )
-            strict = self.run_harness(root, "docs-check")
-            self.assertNotEqual(strict.returncode, 0)
-            self.assertTrue("unresolved TODO" in strict.stderr or "status 'active'" in strict.stderr)
-
-    def test_configured_missing_tool_fails_instead_of_skipping(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            config = root / "dev" / "harness.toml"
-            text = config.read_text(encoding="utf-8").replace(
-                "verify = []", 'verify = [["definitely-not-an-executable"]]'
-            )
-            config.write_text(text, encoding="utf-8")
-            verify = self.run_harness(root, "verify")
-            self.assertNotEqual(verify.returncode, 0)
-            self.assertIn("configured executable is unavailable", verify.stderr)
-
-    def test_dry_run_does_not_create_or_modify_files(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            missing = Path(tmp).resolve() / "new-project"
-            dry_init = self.init(missing, "--dry-run")
-            self.assertEqual(dry_init.returncode, 0, dry_init.stdout + dry_init.stderr)
+    def test_init_dry_run_is_read_only_for_missing_and_existing_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            missing = base / "missing"
+            dry_missing = self.init(missing, "--dry-run")
+            self.assertEqual(dry_missing.returncode, 0, dry_missing.stdout + dry_missing.stderr)
             self.assertFalse(missing.exists())
 
-            root = Path(tmp).resolve() / "existing"
-            root.mkdir()
-            result = self.init(root)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            before = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
-            dry_upgrade = self.run_cli("upgrade", "--root", str(root), "--dry-run")
-            self.assertEqual(dry_upgrade.returncode, 0, dry_upgrade.stdout + dry_upgrade.stderr)
-            after = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
-            self.assertEqual(before, after)
+            existing = base / "existing"
+            existing.mkdir()
+            sentinel = existing / "project-owned.txt"
+            sentinel.write_bytes(b"keep exact bytes  \n")
+            before = self.snapshot(existing)
+            dry_existing = self.init(existing, "--dry-run")
+            self.assertEqual(dry_existing.returncode, 0, dry_existing.stdout + dry_existing.stderr)
+            self.assertEqual(self.snapshot(existing), before)
 
-    def test_init_refuses_to_replace_existing_project_owned_command(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp).resolve()
-            (root / "dev").mkdir()
-            (root / "dev" / "check").write_text("#!/bin/sh\necho project-owned\n", encoding="utf-8")
-            result = self.init(root)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("refusing to replace existing project-owned command paths", result.stderr)
-            self.assertFalse((root / "AGENTS.md").exists())
-            self.assertIn("project-owned", (root / "dev" / "check").read_text(encoding="utf-8"))
+    def test_nonlegacy_upgrade_maintains_only_document_first_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            initialized = self.init(root)
+            self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
+
+            product = root / "docs/PRODUCT.md"
+            product.write_bytes(b"# Project-owned product authority\n")
+            missing_skill = root / ".claude/skills/reporivet-verification/SKILL.md"
+            missing_skill.unlink()
+            before_dry_run = self.snapshot(root)
+
+            dry_run = self.run_cli("upgrade", "--root", str(root), "--dry-run")
+            self.assertEqual(dry_run.returncode, 0, dry_run.stdout + dry_run.stderr)
+            self.assertEqual(self.snapshot(root), before_dry_run)
+            self.assertFalse(missing_skill.exists())
+
+            upgraded = self.run_cli("upgrade", "--root", str(root))
+            self.assertEqual(upgraded.returncode, 0, upgraded.stdout + upgraded.stderr)
+            self.assertEqual(product.read_bytes(), b"# Project-owned product authority\n")
+            self.assertTrue(missing_skill.is_file())
+            for relative in RETIRED_FRESH_PATHS:
+                self.assertFalse((root / relative).exists(), relative)
+
+    def test_init_and_upgrade_preserve_project_owned_authority_and_host_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "docs").mkdir()
+            agents_original = b"# Team instructions\n\nKeep this exact.  \n"
+            product_original = b"# Existing product\n\nDo not rewrite.  "
+            claude_original = b"# Existing host instructions\n"
+            (root / "AGENTS.md").write_bytes(agents_original)
+            (root / "docs/PRODUCT.md").write_bytes(product_original)
+            (root / "CLAUDE.md").write_bytes(claude_original)
+
+            initialized = self.init(root)
+            self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
+            self.assertTrue((root / "AGENTS.md").read_bytes().startswith(agents_original))
+            self.assertEqual((root / "docs/PRODUCT.md").read_bytes(), product_original)
+            self.assertEqual((root / "CLAUDE.md").read_bytes(), claude_original)
+
+            upgraded = self.run_cli("upgrade", "--root", str(root))
+            self.assertEqual(upgraded.returncode, 0, upgraded.stdout + upgraded.stderr)
+            self.assertTrue((root / "AGENTS.md").read_bytes().startswith(agents_original))
+            self.assertEqual((root / "docs/PRODUCT.md").read_bytes(), product_original)
+            self.assertEqual((root / "CLAUDE.md").read_bytes(), claude_original)
+
+    def test_doctor_root_directly_runs_structural_document_first_doctor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            initialized = self.init(root)
+            self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
+
+            healthy = self.run_cli("doctor", "--root", str(root))
+            self.assertEqual(healthy.returncode, 0, healthy.stdout + healthy.stderr)
+            self.assertEqual(json.loads(healthy.stdout)["schema"], "reporivet.doctor/v2")
+
+            (root / "docs/OPERATIONS.md").unlink()
+            broken = self.run_cli("doctor", "--root", str(root))
+            self.assertEqual(broken.returncode, 2, broken.stdout + broken.stderr)
+            self.assertTrue(
+                any(
+                    finding["path"] == "docs/OPERATIONS.md"
+                    and finding["severity"] == "error"
+                    for finding in json.loads(broken.stdout)["findings"]
+                )
+            )
+
+    def test_runtime_only_and_transitional_cli_paths_are_absent(self) -> None:
+        parser = build_parser()
+        rejected = (
+            ("init", "--with-ci"),
+            ("init", "--skip-check"),
+            ("init", "--no-baseline-plan"),
+            ("init", "--project-kind", "service"),
+            ("init", "--primary-language", "Python"),
+            ("init", "--runtime", "Python 3.13"),
+            ("upgrade", "--with-ci"),
+            ("upgrade", "--skip-check"),
+            ("doctor", "--document-first"),
+            ("define", "--adopt"),
+        )
+        for arguments in rejected:
+            with self.subTest(arguments=arguments), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    parser.parse_args(list(arguments))
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["define", "--root", "."])
+
 
 if __name__ == "__main__":
     unittest.main()

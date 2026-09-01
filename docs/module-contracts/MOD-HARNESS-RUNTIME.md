@@ -1,7 +1,7 @@
 ---
 id: MOD-HARNESS-RUNTIME
 kind: module-contract
-status: active
+status: superseded
 area: harness
 summary: Canonical package asset and copied repository-local runtime boundary
 owner: Reporivet maintainers
@@ -22,6 +22,8 @@ verification:
 ---
 
 # Repository-local harness runtime
+
+> Historical/superseded module contract retained without deletion. It describes the retired copied runtime and is not current routing, setup input, or evidence. Use [`../README.md`](../README.md), [`../OPERATIONS.md`](../OPERATIONS.md), and the active Markdown Plan for the document-first authority. The historical body below remains for readability; its old runtime commands are not to be run.
 
 ## Boundary
 

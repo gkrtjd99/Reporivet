@@ -1,90 +1,82 @@
 <!-- reporivet:start -->
-# Reporivet Repository Operating Contract
+# Repository Agent Operating Contract
 
-## Purpose
-
-Initialize and safely maintain repository-local, document-first operating harnesses for coding agents.
-
-This file is a short map and operating contract. Durable knowledge belongs in the linked, version-controlled artifacts.
+`AGENTS.md` is the canonical, host-neutral entry point for repository work. Host adapters may import it, but they do not replace its authority.
 
 ## Start here
 
-1. Run `./dev/context` with `--path`, `--area`, or `--plan` when one is known.
-2. Read [`docs/README.md`](docs/README.md) for the knowledge map.
-3. Check [`docs/exec-plans/active/`](docs/exec-plans/active/) for matching complex work.
-4. Read only the source-of-truth documents and code needed by the current task.
+1. Read [`docs/README.md`](docs/README.md) for the knowledge and generated-surface map.
+2. For substantive work, the Main Skill creates or resumes exactly one matching ordinary Markdown Plan in [`docs/exec-plans/active/`](docs/exec-plans/active/); Reporivet setup itself never creates a Plan.
+3. Read only the current authority, code, and tests named by that Plan or the local task.
+4. Use the project-owned commands documented in [`docs/QUALITY.md`](docs/QUALITY.md) and [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
-Do not preload all documentation, dependencies, generated output, caches, or raw logs.
+The default package onboarding is integrated `reporivet setup`. `reporivet init` is structure-only and `reporivet define` remains the lower-level resumable definition interface. Setup does not spawn or dispatch Agents, execute project commands, or create a runtime; the host and project own those actions.
+
+Do not preload every document, dependency tree, cache, generated output, or historical record.
 
 ## Sources of truth
 
-- Product intent and current requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)
-- Project-definition procedure: [`docs/references/project-definition-protocol.md`](docs/references/project-definition-protocol.md)
-- Current system structure: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- Design principles and durable design documents: [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/design-docs/`](docs/design-docs/)
-- Quality, security, and reliability: [`docs/QUALITY.md`](docs/QUALITY.md), [`docs/SECURITY.md`](docs/SECURITY.md), and `docs/RELIABILITY.md` when present
-- Planning policy and active work: [`docs/PLANS.md`](docs/PLANS.md), [`docs/exec-plans/active/`](docs/exec-plans/active/)
-- Historical execution and decisions: [`docs/exec-plans/completed/`](docs/exec-plans/completed/), [`docs/decisions/`](docs/decisions/)
+- Product intent and requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)
+- Current structure and dependency direction: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Design and accessibility: [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/design-docs/`](docs/design-docs/)
+- Quality and project-owned verification: [`docs/QUALITY.md`](docs/QUALITY.md)
+- Running, release, observation, backup, rollback, recovery, and incidents: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) and [`docs/runbooks/`](docs/runbooks/)
+- Security: [`docs/SECURITY.md`](docs/SECURITY.md)
+- Plan lifecycle: [`docs/PLANS.md`](docs/PLANS.md)
+- Durable decisions and historical execution: [`docs/decisions/`](docs/decisions/) and [`docs/exec-plans/completed/`](docs/exec-plans/completed/)
 
 When current sources conflict, stop and report the conflict. Do not silently choose the easiest interpretation.
 
-## Work classification
+## Main, implementation, and verification
 
-Small, local, reversible changes may proceed without a durable plan. Create an ExecPlan for cross-cutting, risky, long-running, multi-agent, public-contract, persistent-data, security, infrastructure, or deployment changes.
+- **Main** owns user intent, scope, non-goals, acceptance criteria, decomposition, dispatch order, integration, decisions, and final evidence judgment. Main Skill may describe host-native dispatch, but Reporivet itself does not spawn or dispatch Agents. Main alone serializes Plan edits and terminal movement.
+- **Implementation Sub** receives one bounded Task Packet with exact reads, allowed writes, protected paths, acceptance criteria, project-owned commands, stop conditions, and return evidence. It must not broaden scope, change acceptance, delegate again, or approve its own work.
+- **Verification Sub** starts from a fresh context, identifies the integrated candidate, treats implementation narration as unverified, runs applicable project-owned checks, and returns criterion-level results and residual risks. It does not repair the candidate unless Main assigns a separate packet.
 
-Use `./dev/new-plan "<title>" --area <area>`. Tasks live inside that plan; do not create a second task registry, state database, packet directory, or orchestration layer.
+### Broad-milestone native-Agent dispatch
 
-## Main and Sub Agents
+For every milestone classified as broad, this is a common installed-project rule:
 
-The Main Agent owns intent, scope, non-goals, acceptance criteria, decomposition, delegation, integration order, document lifecycle, verification target, and completion.
+`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
 
-A Sub Agent receives one bounded Task Packet containing outcome, non-goals, exact reads, allowed writes, protected paths, acceptance criteria, verification commands, stop conditions, and return schema. A Sub Agent must not broaden scope, change acceptance, create durable work systems, delegate again, or approve its own work.
+Every child row retains an explicit owner and matching bounded packet. Main owns the overall task tree, Main alone serializes Plan edits, and Main dispatches the complete dependency-ready leaf set concurrently using only the host's native Agent execution. This rule does not apply to inherently single or serial milestones.
 
-Read-only exploration, review, test analysis, and log analysis may run in parallel. Mutable work is sequential by default. Parallel writes require disjoint paths, frozen shared interfaces, separate Git worktrees, Main-owned integration, and fresh verification of the integrated commit.
+If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Descendants inherit parent scope, protected paths, and acceptance and cannot broaden them.
 
-Meaningful behavior changes should use separate implementation and verification contexts. Explanations are not evidence.
+Parallel mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Read-only review and verification lanes may run concurrently. Siblings converge on an explicit integration node; fresh verification nodes depend on the integrated candidate.
 
-## Engineering invariants
+Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher. A complete user-confirmed structured procedure may produce an instruction-only project Skill only through resumed setup; generic or unresolved procedure notes do not.
 
-- Deliver working, observable end-to-end slices; keep the integrated repository runnable.
-- Choose the smallest durable implementation that meets current requirements and known operating constraints.
-- Preserve explicit module ownership and dependency direction; encode stable boundaries in tests or lint rules.
-- Inspect existing project facilities and dependencies before adding infrastructure or packages.
-- Do not add speculative abstractions, compatibility shims, fallback paths, configuration, or indirection.
-- Remove obsolete internal paths atomically. Public contracts, persisted data, deployed protocols, and external configuration require explicit migration, rollout, and rollback decisions.
-- A temporary exception requires an owner, exit criteria, removal trigger, and tracked follow-up.
-- Optimize for agent legibility: searchable source, deterministic commands, structured logs, inspectable schemas, and actionable errors.
+Meaningful behavior changes should separate implementation and verification contexts. Main integrates returned evidence without normally repeating the verifier's detailed command run. Project command execution, CI, deployment, publication, signing, and release remain outside Reporivet.
 
-## Stop and escalate before
+## Working boundaries
 
-- changing public APIs, persisted data, authentication, authorization, payments, infrastructure, or production deployment;
-- adding or replacing a production dependency;
-- writing outside the assigned scope or protected paths;
-- weakening an acceptance test merely to make an implementation pass;
-- rewriting unrelated code or formatting the repository broadly;
-- continuing after the same approach has failed twice.
+- Prefer the smallest durable change that satisfies current requirements.
+- Preserve explicit ownership and dependency direction.
+- Do not add speculative infrastructure, compatibility shims, command runners, generated workflows, task databases, journals, evidence archives, or hidden orchestration state.
+- Stop before changing public APIs, persisted data, authentication, authorization, payments, infrastructure, or production deployment unless the approved Plan explicitly covers the change.
+- Do not weaken acceptance tests, rewrite unrelated code, add production dependencies, or perform external actions without explicit authority.
+- Record out-of-scope discoveries in the active Plan or [`docs/exec-plans/tech-debt-tracker.md`](docs/exec-plans/tech-debt-tracker.md); do not implement them implicitly.
 
-Record out-of-scope discoveries in the active plan or [`docs/exec-plans/tech-debt-tracker.md`](docs/exec-plans/tech-debt-tracker.md). Do not implement them implicitly.
+## Project-specific working agreements
 
-## Deterministic commands
+### Confirmed
 
-- Setup: `./dev/bootstrap`
-- Definition status/validation/finalization: `./dev/define`
-- Read-only repository inventory: `./dev/audit`
-- Derived path map: `./dev/code-map`
-- Routed context: `./dev/context`
-- Fast feedback: `./dev/check`
-- Canonical completion gate: `./dev/verify`
-- Observable smoke checks: `./dev/smoke`
-- Tracked-secret guard: `./dev/security-check`
-- Document catalog: `./dev/docs-index`
-- Maintenance candidates: `./dev/garden`
+- Python 3.11 or newer is required for package work.
+- Exact project-owned checks and operational commands live in `docs/QUALITY.md` and `docs/OPERATIONS.md`.
+- Current implementation work is coordinated through one active Markdown Plan when the change is substantive.
 
-The committed [`dev/harness.toml`](dev/harness.toml) is authoritative. Missing configured tools fail visibly; checks must not disappear because of the local environment.
+### Proposed
 
-## Done means
+- None.
 
-A change is complete only when observable behavior and non-goals are satisfied, the integrated commit passes applicable verification, independent review is complete when required, current-state documents match reality, Documentation Impact is resolved, decisions and follow-ups are recorded, and the Main Agent or human reviewer accepts the evidence.
+### Open
 
-An agent saying “done” is not completion evidence.
+- None.
+
+### Sources
+
+- [`docs/QUALITY.md`](docs/QUALITY.md)
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
+- [`docs/PLANS.md`](docs/PLANS.md)
 <!-- reporivet:end -->
