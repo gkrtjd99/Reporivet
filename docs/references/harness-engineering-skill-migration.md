@@ -44,7 +44,7 @@ The distinction is ownership and behavior, not the filename `SKILL.md`:
 | Durable Plans | Adapt | One compact `format: 2` Markdown Plan carries task state, packets, checkpoint, integration, verification, and outcome. |
 | Repository safety and validation | Replace | Package-side root/path safety, preview approval, doctor, project-owned checks, and independent verification cover the current boundary. |
 | Starter material | Replace | Package assets create missing document-first authority and optional adapters without copying an executor. |
-| Repeatable project procedures | Adapt | Through resumed `setup`, a project may create an instruction-only Skill only after a complete structured record is user-confirmed with its slug, purpose/trigger, owner, canonical authority, inputs, allowed actions, protected paths, stop conditions, evidence, and rollback. Incomplete, inferred, generic, Proposed, Open, or Sources-only records create none. |
+| Repeatable project procedures | Adapt | Through resumed `setup`, a project may create an instruction-only Skill only after a complete user-confirmed strict structured record contains exactly these nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. All nine fields are required; no additional fields or aliases are accepted, and no values or defaults are inferred. Incomplete, inferred, generic, Proposed, Open, or Sources-only records create none. |
 | Host-specific role guidance | Adapt | The optional Claude profile contains a thin `CLAUDE.md` import and three instruction-only role Skills owned by the target after creation. |
 
 ## Allowed procedural Skills
@@ -52,7 +52,7 @@ The distinction is ownership and behavior, not the filename `SKILL.md`:
 A procedural Skill must:
 
 1. identify the canonical document or project-owned command it is adapting;
-2. keep scope, inputs, allowed actions, protected paths, and stop conditions explicit;
+2. keep its `reads`, `actions`, `permissions`, and `stop_conditions` explicit;
 3. avoid secrets and avoid embedding private repository content;
 4. leave durable decisions, work state, and evidence in the Plan or current authority rather than Skill-local state;
 5. avoid self-approval and preserve fresh-context verification where required;

@@ -155,16 +155,17 @@ reporivet define finalize --root "$ROOT"
 ## Main / 구현 Sub / 검증 Sub
 
 - **Main**은 의도, 범위, 비목표, 인수 조건, 전체 작업 트리, 통합, 결정, 후보 식별자, 증거 판단, 직렬화된 모든 Plan 편집을 소유합니다. Main Skill 지침은 프로젝트 워크플로를 위해 호스트 네이티브 Agent 디스패치를 설명할 수 있지만 Reporivet이 Agent를 spawn하거나 dispatch하지는 않습니다.
-- **구현 Sub**는 정확한 읽기 경로, 허용된 쓰기 경로, 보호 경로, 인수 조건, 프로젝트 소유 검사, 중지 조건, 반환 증거를 담은 한정된 Task Packet 하나를 받습니다. child 자체가 broad이면 `Role: Task Owner`와 `May delegate: yes`가 표시된 packet만 `T<n>-A-1` 같은 미리 선언된 한정 descendant를 실행할 수 있습니다. 일반 leaf Agent는 위임하거나 범위를 넓히거나 자신의 작업을 승인하지 않으며, descendant는 부모의 범위, 보호 경로, 인수 조건을 상속합니다.
-- **검증 Sub**는 새로운 컨텍스트에서 시작하고 통합 후보를 식별하며 적용 가능한 프로젝트 소유 검사를 실행한 뒤 인수 조건별 결과와 잔여 위험을 반환합니다. 읽기 전용 검증 leaf는 병렬로 실행할 수 있고 기본적으로 위임하지 않으며 통합 후보에 의존합니다. Main이 별도 구현 작업을 디스패치하지 않는 한 후보를 수정하지 않습니다. 프로젝트 명령 실행은 프로젝트와 호스트 워크플로의 책임이며 Reporivet의 책임이 아닙니다.
+- **Task Owner**는 모든 broad 또는 multi-part root의 기본 역할이며 `May delegate: yes`를 가집니다. Owner는 먼저 승인된 범위 안에서 finite child manifest(유한한 child manifest)를 반환하고, Main은 승인된 child row와 완전한 matching packet을 Plan에 직렬화한 뒤 직렬화된 Owner를 재개합니다. 재개된 Task Owner만 호스트 네이티브 Agent 실행으로 자신에게 선언된 dependency-ready descendant를 dispatch합니다.
+- **구현 Sub**는 정확한 읽기 경로, 허용된 쓰기 경로, 보호 경로, 인수 조건, 프로젝트 소유 검사, 중지 조건, 반환 증거를 담은 한정된 Task Packet 하나를 받습니다. narrow 또는 본질적으로 single/serial인 root는 direct nondelegating leaf(직접적인 nondelegating leaf)로 남고, ordinary leaf Agents never delegate(일반 leaf Agent는 절대 위임하지 않으며) 범위를 넓히거나 자신의 작업을 승인하지 않습니다. Descendant는 부모의 범위, 보호 경로, 인수 조건, 비목표, child budget, 고정된 인터페이스를 상속합니다.
+- **검증 Sub**는 새로운 컨텍스트에서 시작하고 통합 후보를 식별하며 적용 가능한 프로젝트 소유 검사를 실행한 뒤 인수 조건별 결과와 잔여 위험을 반환합니다. 읽기 전용(read-only) 검증 leaf는 병렬로 실행할 수 있고 위임하지 않으며 통합 후보에 의존합니다. Main이 별도 구현 작업을 dispatch하지 않는 한 후보를 수정하지 않습니다. 프로젝트 명령 실행은 프로젝트와 호스트 워크플로의 책임이며 Reporivet의 책임이 아닙니다.
 
-broad로 분류된 모든 milestone에는 다음과 같은 공통 installed-project 규칙을 적용합니다.
+broad 또는 multi-part root에는 다음과 같은 공통 installed-project 규칙을 적용합니다.
 
-`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... (parallel fresh verification)`
 
-이 규칙은 본질적으로 single 또는 serial인 milestone에는 적용하지 않습니다. 예시는 계속 `T1`을 사용할 수 있지만 모든 broad milestone은 이 generic 구조를 따릅니다. 각 child 작업은 자체 owner, state, dependency, outcome, result와 일치하는 한정 packet을 유지합니다. 변경 가능한 형제 작업을 병렬 실행하려면 허용된 쓰기 집합이 겹치지 않고 공유 인터페이스가 고정되어 있으며 별도 worktree를 사용해야 합니다. 형제 작업은 명시적 통합 node로 모이고 그 뒤 새 검증 node가 실행됩니다.
+Main은 independent root Owners(독립적인 root Owner)를 동시에 dispatch합니다. 이 규칙은 narrow 또는 본질적으로 single/serial인 root에는 적용되지 않으며, 이러한 root는 direct nondelegating leaves(직접적인 nondelegating leaf)로 남습니다. 각 child 작업은 자체 owner, state, dependency, outcome, result와 일치하는 한정 packet을 유지합니다. 변경 가능한 형제 작업을 병렬 실행하려면 disjoint allowed-write sets(허용된 쓰기 집합이 겹치지 않음), 고정된 공유 인터페이스, separate exact-baseline worktrees(정확한 baseline의 별도 worktree)가 필요합니다. Owner-local aggregation(Owner-local aggregation is distinct from Main's final repository integration)은 Main의 최종 저장소 통합과 구별되며, 새 검증은 통합 후보에 대해 read-only(읽기 전용), nonrepairing(비수정), nondelegating(비위임)으로 수행됩니다.
 
-Main만 Plan 편집을 직렬화하고 통합과 검증을 직접 기록하며 종료 Plan을 `completed/`로 수동 이동합니다. 어떤 명령도 완료를 결정하지 않습니다. 이것은 호스트/프로젝트 운영 계약이지 Reporivet 런타임이 아닙니다. Reporivet은 Agent spawn/dispatch 메커니즘, 프로젝트 명령 실행기, CI/배포 시스템, scheduler, task store, lease, lock, Gate, 증거 보관소, 숨겨진 상태, 자동 dispatcher/closure를 설치하지 않습니다.
+Main만 Plan 편집을 직렬화하고 Owner-local aggregation과 최종 통합을 구분해 기록하며 종료 Plan을 `completed/`로 수동 이동합니다. 어떤 명령도 완료를 결정하지 않습니다. 이것은 호스트/프로젝트 운영 계약이지 Reporivet 런타임이 아닙니다. Reporivet은 Agent spawn/dispatch 메커니즘, 프로젝트 명령 실행기, CI/배포 시스템, scheduler, dispatcher, task store, lease, lock, Gate, 증거 보관소, 숨겨진 상태, 자동 closure 또는 이 워크플로를 위한 런타임을 설치하지 않습니다.
 
 ## 명시적 0.2 마이그레이션과 롤백
 

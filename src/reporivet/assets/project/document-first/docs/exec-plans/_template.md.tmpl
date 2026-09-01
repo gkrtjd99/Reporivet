@@ -2,6 +2,7 @@
 id: PLAN-YYYY-NNNN
 kind: exec-plan
 format: 2
+task_graph: 1
 status: proposed
 owner: main
 area: TODO
@@ -17,103 +18,102 @@ verified_commit: ""
 # TODO: observable goal
 
 ## Original goal
-
 Record the user's goal without replacing it with an implementation detail.
-
 ## Observable outcome and acceptance
-
 - **AC-1:** TODO: observable criterion.
 - **AC-2:** TODO: observable criterion.
 
 ## Scope
-
-- TODO
-
+- TODO: bounded scope.
 ## Non-goals
-
-- TODO
+- TODO: explicit exclusions.
+- Reporivet provides no scheduler, dispatcher, task store, command runner, hidden state, automatic closure, or workflow runtime.
 
 ## Task state
-
 | Task | Owner | State | Depends on | Parallel group | Outcome | Result |
 |---|---|---|---|---|---|---|
-| T1 | TODO | ready | none | none | TODO | pending |
+| T1 | TODO | in-progress | none | root-owners | Own broad subtree | pending |
+| T1-A | implementation-a | ready | none | T1-children | Implement leaf A | pending |
+| T1-B | implementation-b | ready | none | T1-children | Implement leaf B | pending |
+| T1-I | task-owner | blocked | T1-A, T1-B | T1-owner-aggregation | Aggregate child results locally | pending |
+| T1-V1 | verifier | blocked | T1-I | verification | Verify the integrated candidate | pending |
+| T1-V2 | verifier | blocked | T1-I | verification | Verify another criterion | pending |
+| T2 | serial-worker | ready | none | serial | Perform narrow serial work | pending |
 
 ## Task Packets
+Every row has one matching bounded packet. Broad roots use the Task Owner packet below; T2 is a direct narrow serial leaf.
 
-### T1 — TODO
-
+### T1 — broad Task Owner
 - **Owner:** TODO
-- **Outcome:** TODO
-- **Non-goals:** TODO
-- **Read:** exact authority and code paths
-- **Allowed writes:** exact paths or bounded areas
-- **Protected paths:** exact paths or boundaries
-- **Acceptance:** AC-1
-- **Verification:** exact project-owned commands and observations
-- **Stop conditions:** conflicts, scope expansion, unsafe ownership, or missing authority
-- **Return:** changed paths, command/results, discoveries, residual risks
+- **Role:** Task Owner
+- **Parent:** none
+- **Parallel group:** root-owners
+- **May delegate:** yes
+- **Child budget:** finite predeclared descendant budget
+- **Exact baseline:** TODO: exact reproducible baseline
+- **Inherited boundaries:** parent scope, acceptance, non-goals, protected paths, disjoint writes, child budget, exact baseline, and frozen interfaces
+- **Outcome:** Return a finite child manifest, then dispatch and locally aggregate its declared subtree.
+- **Non-goals:** No scope expansion, shared-Plan edit, runtime, or final integration.
+- **Read:** exact authority and code paths named by this packet
+- **Allowed writes:** exact paths approved in the serialized child packets
+- **Protected paths:** the Plan, unapproved paths, history, runtime, and external systems
+- **Acceptance:** AC-1 and AC-2
+- **Verification:** project-owned checks and Owner-local aggregation evidence
+- **Stop conditions:** conflict, scope expansion, budget exhaustion, or missing authority
+- **Return:** changed paths, commands/results, child evidence, discoveries, and residual risks
 - **Result:** pending
 
+### T2 — direct serial leaf
+- **Owner:** serial-worker
+- **Role:** leaf
+- **Parent:** none
+- **Parallel group:** serial
+- **May delegate:** no
+- **Child budget:** none
+- **Exact baseline:** TODO: exact reproducible baseline
+- **Inherited boundaries:** this packet's scope, acceptance, non-goals, protected paths, exact baseline, and frozen interfaces
+- **Outcome:** Perform one narrow, inherently serial task.
+- **Non-goals:** No delegation, parallel sibling work, or scope expansion.
+- **Read:** exact authority named by this packet
+- **Allowed writes:** one bounded path
+- **Protected paths:** the Plan, unapproved paths, history, runtime, and external systems
+- **Acceptance:** AC-1
+- **Verification:** named project-owned check
+- **Stop conditions:** conflict, scope expansion, or missing authority
+- **Return:** changed path, command/result, discovery, and residual risk
+- **Result:** pending
+For T1-A, T1-B, T1-I, T1-V1, and T1-V2, copy every packet field above with each row's exact Owner, Role, Parent, Parallel group, delegation, and inherited boundaries; child rows and packets must remain paired.
+
 ## Broad-milestone decomposition
-
-For every milestone classified as broad, use this common installed-project rule: `T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
-
-This rule does not apply to inherently single or serial milestones. If a child is itself broad, only a packet marked `Role: Task Owner` and `May delegate: yes` may run predeclared descendants such as `T<n>-A-1`; ordinary leaf Agents do not delegate. The example uses `T1`, and every child row requires one matching bounded packet:
-
-| Task | Owner | State | Depends on | Parallel group | Outcome | Result |
-|---|---|---|---|---|---|---|
-| T1-A | implementation-a | ready | none | implementation | Implement leaf A | pending |
-| T1-B | implementation-b | ready | none | implementation | Implement leaf B | pending |
-| T1-I | main | blocked | T1-A, T1-B | integration | Integrate leaves | pending |
-| T1-V1 | verification-a | blocked | T1-I | verification | Verify AC-1 | pending |
-| T1-V2 | verification-b | blocked | T1-I | verification | Verify AC-2 | pending |
-
-For each broad-milestone child packet, add:
-- **Role:** leaf, `Task Owner`, integration, or verification
-- **Parent:** parent task ID or `none`
-- **Parallel group:** group name or `none`
-- **May delegate:** `yes` only for a predeclared Task Owner; otherwise `no`
-- **Inherited boundaries:** parent scope, protected paths, acceptance, disjoint allowed writes, and frozen shared interfaces
-- **Return:** changed paths or findings, commands/results, discoveries, residual risks
+For every milestone classified as broad, use this common installed-project rule:
+`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... (parallel fresh verification)`
+Broad or multi-part roots default to `Role: Task Owner` and `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves. Main dispatches independent root Owners concurrently using only the host's native Agent execution. This rule does not apply to inherently single or serial milestones.
+Each Owner first returns a finite child manifest inside its approved envelope. Main alone serializes accepted child rows and complete matching packets into this Plan, then resumes the serialized Owner. Only that resumed Owner dispatches its complete dependency-ready descendants through host-native Agent execution; ordinary leaf Agents do not delegate.
+Descendants inherit parent scope, acceptance, non-goals, protected paths, child budget, exact baseline, disjoint writes, and frozen interfaces and cannot broaden them. Mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration.
+If a child is itself broad, only a packet marked `Role: Task Owner` and `May delegate: yes` may dispatch predeclared descendants such as `T<n>-A-1`; ordinary leaf Agents do not delegate.
+Fresh verification is candidate-specific, read-only, nonrepairing, and nondelegating and depends on the integrated candidate. Main alone mutates this Plan, performs final repository integration, and makes final evidence judgment. Reporivet installs no scheduler, dispatcher, task store, command runner, hidden state, automatic closure, or workflow runtime.
 
 ## Current checkpoint
-
-TODO: durable state after the latest integrated result.
-
+TODO: record durable state after the latest integrated result, including candidate identity and child aggregation.
 ## Exact next action
-
-TODO: one action a new Main can execute without reconstructing chat history.
-
+TODO: Main reviews this checkpoint, then performs the next declared dispatch or integration without reconstructing chat history.
 ## Decisions
-
-- None.
-
+- Record the finite manifest -> Main serialization -> Owner resume checkpoint and keep Owner-local aggregation separate from Main integration.
+- Use `task_graph: 1` only for strict compact hierarchy checks; preserve unmarked compact and historical Plans.
 ## Discoveries
-
 - None.
-
 ## Documentation impact
-
-- Current-state documents: pending
-- Durable decisions or follow-ups: pending
-
+- Current/package documents: TODO.
+- Durable decisions or follow-ups: TODO.
 ## Integration summary
-
-- Candidate identity: pending
-- Integrated changes: pending
-- Residual risks: pending
-
+- Candidate identity: pending.
+- Integrated changes: pending.
+- Residual risks: pending.
 ## Verification summary
-
 | Criterion | Candidate | Verifier | Result | Decision-bearing evidence |
 |---|---|---|---|---|
-| AC-1 | pending | pending | pending | pending |
-
+| AC-1 through AC-2 | pending | pending | pending | pending |
 ## Follow-ups
-
-- Pending. At terminal transition, record each durable follow-up with its owner and destination, or record `None` explicitly.
-
+- Pending. At terminal transition record each durable follow-up with its owner and destination, or record `None`.
 ## Outcome
-
-Pending. At terminal transition, record `complete`, `cancelled`, or `superseded`, move the file to `completed/`, and preserve historical results.
+Pending. Main records `complete`, `cancelled`, or `superseded` only after fresh evidence and manually moves the terminal Plan to `completed/`.

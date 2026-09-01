@@ -62,10 +62,12 @@ Deterministic scan results remain observations until a person approves their use
 
 ### Bounded roles over self-approval
 
-- Main owns intent, acceptance, decomposition, host-native dispatch instructions, integration, serialized Plan edits, and evidence judgment; Reporivet does not spawn or dispatch Agents.
-- An implementation Sub changes only assigned paths under one bounded Task Packet and uses project-owned commands when its host directs it.
-- A Verification Sub starts fresh, identifies the integrated candidate, and checks each acceptance criterion independently; Reporivet does not execute those project checks.
-- Verification narration is not evidence; command output, inspected behavior, and explicit residual risks are.
+- Broad or multi-part roots default to `Role: Task Owner` with `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves.
+- Main owns intent, acceptance, decomposition, root-owner dispatch, integration, serialized Plan edits, and evidence judgment; Main dispatches independent root Owners concurrently, while Reporivet does not spawn or dispatch Agents.
+- Each Owner first returns a finite child manifest inside its approved envelope. Main alone serializes accepted child rows and complete matching packets into the Plan and resumes that serialized Owner; only the resumed Task Owner dispatches its declared dependency-ready descendants. Ordinary leaves never delegate.
+- Descendants inherit scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces. Mutable siblings use disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration.
+- A Verification Sub starts fresh, identifies the integrated candidate, and checks each acceptance criterion independently. Verification is read-only, nonrepairing, and nondelegating; Reporivet does not execute those project checks.
+- Verification narration is not evidence; command output, inspected behavior, and explicit residual risks are. Reporivet provides no scheduler, dispatcher, task database, command runner, Gate, evidence archive, automatic closure, hidden state, or workflow runtime.
 
 ## Change protocol
 

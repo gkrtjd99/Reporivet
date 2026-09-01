@@ -49,10 +49,25 @@ ARTIFACT_READINESS_DOCUMENTS = (
 ARTIFACT_CANDIDATE = "c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4"
 ARTIFACT_WHEEL = "512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4"
 ARTIFACT_LIFECYCLE = "passed the recorded isolated pipx and pip install/use/uninstall lifecycle"
+HIERARCHY_DOCUMENTS = (
+    REPOSITORY / "AGENTS.md",
+    REPOSITORY / "README.en.md",
+    REPOSITORY / "README.md",
+    REPOSITORY / "docs/PRODUCT.md",
+    REPOSITORY / "docs/DESIGN.md",
+    REPOSITORY / "docs/PLANS.md",
+    REPOSITORY / "docs/product-specs/SPEC-REPORIVET-003-document-first-harness.md",
+    REPOSITORY / "docs/design-docs/DESIGN-REPORIVET-003-document-first-harness.md",
+    REPOSITORY / "docs/exec-plans/_template.md",
+)
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def normalized(path: Path) -> str:
+    return " ".join(read(path).split())
 
 
 class DocumentationContractTests(unittest.TestCase):
@@ -246,6 +261,153 @@ class DocumentationContractTests(unittest.TestCase):
                 self.assertNotIn(ARTIFACT_WHEEL, open_section)
                 self.assertNotIn("pip install/use/uninstall lifecycle", open_section)
 
+    def test_broad_roots_default_to_task_owners_and_serial_roots_remain_leaves(self) -> None:
+        authority = " ".join(normalized(path) for path in HIERARCHY_DOCUMENTS)
+        self.assertRegex(
+            authority,
+            r"(?i)\b(?:broad|multi-part)\b.{0,180}\b(?:root|milestone)s?\b"
+            r".{0,180}\bdefault(?:s|ed|ing)?\b.{0,180}"
+            r"\bRole:\s*Task Owner\b.{0,120}\bMay delegate:\s*yes\b",
+        )
+        self.assertIn("Role: Task Owner", authority)
+        self.assertIn("May delegate: yes", authority)
+        self.assertRegex(
+            authority,
+            r"(?i)\b(?:narrow|inherently serial)\b.{0,180}"
+            r"\b(?:direct|nondelegating)\b.{0,80}\bleaves?\b",
+        )
+        topology = (
+            "T<n> (broad root Owner) -> T<n>-A/B/C/... "
+            "(declared child packets, all ready leaves dispatched concurrently) "
+            "-> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... "
+            "(parallel fresh verification)"
+        )
+        self.assertIn(topology, authority)
+
+        for path in BILINGUAL_READMES:
+            text = read(path)
+            with self.subTest(path=path):
+                self.assertIn("Task Owner", text)
+                self.assertIn("May delegate: yes", text)
+                self.assertIn(topology, text)
+
+    def test_owner_checkpoint_nested_dispatch_and_isolation_contract(self) -> None:
+        authority = " ".join(normalized(path) for path in HIERARCHY_DOCUMENTS)
+        self.assertRegex(
+            authority,
+            r"(?i)(?:\bOwner\b.{0,120}\bfinite(?:\s+\w+){0,4}\s+manifest\b|"
+            r"\bfinite(?:\s+\w+){0,4}\s+manifest\b.{0,120}\bOwner\b)",
+        )
+        self.assertRegex(
+            authority,
+            r"(?i)\bMain\b[^.]{0,180}\balone\b[^.]{0,80}\bserializ\w*\b"
+            r"[^.]{0,220}\b(?:child\s+rows?|matching\s+packets?)\b"
+            r"[^.]{0,180}\bresum\w*\b[^.]{0,80}\b(?:serialized\s+)?Owner\b",
+        )
+        self.assertRegex(
+            authority,
+            r"(?i)\bMain\b.{0,400}\bdispatch\w*\b.{0,220}"
+            r"\bindependent root Owners\b.{0,160}\b(?:concurr|parallel)\w*\b",
+        )
+        self.assertRegex(
+            authority,
+            r"(?i)\bonly\b[^.]{0,100}\bresum\w*\b[^.]{0,60}\bserializ\w*\b"
+            r"[^.]{0,80}\b(?:Task Owner|Owner)\b[^.]{0,120}\bdispatch\w*\b"
+            r"[^.]{0,100}\bdeclared\b[^.]{0,80}\bdescendants?\b",
+        )
+        self.assertRegex(
+            authority,
+            r"(?i)\bordinary leaf(?: Agents?)?.{0,80}\b(?:do not|never)\s+delegate\b",
+        )
+        self.assertRegex(
+            authority,
+            r"(?i)\binherit\w*[^.]{0,160}\bscope\b[^.]{0,100}"
+            r"\bprotected paths\b[^.]{0,100}\bacceptance\b[^.]{0,100}"
+            r"\bcannot broaden\b",
+        )
+        self.assertIn("disjoint allowed-write sets", authority)
+        self.assertIn("separate exact-baseline worktrees", authority)
+        self.assertRegex(
+            authority,
+            r"(?i)(?:Owner[- ]local aggregation.{0,180}"
+            r"(?:distinct|separate).{0,180}Main(?:'s)?(?: repository)? integration|"
+            r"Main(?:'s)?(?: repository)? integration.{0,180}"
+            r"(?:distinct|separate).{0,180}Owner[- ]local aggregation)",
+        )
+
+    def test_fresh_verification_and_plan_compatibility_are_documented(self) -> None:
+        authority = " ".join(
+            normalized(path) for path in (*HIERARCHY_DOCUMENTS, REPOSITORY / "docs/QUALITY.md")
+        )
+        self.assertRegex(authority, r"(?i)\bfresh(?:[- ]context)?[^.]{0,180}\bverification\b")
+        self.assertRegex(
+            authority,
+            r"(?i)\bread-only\b[^.]{0,180}\bverification\b[^.]{0,180}"
+            r"(?:nondelegating|do not delegate|cannot delegate)",
+        )
+        self.assertRegex(
+            authority,
+            r"(?i)\bverification\w*[^.]{0,240}\bdepend\w*\b[^.]{0,100}"
+            r"\bintegrated candidate\b",
+        )
+        self.assertRegex(
+            authority,
+            r"(?i)\bcandidate mutation\b[^.]{0,100}\binvalidat\w*\b"
+            r"[^.]{0,100}\bverification evidence\b",
+        )
+
+        compatibility = (
+            (
+                "unmarked compact Plans",
+                r"(?i)\bunmarked compact Plans?\b.{0,120}"
+                r"\b(?:retain|remain|continue|supported|valid)\w*\b",
+            ),
+            (
+                "historical/expanded Plans",
+                r"(?i)\bhistorical\s+expanded\s+or\s+completed\s+Plans?\b"
+                r".{0,40}\bremain(?:s)?\s+untouched\b",
+            ),
+            (
+                "recursive task IDs",
+                r"(?i)\brecursive(?:\s+task)?\s+IDs?\b.{0,120}"
+                r"\b(?:remain|valid|supported|preserved)\w*\b",
+            ),
+            (
+                "direct serial Plans",
+                r"(?i)\bdirect serial Plans?\b.{0,120}"
+                r"\b(?:remain|supported|valid|preserved)\w*\b",
+            ),
+        )
+        for label, pattern in compatibility:
+            with self.subTest(compatibility=label):
+                self.assertRegex(authority, pattern)
+
+    def test_current_docs_explicitly_reject_runtime_and_orchestration_boundaries(self) -> None:
+        negative_markers = re.compile(
+            r"(?i)\b(?:no|not|never|does not|do not|without|excluded|unestablished)\b"
+        )
+        boundary_terms = (
+            ("scheduler", r"\bscheduler\b"),
+            ("dispatcher", r"\bdispatcher\b"),
+            ("runtime", r"\bruntime\b"),
+            ("task database", r"\btask database\b"),
+            ("task store", r"\btask store\b"),
+            ("command runner", r"\bcommand runner\b"),
+            ("Gate", r"\bGate\b"),
+            ("evidence archive", r"\bevidence archive\b"),
+            ("automatic closure", r"\bautomatic closure\b"),
+        )
+        text = read(SPEC)
+        for label, term in boundary_terms:
+            with self.subTest(boundary=label):
+                self.assertTrue(
+                    any(
+                        re.search(term, line) and negative_markers.search(line)
+                        for line in text.splitlines()
+                    ),
+                    f"{label} lacks an explicit negative boundary in {SPEC}",
+                )
+
     def test_current_docs_do_not_make_positive_release_or_execution_claims(self) -> None:
         positive_patterns = (
             re.compile(r"(?i)\bready for release\b"),
@@ -253,6 +415,14 @@ class DocumentationContractTests(unittest.TestCase):
             re.compile(r"(?i)\b(?:reporivet|the package)\s+(?:publishes|signs|releases|deploys)\b"),
             re.compile(r"(?i)\b(?:reporivet|the package)\s+(?:spawns|dispatches)\s+Agents\b"),
             re.compile(r"(?i)\bReporivet\s+executes\s+project commands\b"),
+        )
+        hierarchy_positive_patterns = (
+            re.compile(
+                r"(?i)\b(?:reporivet|the package)\b[^.\n]*\b"
+                r"(?:scheduler|dispatcher|runtime|task\s+(?:database|store)|"
+                r"command\s+runner|gate|evidence\s+(?:archive|store)|"
+                r"automatic\s+(?:plan[- ]?closure|closure))\b"
+            ),
         )
         negative_markers = re.compile(
             r"(?i)\b(?:no|not|never|does not|do not|without|pending|unknown|excluded|remains?)\b"
@@ -262,6 +432,14 @@ class DocumentationContractTests(unittest.TestCase):
                 if negative_markers.search(line):
                     continue
                 for pattern in positive_patterns:
+                    with self.subTest(path=path, line=line_number, pattern=pattern.pattern):
+                        self.assertIsNone(pattern.search(line), line)
+
+        for path in HIERARCHY_DOCUMENTS:
+            for line_number, line in enumerate(read(path).splitlines(), start=1):
+                if negative_markers.search(line):
+                    continue
+                for pattern in hierarchy_positive_patterns:
                     with self.subTest(path=path, line=line_number, pattern=pattern.pattern):
                         self.assertIsNone(pattern.search(line), line)
 

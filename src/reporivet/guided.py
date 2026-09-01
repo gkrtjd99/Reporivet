@@ -2315,6 +2315,783 @@ def _compact_plan_structure_findings(
     return findings
 
 
+_STRICT_TASK_COLUMNS = (
+    "Task",
+    "Owner",
+    "State",
+    "Depends on",
+    "Parallel group",
+    "Outcome",
+    "Result",
+)
+_STRICT_PACKET_FIELDS = (
+    "Owner",
+    "Role",
+    "Parent",
+    "Parallel group",
+    "May delegate",
+    "Inherited boundaries",
+    "Outcome",
+    "Non-goals",
+    "Read",
+    "Allowed writes",
+    "Protected paths",
+    "Acceptance",
+    "Verification",
+    "Stop conditions",
+    "Return",
+    "Result",
+)
+_STRICT_ROLES = ("Task Owner", "leaf", "integration", "verification")
+_STRICT_ROLE_BY_CASEFOLD = {role.casefold(): role for role in _STRICT_ROLES}
+_STRICT_STATES = (
+    "ready",
+    "blocked",
+    "in-progress",
+    "verifying",
+    "complete",
+    "cancelled",
+    "superseded",
+)
+_STRICT_RESULTS = ("pending", "complete", "cancelled", "superseded")
+_STRICT_RESULT_FOR_STATE = {
+    "ready": "pending",
+    "blocked": "pending",
+    "in-progress": "pending",
+    "verifying": "pending",
+    "complete": "complete",
+    "cancelled": "cancelled",
+    "superseded": "superseded",
+}
+
+
+@dataclass(frozen=True)
+class _StrictTaskRow:
+    task_id: str
+    owner: str
+    state: str
+    dependencies: tuple[str, ...]
+    parallel_group: str
+    outcome: str
+    result: str
+    mapping_valid: bool
+    owner_valid: bool
+    state_valid: bool
+    dependencies_valid: bool
+    parallel_group_valid: bool
+    outcome_valid: bool
+    result_valid: bool
+
+
+@dataclass(frozen=True)
+class _StrictTaskPacket:
+    task_id: str
+    values: tuple[tuple[str, str], ...]
+    valid: bool
+
+
+@dataclass(frozen=True)
+class _StrictTaskGraph:
+    rows: tuple[_StrictTaskRow, ...]
+    packets: tuple[_StrictTaskPacket, ...]
+
+
+def _strict_packet_value(packet: _StrictTaskPacket, field: str) -> str:
+    return dict(packet.values).get(field, "")
+
+
+def _strict_parse_dependencies(
+    *,
+    relative: str,
+    task_id: str,
+    raw: str,
+) -> tuple[tuple[str, ...], bool, list[DoctorFinding]]:
+    value = raw.strip()
+    if value == "none":
+        return (), True, []
+    if not value:
+        return (
+            (),
+            False,
+            [
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} Depends on is missing; use none for no dependencies",
+                )
+            ],
+        )
+
+    tokens = tuple(piece.strip() for piece in value.split(","))
+    if any(not token for token in tokens):
+        return (
+            tokens,
+            False,
+            [
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} Depends on contains a blank dependency",
+                )
+            ],
+        )
+    if "none" in tokens:
+        return (
+            tokens,
+            False,
+            [
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} Depends on cannot mix none with task IDs",
+                )
+            ],
+        )
+    malformed = next(
+        (token for token in tokens if TASK_ID_PATTERN.fullmatch(token) is None),
+        None,
+    )
+    if malformed is not None:
+        return (
+            tokens,
+            False,
+            [
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} Depends on contains malformed Task ID '{malformed}'",
+                )
+            ],
+        )
+    duplicate = next(
+        (token for token in tokens if tokens.count(token) > 1),
+        None,
+    )
+    if duplicate is not None:
+        return (
+            tokens,
+            False,
+            [
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} has duplicate dependency {duplicate}",
+                )
+            ],
+        )
+    return tokens, True, []
+
+
+def _strict_parse_task_rows(
+    *,
+    relative: str,
+    text: str,
+) -> tuple[tuple[_StrictTaskRow, ...], list[DoctorFinding]]:
+    findings: list[DoctorFinding] = []
+    task_section = _markdown_section(text, "## Task state")
+    rows = [line for line in task_section.splitlines() if line.strip().startswith("|")]
+    header = [cell.strip() for cell in rows[0].strip().strip("|").split("|")] if rows else []
+    missing = [column for column in _STRICT_TASK_COLUMNS if column not in header]
+    duplicates = [
+        column
+        for column in _STRICT_TASK_COLUMNS
+        if header.count(column) > 1
+    ]
+    if missing:
+        if not header or any(column not in header for column in ("Task", "Owner")):
+            return (), findings
+        for column in missing:
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task state table must contain {column} column",
+                )
+            )
+        return (), findings
+    if duplicates:
+        for column in duplicates:
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task state table has duplicate {column} column",
+                )
+            )
+        return (), findings
+
+    indexes = {column: header.index(column) for column in _STRICT_TASK_COLUMNS}
+    parsed: list[_StrictTaskRow] = []
+    for raw_row in rows[2:]:
+        cells = [cell.strip() for cell in raw_row.strip().strip("|").split("|")]
+        if len(cells) <= max(indexes.values()):
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    "compact Plan task state contains a malformed task row",
+                )
+            )
+            continue
+        task_id = cells[indexes["Task"]].strip()
+        if TASK_ID_PATTERN.fullmatch(task_id) is None:
+            continue
+
+        owner = cells[indexes["Owner"]].strip()
+        state = cells[indexes["State"]].strip()
+        parallel_group = cells[indexes["Parallel group"]].strip()
+        outcome = cells[indexes["Outcome"]].strip()
+        result = cells[indexes["Result"]].strip()
+        dependencies, dependencies_valid, dependency_findings = _strict_parse_dependencies(
+            relative=relative,
+            task_id=task_id,
+            raw=cells[indexes["Depends on"]],
+        )
+        findings.extend(dependency_findings)
+
+        owner_valid = bool(owner) and not _owner_is_placeholder(owner)
+        state_valid = state in _STRICT_STATES
+        result_valid = result in _STRICT_RESULTS
+        mapping_valid = True
+        parallel_group_valid = bool(parallel_group)
+        outcome_valid = bool(outcome)
+
+        if not state_valid:
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} has invalid State '{state or 'missing'}'; expected one of {', '.join(_STRICT_STATES)}",
+                )
+            )
+        if not result_valid:
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} has invalid Result '{result or 'missing'}'; expected one of {', '.join(_STRICT_RESULTS)}",
+                )
+            )
+        if state_valid and result_valid:
+            expected_result = _STRICT_RESULT_FOR_STATE[state]
+            if result != expected_result:
+                mapping_valid = False
+                findings.append(
+                    DoctorFinding(
+                        "error",
+                        relative,
+                        f"compact Plan task {task_id} State '{state}' requires Result '{expected_result}'",
+                    )
+                )
+        if not parallel_group_valid:
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} is missing Parallel group; use none for no group",
+                )
+            )
+        if not outcome_valid:
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} is missing Outcome",
+                )
+            )
+
+        parsed.append(
+            _StrictTaskRow(
+                task_id=task_id,
+                owner=owner,
+                state=state,
+                dependencies=dependencies,
+                parallel_group=parallel_group,
+                outcome=outcome,
+                result=result,
+                mapping_valid=mapping_valid,
+                owner_valid=owner_valid,
+                state_valid=state_valid,
+                dependencies_valid=dependencies_valid,
+                parallel_group_valid=parallel_group_valid,
+                outcome_valid=outcome_valid,
+                result_valid=result_valid,
+            )
+        )
+    return tuple(parsed), findings
+
+
+def _strict_parse_task_packets(
+    *,
+    relative: str,
+    text: str,
+) -> tuple[tuple[_StrictTaskPacket, ...], list[DoctorFinding]]:
+    findings: list[DoctorFinding] = []
+    packet_section = _markdown_section(text, "## Task Packets")
+    packet_matches = list(
+        re.finditer(
+            r"^### (T[0-9]+(?:[-.][A-Za-z0-9]+)*)\b.*$",
+            packet_section,
+            re.MULTILINE,
+        )
+    )
+    parsed: list[_StrictTaskPacket] = []
+    for index, match in enumerate(packet_matches):
+        end = (
+            packet_matches[index + 1].start()
+            if index + 1 < len(packet_matches)
+            else len(packet_section)
+        )
+        packet = packet_section[match.end() : end]
+        task_id = match.group(1)
+        fields: dict[str, str] = {}
+        errors: list[str] = []
+        for field_match in re.finditer(
+            r"^- \*\*([^*]+):\*\*\s*(.*?)\s*$",
+            packet,
+            re.MULTILINE,
+        ):
+            field = field_match.group(1).strip()
+            if field not in _STRICT_PACKET_FIELDS:
+                continue
+            value = field_match.group(2).strip()
+            if field in fields:
+                errors.append(field)
+                continue
+            fields[field] = value
+
+        for field in _STRICT_PACKET_FIELDS:
+            if field not in fields:
+                if field != "Owner":
+                    findings.append(
+                        DoctorFinding(
+                            "error",
+                            relative,
+                            f"compact Plan Task Packet {task_id} is missing required field {field}",
+                        )
+                    )
+                errors.append(field)
+            elif not fields[field]:
+                if field != "Owner":
+                    findings.append(
+                        DoctorFinding(
+                            "error",
+                            relative,
+                            f"compact Plan Task Packet {task_id} has empty required field {field}",
+                        )
+                    )
+                errors.append(field)
+        duplicate_fields: set[str] = set()
+        seen_fields: set[str] = set()
+        for field_match in re.finditer(
+            r"^- \*\*([^*]+):\*\*\s*(.*?)\s*$",
+            packet,
+            re.MULTILINE,
+        ):
+            field = field_match.group(1).strip()
+            if field not in _STRICT_PACKET_FIELDS:
+                continue
+            if field in seen_fields:
+                duplicate_fields.add(field)
+            seen_fields.add(field)
+        for field in sorted(duplicate_fields):
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan Task Packet {task_id} has duplicate field {field}",
+                )
+            )
+            errors.append(field)
+
+        parsed.append(
+            _StrictTaskPacket(
+                task_id=task_id,
+                values=tuple((field, fields.get(field, "")) for field in _STRICT_PACKET_FIELDS),
+                valid=not errors,
+            )
+        )
+    return tuple(parsed), findings
+
+
+def _strict_lexical_parent(task_id: str) -> str | None:
+    separator = max(task_id.rfind("-"), task_id.rfind("."))
+    return task_id[:separator] if separator > 0 else None
+
+
+def _strict_task_graph_findings(
+    *,
+    relative: str,
+    text: str,
+) -> list[DoctorFinding]:
+    rows, row_findings = _strict_parse_task_rows(relative=relative, text=text)
+    packets, packet_findings = _strict_parse_task_packets(relative=relative, text=text)
+    findings = [*row_findings, *packet_findings]
+
+    row_groups: dict[str, list[_StrictTaskRow]] = {}
+    for row in rows:
+        row_groups.setdefault(row.task_id, []).append(row)
+    packet_groups: dict[str, list[_StrictTaskPacket]] = {}
+    for packet in packets:
+        packet_groups.setdefault(packet.task_id, []).append(packet)
+    unique_rows = {
+        task_id: values[0]
+        for task_id, values in row_groups.items()
+        if len(values) == 1
+    }
+    unique_packets = {
+        task_id: values[0]
+        for task_id, values in packet_groups.items()
+        if len(values) == 1
+    }
+    common_ids = sorted(set(unique_rows) & set(unique_packets))
+
+    for task_id in common_ids:
+        row = unique_rows[task_id]
+        packet = unique_packets[task_id]
+        packet_group = _strict_packet_value(packet, "Parallel group")
+        if (
+            row.parallel_group_valid
+            and packet_group
+            and row.parallel_group != packet_group
+        ):
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} row and Task Packet parallel groups disagree",
+                )
+            )
+
+    graph = _StrictTaskGraph(
+        rows=tuple(unique_rows[task_id] for task_id in common_ids),
+        packets=tuple(unique_packets[task_id] for task_id in common_ids),
+    )
+    if (
+        not graph.rows
+        or set(unique_rows) != set(unique_packets)
+        or any(len(values) != 1 for values in row_groups.values())
+        or any(len(values) != 1 for values in packet_groups.values())
+        or any(not row.owner_valid or not row.state_valid or not row.mapping_valid
+               or not row.dependencies_valid or not row.parallel_group_valid
+               or not row.outcome_valid or not row.result_valid
+               for row in graph.rows)
+        or any(not packet.valid for packet in graph.packets)
+    ):
+        return findings
+
+    rows_by_id = {row.task_id: row for row in graph.rows}
+    packets_by_id = {packet.task_id: packet for packet in graph.packets}
+
+    dependency_references_valid = True
+    for row in graph.rows:
+        for dependency in row.dependencies:
+            if dependency == row.task_id:
+                dependency_references_valid = False
+                findings.append(
+                    DoctorFinding(
+                        "error",
+                        relative,
+                        f"compact Plan task {row.task_id} cannot depend on itself",
+                    )
+                )
+            elif dependency not in rows_by_id:
+                dependency_references_valid = False
+                findings.append(
+                    DoctorFinding(
+                        "error",
+                        relative,
+                        f"compact Plan task {row.task_id} depends on missing task {dependency}",
+                    )
+                )
+
+    if dependency_references_valid:
+        dependency_map = {
+            row.task_id: row.dependencies
+            for row in graph.rows
+        }
+        visit_state: dict[str, int] = {}
+        visit_stack: list[str] = []
+        reported_cycles: set[tuple[str, ...]] = set()
+
+        def visit(task_id: str) -> None:
+            visit_state[task_id] = 1
+            visit_stack.append(task_id)
+            for dependency in dependency_map[task_id]:
+                state = visit_state.get(dependency, 0)
+                if state == 0:
+                    visit(dependency)
+                elif state == 1:
+                    start = visit_stack.index(dependency)
+                    cycle = tuple((*visit_stack[start:], dependency))
+                    cycle_nodes = cycle[:-1]
+                    first = min(cycle_nodes)
+                    first_index = cycle_nodes.index(first)
+                    canonical = tuple(
+                        (*cycle_nodes[first_index:], *cycle_nodes[:first_index], first)
+                    )
+                    if canonical not in reported_cycles:
+                        reported_cycles.add(canonical)
+                        findings.append(
+                            DoctorFinding(
+                                "error",
+                                relative,
+                                f"compact Plan task {first} is part of dependency cycle: {' -> '.join(canonical)}",
+                            )
+                        )
+            visit_stack.pop()
+            visit_state[task_id] = 2
+
+        for task_id in sorted(dependency_map):
+            if visit_state.get(task_id, 0) == 0:
+                visit(task_id)
+
+        if not reported_cycles:
+            for row in graph.rows:
+                if row.state not in {"ready", "in-progress", "verifying", "complete"}:
+                    continue
+                incomplete = [
+                    dependency
+                    for dependency in row.dependencies
+                    if rows_by_id[dependency].result != "complete"
+                ]
+                if not incomplete:
+                    continue
+                role = _strict_packet_value(packets_by_id[row.task_id], "Role").casefold()
+                if role == "verification":
+                    detail = (
+                        f"verification task {row.task_id} must remain blocked until integration dependencies complete"
+                    )
+                else:
+                    detail = (
+                        f"compact Plan task {row.task_id} must remain blocked until dependencies complete"
+                    )
+                findings.append(DoctorFinding("error", relative, detail))
+
+    role_by_id: dict[str, str] = {}
+    delegate_by_id: dict[str, str] = {}
+    parent_by_id: dict[str, str] = {}
+    packet_semantics_valid = True
+    for packet in graph.packets:
+        task_id = packet.task_id
+        role_raw = _strict_packet_value(packet, "Role")
+        role = _STRICT_ROLE_BY_CASEFOLD.get(role_raw.casefold())
+        if role is None:
+            packet_semantics_valid = False
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan Task Packet {task_id} has invalid Role '{role_raw}'; expected one of {', '.join(_STRICT_ROLES)}",
+                )
+            )
+        else:
+            role_by_id[task_id] = role
+
+        delegate_raw = _strict_packet_value(packet, "May delegate")
+        delegate = delegate_raw.casefold()
+        if delegate not in {"yes", "no"}:
+            packet_semantics_valid = False
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan Task Packet {task_id} has invalid May delegate '{delegate_raw}'; expected yes or no",
+                )
+            )
+        else:
+            delegate_by_id[task_id] = delegate
+
+        parent = _strict_packet_value(packet, "Parent")
+        if parent != "none" and TASK_ID_PATTERN.fullmatch(parent) is None:
+            packet_semantics_valid = False
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan Task Packet {task_id} has invalid Parent '{parent or 'missing'}'; expected none or an exact Task ID",
+                )
+            )
+        else:
+            parent_by_id[task_id] = parent
+
+    if not packet_semantics_valid:
+        return findings
+
+    parent_graph_valid = True
+    for task_id in sorted(parent_by_id):
+        parent = parent_by_id[task_id]
+        expected = _strict_lexical_parent(task_id)
+        if expected is None:
+            if parent != "none":
+                parent_graph_valid = False
+                findings.append(
+                    DoctorFinding(
+                        "error",
+                        relative,
+                        f"compact Plan Task Packet {task_id} is a root packet and Parent must be none",
+                    )
+                )
+            continue
+        if parent == "none" or parent != expected:
+            parent_graph_valid = False
+            if parent != "none" and parent not in packets_by_id:
+                detail = (
+                    f"compact Plan Task Packet {task_id} Parent {parent} does not exist "
+                    f"and must be exact immediate lexical prefix {expected}"
+                )
+            else:
+                detail = (
+                    f"compact Plan Task Packet {task_id} Parent must be exact immediate lexical prefix {expected}"
+                )
+            findings.append(DoctorFinding("error", relative, detail))
+        elif parent not in packets_by_id:
+            parent_graph_valid = False
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan Task Packet {task_id} Parent {parent} does not exist",
+                )
+            )
+
+    if not parent_graph_valid:
+        return findings
+
+    children: dict[str, list[str]] = {task_id: [] for task_id in packets_by_id}
+    for task_id, parent in parent_by_id.items():
+        if parent != "none":
+            children[parent].append(task_id)
+    descendants: dict[str, tuple[str, ...]] = {}
+    for task_id in sorted(children):
+        found: list[str] = []
+        pending = list(sorted(children[task_id]))
+        while pending:
+            child = pending.pop(0)
+            found.append(child)
+            pending[0:0] = sorted(children[child])
+        descendants[task_id] = tuple(found)
+
+    for task_id in sorted(role_by_id):
+        role = role_by_id[task_id]
+        delegate = delegate_by_id[task_id]
+        has_descendants = bool(descendants[task_id])
+        if role == "Task Owner" or has_descendants:
+            if delegate != "yes":
+                findings.append(
+                    DoctorFinding(
+                        "error",
+                        relative,
+                        f"compact Plan Task Packet {task_id} with role {role} must declare May delegate yes",
+                    )
+                )
+        if role in {"leaf", "integration", "verification"} and delegate != "no":
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan Task Packet {task_id} with role {role} must declare May delegate no",
+                )
+            )
+
+    for task_id in sorted(role_by_id):
+        role = role_by_id[task_id]
+        row = rows_by_id[task_id]
+        dependencies = row.dependencies
+        if role == "integration":
+            if descendants[task_id]:
+                findings.append(
+                    DoctorFinding(
+                        "error",
+                        relative,
+                        f"integration task {task_id} must not have descendants",
+                    )
+                )
+            if dependency_references_valid:
+                implementation_dependencies = [
+                    dependency
+                    for dependency in dependencies
+                    if role_by_id.get(dependency) in {"leaf", "Task Owner"}
+                ]
+                if not implementation_dependencies:
+                    findings.append(
+                        DoctorFinding(
+                            "error",
+                            relative,
+                            f"integration task {task_id} must depend on at least one implementation leaf or Task Owner",
+                        )
+                    )
+                for dependency in dependencies:
+                    if role_by_id.get(dependency) == "verification":
+                        findings.append(
+                            DoctorFinding(
+                                "error",
+                                relative,
+                                f"integration task {task_id} must not depend on verification task {dependency}",
+                            )
+                        )
+                parent = parent_by_id[task_id]
+                if parent != "none":
+                    required_siblings = [
+                        sibling
+                        for sibling in sorted(role_by_id)
+                        if sibling != task_id
+                        and parent_by_id[sibling] == parent
+                        and role_by_id[sibling] in {"leaf", "Task Owner"}
+                    ]
+                    for sibling in required_siblings:
+                        if sibling not in dependencies:
+                            findings.append(
+                                DoctorFinding(
+                                    "error",
+                                    relative,
+                                    f"integration task {task_id} must depend on same-parent implementation sibling {sibling}",
+                                )
+                            )
+        elif role == "verification":
+            if descendants[task_id]:
+                findings.append(
+                    DoctorFinding(
+                        "error",
+                        relative,
+                        f"verification task {task_id} must not have descendants",
+                    )
+                )
+            if dependency_references_valid:
+                integration_dependencies = [
+                    dependency
+                    for dependency in dependencies
+                    if role_by_id.get(dependency) == "integration"
+                ]
+                if not integration_dependencies:
+                    findings.append(
+                        DoctorFinding(
+                            "error",
+                            relative,
+                            f"verification task {task_id} must directly depend on at least one integration candidate",
+                        )
+                    )
+                for dependency in dependencies:
+                    if role_by_id.get(dependency) != "integration":
+                        findings.append(
+                            DoctorFinding(
+                                "error",
+                                relative,
+                                f"verification task {task_id} may directly depend only on integration task {dependency}",
+                            )
+                        )
+        if row.state == "verifying" and role != "verification":
+            findings.append(
+                DoctorFinding(
+                    "error",
+                    relative,
+                    f"compact Plan task {task_id} may use State verifying only with verification Role",
+                )
+            )
+
+    return findings
+
+
 def _plan_findings(root: Path) -> list[DoctorFinding]:
     findings: list[DoctorFinding] = []
     seen: dict[str, str] = {}
@@ -2397,6 +3174,23 @@ def _plan_findings(root: Path) -> list[DoctorFinding]:
                         status=status,
                     )
                 )
+                if plan_format == "2" and "task_graph" in metadata:
+                    task_graph_marker = metadata["task_graph"]
+                    if task_graph_marker != "1":
+                        findings.append(
+                            DoctorFinding(
+                                "error",
+                                relative,
+                                f"Plan task_graph marker '{task_graph_marker or 'empty'}' is invalid; expected 1",
+                            )
+                        )
+                    else:
+                        findings.extend(
+                            _strict_task_graph_findings(
+                                relative=relative,
+                                text=text,
+                            )
+                        )
             elif "format" not in metadata:
                 if directory.name == "completed":
                     detail = (

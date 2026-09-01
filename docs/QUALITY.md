@@ -79,7 +79,7 @@ For a bounded task, also inspect `git status --short` and the final changed-path
 | Confirmed procedure Skills | Verify complete structured Confirmed records alone render deterministic instruction-only Skills; unresolved or generic records render none and no command executes. |
 | Plan lifecycle | Verify Main Skill first-Plan resume/create behavior, compact frontmatter, required headings, state consistency, candidate identity, and manual terminal movement rules. |
 | Migration | Verify preview/apply/rollback, external backup, fingerprint revalidation, failed-apply restoration, and refusal after later user changes. |
-| Current documentation or templates | Run doctor, link resolution, bilingual claim parity when public READMEs change, bounded retired-authority scan, full tests, and `git diff --check`. |
+| Current documentation or templates | Run doctor, link resolution, bilingual claim parity when public READMEs change, bounded retired-authority scan, full tests, and `git diff --check`; for hierarchy changes, confirm broad or multi-part roots default to `Role: Task Owner`/`May delegate: yes`, finite manifest-to-Main-serialization-to-Owner-resume checkpoints, disjoint sibling writes, Owner-local aggregation distinct from Main integration, and fresh read-only verification without a Reporivet runtime claim. |
 | Security-sensitive behavior | Apply [`SECURITY.md`](SECURITY.md), inspect exact paths and permissions, and record residual threats. |
 
 Main defines the applicable target in the Plan. A fresh Verification Sub runs the checks against the identifiable integrated candidate and reports each acceptance criterion as accepted, failed, or not established.

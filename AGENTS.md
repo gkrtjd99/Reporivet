@@ -35,17 +35,15 @@ When current sources conflict, stop and report the conflict. Do not silently cho
 
 ### Broad-milestone native-Agent dispatch
 
-For every milestone classified as broad, this is a common installed-project rule:
+For every broad or multi-part root, the default packet is `Role: Task Owner` with `May delegate: yes`. Narrow or inherently serial roots remain direct nondelegating leaves. This is a host/project operating rule, not a Reporivet runtime:
 
-`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... (parallel fresh verification)`
 
-Every child row retains an explicit owner and matching bounded packet. Main owns the overall task tree, Main alone serializes Plan edits, and Main dispatches the complete dependency-ready leaf set concurrently using only the host's native Agent execution. This rule does not apply to inherently single or serial milestones.
+Main dispatches independent root Owners concurrently. Each Owner first returns a finite child manifest within its approved envelope; Main alone serializes the accepted child rows and complete matching packets into the Plan, freezes their boundaries, and resumes that serialized Owner. Only the resumed serialized Task Owner dispatches its own declared dependency-ready descendants through host-native Agent execution. Ordinary leaf Agents never delegate. A narrow or inherently serial root follows its declared direct, nondelegating path instead.
 
-If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Descendants inherit parent scope, protected paths, and acceptance and cannot broaden them.
+Every child row retains an explicit owner and matching bounded packet. Descendants inherit the parent's scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces and cannot broaden them. Parallel mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration; fresh verification nodes depend on the integrated candidate and are read-only, nonrepairing, and nondelegating.
 
-Parallel mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Read-only review and verification lanes may run concurrently. Siblings converge on an explicit integration node; fresh verification nodes depend on the integrated candidate.
-
-Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher. A complete user-confirmed structured procedure may produce an instruction-only project Skill only through resumed setup; generic or unresolved procedure notes do not.
+Reporivet installs no scheduler, dispatcher, task store, lease, lock, command runner, Gate, evidence archive, automatic closure, hidden state, or other runtime for this workflow. A complete user-confirmed structured procedure may produce an instruction-only project Skill only through resumed setup; generic or unresolved procedure notes do not.
 
 Meaningful behavior changes should separate implementation and verification contexts. Main integrates returned evidence without normally repeating the verifier's detailed command run. Project command execution, CI, deployment, publication, signing, and release remain outside Reporivet.
 

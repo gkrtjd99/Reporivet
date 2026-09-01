@@ -46,17 +46,15 @@ A Verification Sub starts from a fresh context after integration. It identifies 
 
 ### Broad-milestone native-Agent dispatch
 
-For every milestone classified as broad, this is a common installed-project rule:
+For every broad or multi-part root, the default packet is `Role: Task Owner` with `May delegate: yes`. Narrow or inherently serial roots remain direct nondelegating leaves. This is a host/project operating rule, not a Reporivet runtime:
 
-`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... (parallel fresh verification)`
 
-Every child row retains an explicit owner and matching bounded packet. Main owns the overall task tree, Main alone serializes Plan edits, and Main dispatches the complete dependency-ready leaf set concurrently using only the host's native Agent execution. This rule does not apply to inherently single or serial milestones.
+Main dispatches independent root Owners concurrently. Each Owner first returns a finite child manifest within its approved envelope; Main alone serializes accepted child rows and complete matching packets into the Plan, freezes their boundaries, and resumes that serialized Owner. Only the resumed serialized Task Owner dispatches its own declared dependency-ready descendants through host-native Agent execution. Ordinary leaf Agents never delegate. A narrow or inherently serial root follows its declared direct, nondelegating path instead.
 
-If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Descendants inherit parent scope, protected paths, and acceptance and cannot broaden them.
+Every child row retains an explicit owner and matching bounded packet. Descendants inherit the parent's scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces and cannot broaden them. Parallel mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration; fresh verification nodes depend on the integrated candidate and are read-only, nonrepairing, and nondelegating.
 
-Parallel mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Read-only review and verification lanes may run concurrently. Siblings converge on an explicit integration node; fresh verification nodes depend on the integrated candidate.
-
-Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher. It installs no Agent spawn/dispatch mechanism, project command runner, CI/deployment engine, Gate, evidence archive, hidden state, or automatic closure.
+Reporivet installs no scheduler, dispatcher, task store, lease, lock, command runner, Gate, evidence archive, automatic closure, hidden state, or other runtime for this workflow. It installs no Agent spawn/dispatch mechanism or project command execution engine; project commands and CI remain project/host-owned. The `task_graph: 1` marker opts a compact `format: 2` Plan into strict hierarchy checks; unmarked compact Plans retain structural validation, historical expanded or completed Plans remain untouched, recursive task IDs remain valid, and direct serial Plans remain supported.
 
 ## Minimum active Plan content
 
@@ -112,9 +110,9 @@ Lifecycle:
 
 1. Main Skill searches existing history and either resumes one matching active Plan or creates the first ordinary Markdown Plan in `docs/exec-plans/active/` with the lowest unused current-year ID; setup itself never creates it.
 2. Main approves scope and acceptance before mutable work.
-3. For each broad milestone, Main dispatches the complete dependency-ready leaf set together using only native host Agent execution and serializes returned state into the Plan; an inherently single or serial milestone follows its declared linear dependency order.
-4. Sibling results converge on their declared integration node; Main integrates the candidate and records `integrated_commit` or another exact identifier.
-5. Fresh verification nodes that depend on that integrated candidate may run in parallel when their packets are read-only and return criterion-level evidence.
+3. For each broad or multi-part root, Main dispatches independent root Owners concurrently. Each Owner returns a finite child manifest; Main serializes accepted child rows and complete matching packets into the Plan, then resumes the serialized Owner to dispatch its declared dependency-ready descendants. An inherently single or serial root remains a direct nondelegating leaf and follows its declared linear dependency order.
+4. Owner-local child results converge on their declared aggregation node; Main separately integrates the accepted candidate and records `integrated_commit` or another exact identifier.
+5. Fresh verification nodes that depend on that integrated candidate may run in parallel when their packets are read-only, nonrepairing, and nondelegating, and return criterion-level evidence.
 6. Main records `verified_commit` when commit-based verification applies, resolves documentation impact and follow-ups, chooses the terminal outcome, and edits the status.
 7. Main manually moves the terminal Plan to `docs/exec-plans/completed/`.
 
@@ -132,7 +130,7 @@ No command decides completion or moves a Plan automatically. A terminal state is
 
 ## Parallel work
 
-For every broad milestone, Main dispatches all dependency-ready leaves together. Inherently single or serial milestones follow their declared linear order. Read-only exploration, review, and verification lanes may run concurrently. Mutable siblings are dependency-ready for concurrent dispatch only when their packets have disjoint allowed-write sets, frozen shared interfaces, and separate worktrees; otherwise dependencies must serialize them. The Plan remains Main-serialized, siblings converge on an explicit integration node, and fresh verification depends on the integrated candidate.
+For every broad or multi-part root, Main dispatches independent root Owners together. Only a resumed serialized Task Owner dispatches its own complete dependency-ready descendant set. Inherently single or serial roots follow their declared linear order as direct nondelegating leaves. Read-only exploration, review, and verification lanes may run concurrently. Mutable siblings are dependency-ready for concurrent dispatch only when their packets have disjoint allowed-write sets, frozen shared interfaces, and separate exact-baseline worktrees; otherwise dependencies must serialize them. The Plan remains Main-serialized, Owner-local aggregation remains distinct from Main integration, and fresh verification depends on the integrated candidate.
 
 ## Documentation and history
 

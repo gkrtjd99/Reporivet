@@ -194,6 +194,144 @@ class ClaudeAssetTests(unittest.TestCase):
         ):
             self.assertIn(phrase, verification)
 
+    def test_packaged_hierarchy_assets_encode_frozen_native_dispatch_contract(self) -> None:
+        asset_paths = {
+            "agents": "document-first/root/AGENTS.md.tmpl",
+            "plans": "document-first/docs/PLANS.md.tmpl",
+            "claude": "document-first/claude/CLAUDE.md.tmpl",
+            "main": "document-first/claude/skills/reporivet-main/SKILL.md.tmpl",
+            "implementation": "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl",
+            "verification": "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl",
+        }
+        assets = {name: read_asset(path) for name, path in asset_paths.items()}
+        inventory = read_asset("document-first/docs/README.md.tmpl")
+        expected_asset_paths = {
+            *asset_paths.values(),
+            "document-first/docs/README.md.tmpl",
+        }
+
+        for path in asset_paths.values():
+            self.assertIn(path, expected_asset_paths)
+        self.assertIn("document-first/docs/README.md.tmpl", expected_asset_paths)
+        self.assertEqual(assets["claude"], "@AGENTS.md\n")
+
+        for name in ("agents", "plans", "main", "implementation", "verification"):
+            text = assets[name]
+            self.assertIn("For every milestone classified as broad", text)
+            self.assertIn("ordinary leaf Agents do not delegate", text)
+
+        main = assets["main"]
+        for phrase in (
+            "broad",
+            "multi-part",
+            "root",
+            "Role: Task Owner",
+            "May delegate: yes",
+            "finite",
+            "accepted",
+            "manifest",
+            "checkpoint",
+            "serializes",
+            "dispatch",
+            "declared",
+            "host's native Agent execution",
+            "final repository integration",
+        ):
+            self.assertIn(phrase, main)
+        self.assertRegex(
+            main,
+            r"(?is)(?:broad|multi-part).{0,160}roots?.{0,160}Role: Task Owner.{0,100}May delegate: yes",
+        )
+        self.assertRegex(
+            main,
+            r"(?is)serializ\w*.{0,120}\bfinite\b.{0,80}\baccepted\b.{0,80}\bmanifest\b.{0,180}resum\w*",
+        )
+        self.assertRegex(main, r"(?is)\bmanifest\b.{0,160}\bresum\w*\b")
+        self.assertRegex(main, r"(?is)\bindependent\b.{0,100}\broot\b.{0,120}\b(?:Task )?Owners?\b")
+        self.assertRegex(main, r"(?is)\broot\b.{0,160}\bOwner\w*\b.{0,160}\bconcurr")
+        self.assertRegex(
+            main,
+            r"(?is)\bonly\b.{0,140}\bresum\w*\b.{0,100}\bOwner\b.{0,180}\bdispatch\w*\b.{0,120}\bdeclared\b.{0,120}\bdependency-ready\b.{0,180}\bdescendant",
+        )
+        self.assertRegex(main, r"(?is)\bMain\b.{0,120}\bfinal integration\b")
+        self.assertRegex(main, r"(?is)\b(?:narrow|inherently (?:single or )?serial)\b")
+        self.assertRegex(
+            main,
+            r"(?is)(?:direct(?:ly)?\s+non[- ]delegating\s+leaves?|ordinary\s+leaf\s+Agents?\s+do\s+not\s+delegate)",
+        )
+        self.assertRegex(
+            main,
+            r"(?is)(?:\bnarrow\b|\binherently (?:single or )?serial\b).{0,220}\broot\b.{0,180}(?:direct(?:ly)?\s+non[- ]delegating|ordinary\s+leaf)",
+        )
+
+        implementation = assets["implementation"]
+        for phrase in (
+            "Role: Task Owner",
+            "May delegate: yes",
+            "predeclared bounded descendant packets",
+            "inherit parent scope",
+            "protected paths",
+            "acceptance",
+            "cannot broaden",
+            "disjoint allowed-write sets",
+            "frozen shared interfaces",
+            "separate worktrees",
+            "exact baseline",
+        ):
+            self.assertIn(phrase, implementation)
+        implementation_lower = implementation.casefold()
+        self.assertTrue(
+            any(
+                phrase in implementation_lower
+                for phrase in (
+                    "child budget",
+                    "child-budget",
+                    "descendant budget",
+                    "descendant-budget",
+                    "budget for child",
+                    "budget for descendant",
+                )
+            )
+        )
+        self.assertIn("local aggregat", implementation_lower)
+
+        verification = assets["verification"]
+        for phrase in (
+            "fresh context",
+            "Read-only verification leaves may run concurrently",
+            "depends on the integrated candidate",
+            "Default verification leaves do not delegate",
+        ):
+            self.assertIn(phrase, verification)
+        self.assertRegex(
+            verification,
+            r"(?is)(?:non[- ]repairing|Do not change the candidate)",
+        )
+
+        hierarchy_assets = "\n".join(
+            assets[name] for name in ("agents", "plans", "main", "implementation", "verification")
+        )
+        no_runtime_assets = hierarchy_assets + "\n" + inventory
+        for phrase in (
+            "no scheduler",
+            "no dispatcher",
+            "task DB",
+            "runner",
+            "automatic closure",
+        ):
+            self.assertIn(phrase, no_runtime_assets)
+
+        inventory_paths = (
+            "AGENTS.md",
+            "CLAUDE.md",
+            "docs/PLANS.md",
+            ".claude/skills/reporivet-main/SKILL.md",
+            ".claude/skills/reporivet-implementation/SKILL.md",
+            ".claude/skills/reporivet-verification/SKILL.md",
+        )
+        for path in inventory_paths:
+            self.assertIn(f"`{path}`", inventory)
+
     def test_future_assets_define_integrated_setup_and_dynamic_procedure_skill_boundary(self) -> None:
         asset_paths = (
             "document-first/root/AGENTS.md.tmpl",

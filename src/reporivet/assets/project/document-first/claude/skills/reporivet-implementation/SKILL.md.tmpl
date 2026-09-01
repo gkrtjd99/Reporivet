@@ -11,9 +11,15 @@ For every milestone classified as broad, apply this common installed-project rul
 
 `T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
 
+Broad or multi-part roots default to `Role: Task Owner` and `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves. Main dispatches independent root Owners concurrently.
+
 This rule does not apply to inherently single or serial milestones. If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Descendants inherit parent scope, protected paths, and acceptance and cannot broaden those boundaries.
 
-Stay within allowed writes and protected paths. Concurrent mutable siblings require disjoint allowed-write sets, frozen shared interfaces, and separate worktrees. Use existing project-owned commands from the repository's manifests, `docs/QUALITY.md`, or the Task Packet; do not add an executor, wrapper, CI system, hidden state, or speculative abstraction.
+A Task Owner's first pass returns a finite child manifest within the approved envelope and does not dispatch yet. Main alone serializes the accepted child rows and complete packets into the active Plan before resuming that Owner. After resume, the Owner dispatches its complete dependency-ready descendants through only the host's native Agent execution. An ordinary leaf, integration, or verification packet has `May delegate: no` and never spawns or dispatches. No newly discovered child or changed boundary bypasses the serialization checkpoint.
+
+Owners and descendants also inherit non-goals, child budget, frozen shared interfaces, and the exact baseline. Concurrent mutable siblings require disjoint allowed-write sets and separate worktrees, each rooted at the exact baseline. The Owner keeps review, tests, and Owner-local aggregation within its subtree and returns one compact result; Main owns final repository integration. Owner or implementation tests do not self-approve a candidate, and fresh candidate-specific verification remains read-only, nonrepairing, and nondelegating.
+
+Stay within allowed writes and protected paths. Use existing project-owned commands from the repository's manifests, `docs/QUALITY.md`, or the Task Packet; do not add an executor, wrapper, scheduler, dispatcher, CI system, hidden state, or speculative abstraction. Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher; it also installs no runtime, hidden state, or automatic closure.
 
 Stop and report before crossing a protected path, overlapping a sibling's writes, changing an unapproved public or data/security/operations boundary, adding a production dependency, weakening acceptance, or continuing after the same approach fails twice.
 

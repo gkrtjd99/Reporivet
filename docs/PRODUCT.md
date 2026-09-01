@@ -65,6 +65,12 @@ The product does not install a copied command executor, command registry, genera
 8. **Verify** the integrated candidate from a fresh context and record criterion-level evidence in the Plan.
 9. **Maintain or migrate** with package-side diagnosis, non-destructive updates, and explicit backup-backed transactions.
 
+### Bounded task ownership
+
+Broad or multi-part roots default to `Role: Task Owner` with `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves. Main dispatches independent root Owners concurrently. Each Owner first returns a finite child manifest within its approved envelope, after which Main alone serializes the accepted child rows and complete matching packets into the Plan and resumes that Owner. Only the resumed serialized Task Owner dispatches its own declared dependency-ready descendants through host-native Agent execution; ordinary leaves never delegate.
+
+Descendants inherit the parent's scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces and cannot broaden them. Mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration; fresh verification is read-only, nonrepairing, nondelegating, and candidate-specific. Reporivet provides no scheduler, dispatcher, task database, runner, Gate, evidence archive, automatic closure, hidden state, or workflow runtime.
+
 ## Requirements
 
 ### Rich content
