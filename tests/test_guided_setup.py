@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -9,17 +10,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
 sys.path.insert(0, str(SRC))
 
 from reporivet.cli import main as cli_main
-from reporivet.guided import (
-    LEGACY_MANAGED_FILES,
-    LEGACY_RUNTIME_PATHS,
-    parse_definition_draft,
-)
+from reporivet.guided import LEGACY_RUNTIME_PATHS, parse_definition_draft
 from reporivet.initializer import read_asset
 from reporivet.procedures import ProcedureSpec
 
@@ -238,128 +236,70 @@ class GuidedSetupTests(unittest.TestCase):
                 actions["docs/design-docs/core-beliefs.md"]["content"],
             )
 
-    def test_doctor_validates_authority_structure_utf8_and_retired_vocabulary(self) -> None:
+    def test_setup_bundle_uses_markdown_authority_without_a_diagnostic_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             self.install_bundle(root)
-            product = root / "docs/PRODUCT.md"
-            original_product = product.read_text(encoding="utf-8")
 
-            product.write_text(
-                "# Product\n\nThe generated Gate is current.\n",
-                encoding="utf-8",
-            )
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertEqual(returncode, 2, stdout + stderr)
-            product_findings = [
-                finding
-                for finding in json.loads(stdout)["findings"]
-                if finding["path"] == "docs/PRODUCT.md"
-            ]
-            self.assertTrue(
-                any("missing required structure" in finding["detail"] for finding in product_findings)
-            )
-            self.assertTrue(
-                any("singular Gate" in finding["detail"] for finding in product_findings)
-            )
+            inventory = (root / "docs/README.md").read_text(encoding="utf-8")
+            plans = (root / "docs/PLANS.md").read_text(encoding="utf-8")
+            runbooks = (root / "docs/runbooks/index.md").read_text(encoding="utf-8")
+            self.assertIn("ordinary Markdown", inventory)
+            self.assertIn("Package absence after setup is expected", inventory)
+            self.assertIn("Setup handoff does not create a Plan", inventory)
+            self.assertIn("Setup handoff creates no Plan", plans)
+            self.assertIn("static runbook", runbooks)
+            self.assertNotIn(".claude/skills/<slug>/SKILL.md", inventory)
+            self.assertFalse((root / ".claude/settings.json").exists())
+            self.assertFalse((root / ".reporivet-version").exists())
 
-            product.write_text(
-                original_product
-                + "\nThe Reporivet runtime is current.\n"
-                + "Automatic Plan closure is current.\n"
-                + "The generated gate is current.\n",
-                encoding="utf-8",
-            )
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertEqual(returncode, 0, stdout + stderr)
-            details = [
-                finding["detail"]
-                for finding in json.loads(stdout)["findings"]
-                if finding["path"] == "docs/PRODUCT.md"
-            ]
-            self.assertTrue(any("singular Gate" in detail for detail in details))
-            self.assertTrue(any("Reporivet runtime" in detail for detail in details))
-            self.assertTrue(any("automatic Plan closure" in detail for detail in details))
-
-            product.write_text(original_product, encoding="utf-8")
             quality = root / "docs/QUALITY.md"
             quality.write_bytes(b"# Quality\n\xff\n")
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertEqual(returncode, 2, stdout + stderr)
-            self.assertTrue(
-                any(
-                    finding["path"] == "docs/QUALITY.md"
-                    and "UTF-8" in finding["detail"]
-                    for finding in json.loads(stdout)["findings"]
-                )
-            )
+            preview = self.preview(root)
+            actions = {str(action["path"]): action for action in preview["actions"]}
+            self.assertEqual(actions["docs/QUALITY.md"]["action"], "preserve")
+            returncode, stdout, stderr = self.apply_preview(root, preview)
+            self.assertEqual(returncode, 0, stdout + stderr)
+            self.assertEqual(quality.read_bytes(), b"# Quality\n\xff\n")
 
-    def test_retired_contract_detection_is_clause_local_and_checks_every_match(self) -> None:
+    def test_markdown_authority_preserves_retired_vocabulary_without_rewriting(self) -> None:
         cases = (
-            (
-                "Do not use Gate; Gate is current",
-                {"singular Gate": 1, "automatic Plan closure": 0, "Reporivet runtime": 0},
-            ),
-            (
-                "Automatic Plan closure does not apply.",
-                {"singular Gate": 0, "automatic Plan closure": 0, "Reporivet runtime": 0},
-            ),
-            (
-                "Gate is current; do not use Gate. The Reporivet runtime is retired; Automatic Plan closure is current.",
-                {"singular Gate": 1, "automatic Plan closure": 1, "Reporivet runtime": 0},
-            ),
-            (
-                "Do not use Gate, and Gate is current",
-                {"singular Gate": 1, "automatic Plan closure": 0, "Reporivet runtime": 0},
-            ),
-            (
-                "Gate is retired, Gate is current",
-                {"singular Gate": 1, "automatic Plan closure": 0, "Reporivet runtime": 0},
-            ),
-            (
-                "Gate is current and Automatic Plan closure does not apply.",
-                {"singular Gate": 1, "automatic Plan closure": 0, "Reporivet runtime": 0},
-            ),
-            (
-                "Do not use Gate, Automatic Plan closure, or the Reporivet runtime.",
-                {"singular Gate": 0, "automatic Plan closure": 0, "Reporivet runtime": 0},
-            ),
+            "Do not use Gate; Gate is current",
+            "Automatic Plan closure does not apply.",
+            "Gate is current; do not use Gate. The Reporivet runtime is retired; Automatic Plan closure is current.",
+            "Do not use Gate, and Gate is current",
+            "Gate is retired, Gate is current",
+            "Gate is current and Automatic Plan closure does not apply.",
+            "Do not use Gate, Automatic Plan closure, or the Reporivet runtime.",
         )
-        for guidance, expected_counts in cases:
+        for guidance in cases:
             with self.subTest(guidance=guidance), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory).resolve()
                 self.install_bundle(root)
                 product = root / "docs/PRODUCT.md"
-                product.write_text(
-                    product.read_text(encoding="utf-8") + "\n" + guidance + "\n",
-                    encoding="utf-8",
-                )
+                original = product.read_bytes()
+                product.write_bytes(original + ("\n" + guidance + "\n").encode("utf-8"))
 
-                returncode, stdout, stderr = self.run_cli(
-                    "doctor", "--root", str(root)
+                preview = self.preview(root)
+                action = next(
+                    action
+                    for action in preview["actions"]
+                    if action["path"] == "docs/PRODUCT.md"
                 )
+                self.assertEqual(action["action"], "preserve")
+                self.assertEqual(
+                    action["current_sha256"],
+                    hashlib.sha256(product.read_bytes()).hexdigest(),
+                )
+                returncode, stdout, stderr = self.apply_preview(root, preview)
                 self.assertEqual(returncode, 0, stdout + stderr)
-                details = [
-                    finding["detail"]
-                    for finding in json.loads(stdout)["findings"]
-                    if finding["path"] == "docs/PRODUCT.md"
-                    and finding["severity"] == "warning"
-                ]
-                for marker, expected_count in expected_counts.items():
-                    self.assertEqual(
-                        sum(marker in detail for detail in details),
-                        expected_count,
-                        details,
-                    )
+                self.assertEqual(
+                    product.read_bytes(),
+                    original + ("\n" + guidance + "\n").encode("utf-8"),
+                )
 
-    def test_doctor_derives_confirmed_procedure_skills_without_scanning_stale_paths(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
+    def test_confirmed_procedures_render_static_runbooks_and_preserve_stale_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             self.install_bundle(root)
             spec = self.procedure()
@@ -389,141 +329,70 @@ class GuidedSetupTests(unittest.TestCase):
 
             stale = root / ".claude/skills/old-name/SKILL.md"
             stale.parent.mkdir(parents=True)
-            stale.write_text("not a valid Skill, but project-owned\n", encoding="utf-8")
-            target_relative = ".claude/skills/release-check/SKILL.md"
-
-            returncode, stdout, stderr = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(returncode, 0, stdout + stderr)
-            findings = json.loads(stdout)["findings"]
-            self.assertTrue(
-                any(
-                    finding["path"] == target_relative
-                    and finding["severity"] == "warning"
-                    and "not installed" in finding["detail"]
-                    for finding in findings
-                )
-            )
-            self.assertEqual(
-                {
-                    finding["path"]
-                    for finding in findings
-                    if finding["path"].startswith("procedures.confirmed[")
-                },
-                {"procedures.confirmed[1]", "procedures.confirmed[2]"},
-            )
-            self.assertNotIn(
-                ".claude/skills/old-name/SKILL.md",
-                {finding["path"] for finding in findings},
-            )
+            stale_bytes = b"not a valid Skill, but project-owned\n"
+            stale.write_bytes(stale_bytes)
 
             preview = self.preview(root)
+            actions = {str(action["path"]): action for action in preview["actions"]}
+            runbook_relative = "docs/runbooks/release-check.md"
+            self.assertEqual(actions[runbook_relative]["action"], "create")
+            self.assertEqual(actions[stale.as_posix().replace(root.as_posix() + "/", "")]["action"], "preserve")
+            self.assertIn("Generic procedure evidence", json.dumps(preview))
+            self.assertIn("incomplete", json.dumps(preview))
+            self.assertNotIn(".claude/skills/release-check/SKILL.md", actions)
+
             returncode, stdout, stderr = self.apply_preview(root, preview)
             self.assertEqual(returncode, 0, stdout + stderr)
-            target = root / target_relative
-            self.assertTrue(target.is_file())
+            runbook = root / runbook_relative
+            self.assertTrue(runbook.is_file())
+            content = runbook.read_text(encoding="utf-8")
+            self.assertTrue(content.startswith("# Release check procedure\n"))
+            self.assertNotIn("---\n", content)
+            self.assertEqual(stale.read_bytes(), stale_bytes)
+            self.assertFalse((root / ".claude/settings.json").exists())
 
-            returncode, stdout, stderr = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(returncode, 0, stdout + stderr)
-            installed_findings = json.loads(stdout)["findings"]
-            self.assertFalse(
-                any(
-                    finding["path"] == target_relative
-                    and "not installed" in finding["detail"]
-                    for finding in installed_findings
-                )
-            )
-            self.assertNotIn(
-                ".claude/skills/old-name/SKILL.md",
-                {finding["path"] for finding in installed_findings},
-            )
-
-            fixed = root / ".claude/skills/reporivet-main/SKILL.md"
-            fixed_content = fixed.read_bytes()
-            fixed.write_text(
-                "---\nname: wrong-name\ndescription: missing trigger\nallowed-tools: Bash\n---\n",
-                encoding="utf-8",
-            )
-            returncode, stdout, stderr = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(returncode, 2, stdout + stderr)
-            fixed_findings = [
-                finding
-                for finding in json.loads(stdout)["findings"]
-                if finding["path"] == ".claude/skills/reporivet-main/SKILL.md"
-            ]
-            self.assertTrue(
-                any("match its parent" in finding["detail"] for finding in fixed_findings)
-            )
-            self.assertTrue(
-                any("allowed-tools" in finding["detail"] for finding in fixed_findings)
-            )
-            fixed.write_bytes(fixed_content)
-
-            external = Path(external_directory).resolve() / "external-skill.md"
-            external_content = b"external sensitive Skill content\n"
-            external.write_bytes(external_content)
-            target.unlink()
-            target.symlink_to(external)
-            returncode, stdout, stderr = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(returncode, 2, stdout + stderr)
-            self.assertTrue(
-                any(
-                    finding["path"] == target_relative
-                    and finding["severity"] == "error"
-                    and "unsafe" in finding["detail"]
-                    for finding in json.loads(stdout)["findings"]
-                )
-            )
-            self.assertEqual(external.read_bytes(), external_content)
-
-    def test_doctor_inventory_reports_only_managed_legacy_surfaces(self) -> None:
+    def test_setup_preserves_historical_runtime_without_inventory_or_access(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            self.install_bundle(root)
+            self.assertEqual(self.define(root, "start")[0], 0)
             project_owned = root / "dev/verify"
             project_owned.parent.mkdir(parents=True)
             project_owned.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             (root / "dev/custom-tool").write_text("project owned\n", encoding="utf-8")
-
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertEqual(returncode, 0, stdout + stderr)
-            initial_paths = {
-                finding["path"] for finding in json.loads(stdout)["findings"]
-            }
-            self.assertNotIn("dev/verify", initial_paths)
-            self.assertNotIn("dev/custom-tool", initial_paths)
-
-            managed = "# reporivet:managed version=0.2.0\n"
-            for relative in LEGACY_MANAGED_FILES:
-                path = root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(managed, encoding="utf-8")
-            (root / "dev/harness.toml").write_text(
-                "version = 1\n\n[project]\nname = \"fixture\"\n\n[commands]\n\n[paths]\n",
-                encoding="utf-8",
-            )
             for relative in LEGACY_RUNTIME_PATHS:
                 (root / relative).mkdir(parents=True, exist_ok=True)
             retained = root / ".harness/runs/private.log"
-            retained.write_bytes(b"sensitive retained evidence\n")
+            retained_bytes = b"sensitive retained evidence\n"
+            retained.write_bytes(retained_bytes)
+            runtime_before = self.snapshot(root)
 
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
+            from reporivet import guided
+
+            original_path_state = guided._path_state
+
+            def reject_runtime_access(path: Path, relative: str):
+                if relative == ".harness" or relative.startswith(".harness/"):
+                    raise AssertionError(f"setup accessed retained runtime: {relative}")
+                return original_path_state(path, relative)
+
+            with mock.patch.object(
+                guided,
+                "_path_state",
+                side_effect=reject_runtime_access,
+            ):
+                preview = self.preview(root)
+                returncode, stdout, stderr = self.apply_preview(root, preview)
             self.assertEqual(returncode, 0, stdout + stderr)
-            findings = json.loads(stdout)["findings"]
-            warning_paths = {
-                finding["path"]
-                for finding in findings
-                if finding["severity"] == "warning"
-            }
-            expected = set(LEGACY_MANAGED_FILES) | set(LEGACY_RUNTIME_PATHS) | {
-                "dev/harness.toml"
-            }
-            self.assertTrue(expected.issubset(warning_paths), sorted(expected - warning_paths))
-            self.assertNotIn("dev/custom-tool", warning_paths)
-            self.assertEqual(retained.read_bytes(), b"sensitive retained evidence\n")
+            self.assertEqual(retained.read_bytes(), retained_bytes)
+            self.assertTrue((root / "dev/verify").is_file())
+            self.assertEqual(
+                {
+                    entry for entry in self.snapshot(root) if entry[0].startswith(".harness/")
+                },
+                {
+                    entry for entry in runtime_before if entry[0].startswith(".harness/")
+                },
+            )
 
     def test_start_rejects_a_non_directory_parent_without_a_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -562,7 +431,7 @@ class GuidedSetupTests(unittest.TestCase):
     def test_preview_apply_preserves_project_files_and_rejects_stale_approval(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            sentinel = root / "doctor-command-ran"
+            sentinel = root / "project-command-ran"
             (root / "package.json").write_text(
                 json.dumps(
                     {
@@ -590,8 +459,8 @@ class GuidedSetupTests(unittest.TestCase):
             inventory = actions["docs/README.md"]["content"]
             for path in actions:
                 self.assertIn(f"`{path}`", inventory, path)
-            self.assertIn("`.claude/settings.json`", inventory)
-            self.assertIn("`.claude/settings.local.json`", inventory)
+            self.assertNotIn("`.claude/settings.json`", inventory)
+            self.assertNotIn("`.claude/settings.local.json`", inventory)
 
             product.write_bytes(b"# Existing product\n\nChanged after preview.\n")
             before_stale_apply = self.snapshot(root)
@@ -608,32 +477,18 @@ class GuidedSetupTests(unittest.TestCase):
             self.assertEqual(product.read_bytes(), expected_product)
             self.assertEqual(claude.read_bytes(), expected_claude)
             agents = (root / "AGENTS.md").read_text(encoding="utf-8")
-            self.assertTrue(agents.startswith("# Project instructions\n\nKeep this exact.  \n"))
-            self.assertEqual(agents.count("<!-- reporivet:start -->"), 1)
+            self.assertEqual(agents, "# Project instructions\n\nKeep this exact.  \n")
             self.assertTrue((root / "docs/OPERATIONS.md").is_file())
             self.assertFalse((root / "docs/RELIABILITY.md").exists())
             self.assertFalse((root / "dev").exists())
             self.assertFalse((root / ".harness").exists())
             self.assertFalse((root / ".github/workflows/harness-verify.yml").exists())
 
-            before_doctor = self.snapshot(root)
-            returncode, doctor_stdout, doctor_stderr = self.run_cli(
-                "doctor",
-                "--root",
-                str(root),
-            )
-            self.assertEqual(returncode, 2, doctor_stdout + doctor_stderr)
-            self.assertEqual(self.snapshot(root), before_doctor)
             self.assertFalse(sentinel.exists())
-            findings = json.loads(doctor_stdout)["findings"]
-            self.assertTrue(
-                any(
-                    finding["severity"] == "error"
-                    and finding["path"] == "docs/PRODUCT.md"
-                    and "missing required structure" in finding["detail"]
-                    for finding in findings
-                )
-            )
+            self.assertFalse((root / ".claude/settings.json").exists())
+            self.assertFalse((root / ".reporivet-version").exists())
+            self.assertFalse((root / ".harness").exists())
+            self.assertNotIn("doctor", inventory.casefold())
 
 
 if __name__ == "__main__":

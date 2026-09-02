@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import json
 import os
 import subprocess
 import sys
@@ -20,11 +19,6 @@ from reporivet.cli import build_parser, main as cli_main
 
 
 EXPECTED_FRESH_FILES = {
-    ".claude/skills/reporivet-implementation/SKILL.md",
-    ".claude/skills/reporivet-main/SKILL.md",
-    ".claude/skills/reporivet-verification/SKILL.md",
-    ".gitignore",
-    ".reporivet-version",
     "AGENTS.md",
     "ARCHITECTURE.md",
     "CLAUDE.md",
@@ -60,6 +54,8 @@ EXPECTED_FRESH_DIRECTORIES = {
 }
 
 RETIRED_FRESH_PATHS = {
+    ".claude",
+    ".reporivet-version",
     ".github",
     ".harness",
     "dev",
@@ -139,17 +135,14 @@ class ReporivetTests(unittest.TestCase):
                 self.assertFalse((root / relative).exists(), relative)
 
             self.assertEqual((root / "CLAUDE.md").read_bytes(), b"@AGENTS.md\n")
-            self.assertEqual(
-                (root / ".reporivet-version").read_text(encoding="utf-8"),
-                "# reporivet:managed version=0.2.0\n0.2.0\n",
-            )
+            self.assertFalse((root / ".reporivet-version").exists())
             agents = (root / "AGENTS.md").read_text(encoding="utf-8")
-            self.assertEqual(agents.count("<!-- reporivet:start -->"), 1)
-            self.assertEqual(agents.count("<!-- reporivet:end -->"), 1)
+            self.assertNotIn("<!-- reporivet:start -->", agents)
+            self.assertNotIn("<!-- reporivet:end -->", agents)
             self.assertNotIn("./dev/", agents)
             self.assertNotIn(".harness/runs", agents)
 
-    def test_release_version_and_version_marker_are_in_sync(self) -> None:
+    def test_release_version_metadata_and_fresh_target_have_no_version_marker(self) -> None:
         metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(__version__, "0.2.0")
         self.assertNotIn("version", metadata["project"])
@@ -163,8 +156,7 @@ class ReporivetTests(unittest.TestCase):
             root = Path(directory).resolve()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            marker = (root / ".reporivet-version").read_text(encoding="utf-8")
-            self.assertEqual(marker.count(__version__), 2)
+            self.assertFalse((root / ".reporivet-version").exists())
 
     def test_init_dry_run_is_read_only_for_missing_and_existing_roots(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -191,19 +183,19 @@ class ReporivetTests(unittest.TestCase):
 
             product = root / "docs/PRODUCT.md"
             product.write_bytes(b"# Project-owned product authority\n")
-            missing_skill = root / ".claude/skills/reporivet-verification/SKILL.md"
-            missing_skill.unlink()
+            missing_document = root / "docs/OPERATIONS.md"
+            missing_document.unlink()
             before_dry_run = self.snapshot(root)
 
             dry_run = self.run_cli("upgrade", "--root", str(root), "--dry-run")
             self.assertEqual(dry_run.returncode, 0, dry_run.stdout + dry_run.stderr)
             self.assertEqual(self.snapshot(root), before_dry_run)
-            self.assertFalse(missing_skill.exists())
+            self.assertFalse(missing_document.exists())
 
             upgraded = self.run_cli("upgrade", "--root", str(root))
             self.assertEqual(upgraded.returncode, 0, upgraded.stdout + upgraded.stderr)
             self.assertEqual(product.read_bytes(), b"# Project-owned product authority\n")
-            self.assertTrue(missing_skill.is_file())
+            self.assertTrue(missing_document.is_file())
             for relative in RETIRED_FRESH_PATHS:
                 self.assertFalse((root / relative).exists(), relative)
 
@@ -229,27 +221,6 @@ class ReporivetTests(unittest.TestCase):
             self.assertTrue((root / "AGENTS.md").read_bytes().startswith(agents_original))
             self.assertEqual((root / "docs/PRODUCT.md").read_bytes(), product_original)
             self.assertEqual((root / "CLAUDE.md").read_bytes(), claude_original)
-
-    def test_doctor_root_directly_runs_structural_document_first_doctor(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            initialized = self.init(root)
-            self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
-
-            healthy = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(healthy.returncode, 0, healthy.stdout + healthy.stderr)
-            self.assertEqual(json.loads(healthy.stdout)["schema"], "reporivet.doctor/v2")
-
-            (root / "docs/OPERATIONS.md").unlink()
-            broken = self.run_cli("doctor", "--root", str(root))
-            self.assertEqual(broken.returncode, 2, broken.stdout + broken.stderr)
-            self.assertTrue(
-                any(
-                    finding["path"] == "docs/OPERATIONS.md"
-                    and finding["severity"] == "error"
-                    for finding in json.loads(broken.stdout)["findings"]
-                )
-            )
 
     def test_runtime_only_and_transitional_cli_paths_are_absent(self) -> None:
         parser = build_parser()

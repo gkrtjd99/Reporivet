@@ -1,64 +1,154 @@
 # Plans
 
-A Plan is Main's durable cross-session memory for one substantive user goal. Native host task state and chat history are temporary; the active Markdown Plan records what must survive compaction, a new session, or a new Main Agent.
+## Purpose
 
-Use `exec-plans/_template.md` with `format: 2` and `task_graph: 1`. Preserve those fields and the example requirements when creating or resuming a Plan.
+A Plan is the single durable Markdown record for one substantive goal. It carries scope, acceptance, task ownership, decisions, checkpoint state, integration, independent verification, documentation impact, follow-ups, and outcome without requiring another task system.
+
+Use [`exec-plans/_template.md`](exec-plans/_template.md) with `format: 2`.
+
+## Setup and first-Plan handoff
+
+The setup handoff is one-shot and package-side only. Setup handoff creates no Plan, Plan runtime, scheduler, or hidden state. The Main owns the handoff: it searches active and completed history, resumes exactly one matching active ordinary Markdown Plan, stops on ambiguity, or creates a new Plan from `_template.md` using the lowest unused current-year ID without overwriting an existing file. Reporivet does not create or close Plans automatically.
+
+The target remains useful after package removal. Main and the host/project own Plan edits, Agent dispatch, project-command execution, integration, verification, and terminal movement. Package absence after handoff is expected and is not `UNKNOWN`, blocking, or a residual risk for ordinary target work.
 
 ## When to use a Plan
 
-Create or resume one active Plan for cross-cutting, risky, long-running, multi-agent, public-contract, persistent-data, security, infrastructure, deployment, or otherwise substantive work. Small local reversible changes may proceed without one.
+Create or resume a matching Plan for cross-cutting, long-running, risky, public-contract, persistent-data, security, infrastructure, deployment, or multi-context work. A small, local, reversible edit may proceed without one when acceptance and evidence are obvious.
 
-Do not create a second task database, packet directory, lease, journal, scheduler, or orchestration layer.
+Before creating a Plan, inspect `exec-plans/active/` and reuse the one substantive goal that already matches. Do not split one goal across multiple active records or use Plans as a backlog.
 
 ## Ownership and lifecycle
 
-- Main alone serializes Plan edits and owns goal, scope, non-goals, acceptance, decomposition, dispatch, integration, decisions, checkpoint, exact next action, verification judgment, and terminal transition. Main serializes a finite accepted manifest before resuming an Owner.
-- Sub Agents receive one bounded Task Packet and return Plan-ready evidence; they do not concurrently edit the Plan.
-- Broad or multi-part roots default to `Role: Task Owner` and `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves.
-- One substantive goal maps to one file in `exec-plans/active/`.
-- Terminal Plans move to `exec-plans/completed/` with actual status `complete`, `cancelled`, or `superseded`.
-- Historical Plans remain readable. Supersede or annotate history; do not rewrite old results to match a new process.
+### Main
 
-## First-Plan handoff
+Main owns:
 
-Main—not package runtime—creates and resumes Plans. Before dispatching a substantive goal, Main searches both `exec-plans/active/` and `exec-plans/completed/` for ordinary Markdown Plans matching the goal. Resume exactly one matching active Plan; stop if multiple active Plans match. Completed Plans are historical and are searched to prevent ID reuse, not resumed.
+- original intent, observable outcome, scope, non-goals, and acceptance criteria;
+- decomposition, task ordering, Task Packets, host-native dispatch instructions, and integration; Reporivet does not spawn or dispatch Agents;
+- candidate identity and verification target;
+- decisions, discoveries, documentation impact, follow-ups, and outcome; and
+- every shared Plan mutation and manual movement between Plan directories.
 
-Otherwise choose the lowest unused current-year numeric ID across both directories, copy `_template.md` (`exec-plans/_template.md`) to a new file in `exec-plans/active/`, and never overwrite/reuse an ID. Keep state in visible Markdown. Never use a Plan CLI/hidden state/automatic dispatcher/closure. Main serializes a finite accepted manifest before resuming an Owner.
+Main alone serializes Plan edits. Sub agents return evidence to Main rather than concurrently editing the shared Plan unless an unusually narrow packet grants one disjoint Plan section and Main still controls integration.
 
-## Dynamic procedure Skills
+### Implementation Sub
 
-Only complete Confirmed structured procedure records can produce a project-owned instruction-only `.claude/skills/<slug>/SKILL.md` through resumed `reporivet setup`. Do not pre-generate a project-specific Skill. Keep its frontmatter instruction-only and least privilege; no procedure is inferred or executed, and existing differing, stale, or arbitrary Skills are preserved rather than deleted.
+An Implementation Sub receives exactly one bounded Task Packet. It may read and write only the named scope, must preserve protected paths, runs the named project-owned checks, stops at stated conditions, and returns changed paths, evidence, discoveries, and residual risks. A default leaf may not broaden scope, change acceptance, delegate, move the Plan, or approve its own candidate. The only delegation exception is the explicitly bounded Task Owner role below.
 
-## Broad-milestone native-Agent dispatch
+### Verification Sub
 
-For every milestone classified as broad, this is a common installed-project rule:
+A Verification Sub starts from a fresh context after integration. It identifies the integrated candidate, maps checks to acceptance criteria, runs applicable project-owned commands, inspects non-goals and protected paths, and returns accepted, failed, or not-established results plus residual risks. A default verification leaf does not delegate. It does not repair the candidate unless Main creates a separate implementation packet.
 
-`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`
+### Broad-milestone native-Agent dispatch
 
-Main dispatches independent root Owners concurrently using only the host's native Agent execution. A resumed Owner dispatches its complete dependency-ready descendants through host-native Agent execution and only within the finite child budget in the accepted manifest. Main dispatches the complete dependency-ready root set concurrently: independent Owners for broad work and direct leaves for narrow or inherently serial work. This rule does not apply to inherently single or serial milestones.
+For every broad or multi-part root, the default packet is `Role: Task Owner` with `May delegate: yes`. Narrow or inherently serial roots remain direct nondelegating leaves. This is a host/project operating rule, not a Reporivet runtime:
 
-Every child row retains an explicit owner and matching bounded packet. Owner boundaries, child budget, disjoint allowed-write sets, exact baseline, frozen shared interfaces, and separate worktrees remain explicit. Descendants inherit parent scope, protected paths, acceptance, exact baseline, and frozen shared interfaces and cannot broaden them. An Owner performs local aggregation of descendant results and returns one Plan-ready evidence package to Main; Main alone performs final integration.
+`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... (parallel fresh verification)`
 
-If a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Existing narrow or inherently serial packets remain compatible as direct nondelegating leaves and may omit hierarchy-only fields.
+Main dispatches independent root Owners concurrently. Each Owner first returns a finite child manifest within its approved envelope; Main alone serializes accepted child rows and complete matching packets into the Plan, freezes their boundaries, and resumes that serialized Owner. Only the resumed serialized Task Owner dispatches its own declared dependency-ready descendants through host-native Agent execution. Ordinary leaf Agents never delegate. A narrow or inherently serial root follows its declared direct, nondelegating path instead.
 
-Parallel mutable siblings require disjoint allowed-write sets, frozen shared interfaces, an exact common baseline, and separate worktrees. Read-only review and verification lanes may run concurrently. Fresh verification is read-only, nonrepairing, and nondelegating; verification nodes depend on the integrated candidate.
+Every child row retains an explicit owner and matching bounded packet. Descendants inherit the parent's scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces and cannot broaden them. Parallel mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration; fresh verification nodes depend on the integrated candidate and are read-only, nonrepairing, and nondelegating.
 
-Reporivet installs no scheduler, task store, lease, lock, or automatic dispatcher; it also installs no dispatcher, runtime, hidden state, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+Reporivet installs no scheduler, dispatcher, task store, lease, lock, command runner, Gate, evidence archive, automatic closure, hidden state, or other runtime for this workflow. It installs no Agent spawn/dispatch mechanism or project command execution engine; project commands and CI remain project/host-owned. The `task_graph: 1` marker opts a compact `format: 2` Plan into strict hierarchy checks; unmarked compact Plans retain structural validation, historical expanded or completed Plans remain untouched, recursive task IDs remain valid, and direct serial Plans remain supported.
 
 ## Minimum active Plan content
 
-Use `exec-plans/_template.md` with `format: 2` and `task_graph: 1`. Keep it concise but restartable:
+Each Plan has:
 
-- frontmatter retaining identity, lifecycle status, `format: 2`, `task_graph: 1`, and candidate hashes;
-- original goal and observable acceptance criteria;
-- scope and non-goals;
-- task rows retaining Owner, State, Depends on, Outcome, Result, and an optional Parallel group;
-- decisions and discoveries;
-- current checkpoint and exact next action;
-- integration and verification summaries, candidate identity, and residual risks.
+- frontmatter with identity, status, owner, area, dates, supersession links, and candidate hashes;
+- one original goal and one observable outcome;
+- explicit scope and non-goals;
+- one task-state table;
+- one matching Task Packet per task;
+- one current checkpoint and one exact next action;
+- concise decisions and discoveries;
+- documentation impact;
+- integration and verification summaries;
+- bounded follow-ups; and
+- one terminal outcome.
 
-A Task Packet names outcome, non-goals, exact reads, allowed writes, protected paths, acceptance criteria, verification commands, stop conditions, and compact return evidence. Broad-milestone child packets also name Role, Parent, Parallel group, May delegate, inherited boundaries, finite child budget, exact baseline, disjoint write isolation, and Return; an inherently single or serial milestone may omit hierarchy-only fields. Task Owners locally aggregate descendant results and do not edit the shared Plan.
+Task state belongs in the single table. Every row retains `Task`, `Owner`, `State`, `Depends on`, `Outcome`, and `Result`; a visible `Parallel group` column may record concurrent siblings. Detailed work instructions belong in the matching packet. Do not add a second registry, packet directory, journal, event log, evidence archive, or hidden coordination state.
+
+## Task Packet minimum
+
+Every implementation or verification packet states:
+
+- outcome;
+- non-goals;
+- exact reads;
+- allowed writes;
+- protected paths;
+- acceptance criteria;
+- project-owned verification commands;
+- stop conditions; and
+- return evidence.
+
+Packets should be self-contained enough for a fresh context but no broader than the assigned task. When broad-root decomposition exists, each packet also records `Role`, `Parent`, `Parallel group`, `May delegate`, inherited boundaries and write isolation, and its compact `Return`. An inherently single or serial milestone may omit those hierarchy-only fields.
+
+## States and lifecycle
+
+Active states are:
+
+- `proposed`
+- `approved`
+- `in-progress`
+- `verifying`
+- `blocked`
+
+Terminal states are:
+
+- `complete`
+- `cancelled`
+- `superseded`
+
+Lifecycle:
+
+1. Main searches existing history and either resumes one matching active Plan or creates the first ordinary Markdown Plan in `docs/exec-plans/active/` with the lowest unused current-year ID; setup handoff itself never creates it.
+2. Main approves scope and acceptance before mutable work.
+3. For each broad or multi-part root, Main dispatches independent root Owners concurrently. Each Owner returns a finite child manifest; Main serializes accepted child rows and complete matching packets into the Plan, then resumes the serialized Owner to dispatch its declared dependency-ready descendants. An inherently single or serial root remains a direct nondelegating leaf and follows its declared linear dependency order.
+4. Owner-local child results converge on their declared aggregation node; Main separately integrates the accepted candidate and records `integrated_commit` or another exact identifier.
+5. Fresh verification nodes that depend on that integrated candidate may run in parallel when their packets are read-only, nonrepairing, and nondelegating, and return criterion-level evidence.
+6. Main records `verified_commit` when commit-based verification applies, resolves documentation impact and follow-ups, chooses the terminal outcome, and edits the status.
+7. Main manually moves the terminal Plan to `docs/exec-plans/completed/`.
+
+No command decides completion or moves a Plan automatically. A terminal state is justified only by accepted evidence, not by an agent's assertion.
 
 ## Completion
 
-Completion requires observable acceptance, integrated project-owned verification, independent review when required, current-state documentation parity, recorded follow-ups, and Main or human evidence judgment. No repository-local completion engine, model judge, automatic closure command, or evidence archive decides completion. Reporivet installs no scheduler, dispatcher, runtime, hidden state, or automatic closure.
+- `base_commit` identifies the comparison point when Git is used.
+- `integrated_commit` identifies the exact implementation candidate presented for verification.
+- `verified_commit` identifies the exact commit actually checked; it must match the accepted integrated candidate for commit-based completion.
+- When verification occurs in an intentionally dirty tree, record another exact reproducible fingerprint and explain the limitation instead of inventing a commit.
+- Record exact commands, results, criterion mapping, and residual risks in the verification summary.
+- Mark unavailable or unrun evidence explicitly; never report it as passing.
+- Main normally relies on the fresh verifier's detailed execution evidence rather than rerunning the same checks without cause.
+
+## Parallel work
+
+For every broad or multi-part root, Main dispatches independent root Owners together. Only a resumed serialized Task Owner dispatches its own complete dependency-ready descendant set. Inherently single or serial roots follow their declared linear order as direct nondelegating leaves. Read-only exploration, review, and verification lanes may run concurrently. Mutable siblings are dependency-ready for concurrent dispatch only when their packets have disjoint allowed-write sets, frozen shared interfaces, and separate exact-baseline worktrees; otherwise dependencies must serialize them. The Plan remains Main-serialized, Owner-local aggregation remains distinct from Main integration, and fresh verification depends on the integrated candidate.
+
+## Documentation and history
+
+Every Plan resolves Documentation Impact as changed, no change required, or follow-up with an owner and trigger. Completed Plans preserve what happened; do not rewrite their bodies to match later policy. Supersession metadata may point readers to the current successor without erasing history.
+
+Out-of-scope discoveries go in [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md) only when they are concrete and useful. That tracker is not an implementation queue and does not authorize work.
+
+### Confirmed
+
+- Current project checks recognize the compact `format: 2` headings and active/terminal state sets above.
+- Plan files are ordinary Markdown and remain useful without the package installed.
+- Main owns terminal movement and evidence judgment.
+
+### Proposed
+
+- None.
+
+### Open
+
+- None.
+
+### Sources
+
+- [`exec-plans/_template.md`](exec-plans/_template.md)
+- Project product specifications and design decisions that govern the current Plan contract.

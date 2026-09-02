@@ -45,7 +45,5 @@ reporivet = [
   "assets/project/document-first/docs/*.tmpl",
   "assets/project/document-first/docs/*/*.tmpl",
   "assets/project/document-first/claude/*.tmpl",
-  "assets/project/document-first/claude/skills/*/*.tmpl",
-  "assets/project/document-first/optional/*.tmpl",
-  "assets/project/root/reporivet-version.tmpl",
+  "assets/user-scoped/reporivet-setup/SKILL.md",
 ]

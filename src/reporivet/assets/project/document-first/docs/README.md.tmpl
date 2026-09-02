@@ -1,75 +1,71 @@
 # Repository Knowledge Map
 
-This map explains every Reporivet-installed path and routes Agents to project-owned authority. The default onboarding entry point is integrated `reporivet setup`; `reporivet init` remains structure-only, and the lower-level `reporivet define` flow remains available. Reporivet installs documents and fixed Claude adapters; it does not install a repository-local executor, CI, completion engine, evidence archive, deployment engine, or task database.
+This map explains the project-owned paths and routes Agents to durable authority. It describes documents and directories, not a command system. After setup handoff, the target remains independently useful through its Markdown, Plans, runbooks, Git history, project commands, and host-native Agents.
 
 ## Reading protocol
 
 1. Read root [`AGENTS.md`](../AGENTS.md).
-2. For substantive work, create or resume one matching Plan in [`exec-plans/active/`](exec-plans/active/).
-3. Follow the Plan's exact reads, boundaries, acceptance criteria, and current checkpoint.
-4. Read only the relevant authority below and use project-owned commands from [`QUALITY.md`](QUALITY.md) or [`OPERATIONS.md`](OPERATIONS.md).
+2. For substantive work, inspect [`exec-plans/active/`](exec-plans/active/) and resume or create exactly one matching ordinary Markdown Plan.
+3. Follow that Plan's exact reads, boundaries, acceptance criteria, and current checkpoint.
+4. Read only the relevant authority and use project-owned commands from [`QUALITY.md`](QUALITY.md) or [`OPERATIONS.md`](OPERATIONS.md).
+
+Completed Plans, superseded documents, and accepted decisions are durable records, not general startup context. Package absence after setup is expected and is not `UNKNOWN`, blocking, or a residual risk for ordinary target work.
 
 ## Canonical paths
 
 | Path | Purpose and ownership |
 |---|---|
-| `.gitignore` | Reporivet owns only its marked block, which ignores machine-local `.claude/settings.local.json`; surrounding project rules are preserved. |
-| `AGENTS.md` | Canonical host-neutral Agent operating contract. Reporivet owns only its marked block and preserves surrounding project text. |
-| `CLAUDE.md` | Claude Code adapter, created only when missing; the default content is exactly `@AGENTS.md`. Existing content is preserved. |
-| `.claude/skills/reporivet-main/SKILL.md` | Instruction-only Main procedure, created only when missing. |
-| `.claude/skills/reporivet-implementation/SKILL.md` | Instruction-only bounded implementation procedure, created only when missing. |
-| `.claude/skills/reporivet-verification/SKILL.md` | Instruction-only fresh-context verification procedure, created only when missing. |
-| `.claude/skills/<slug>/SKILL.md` | Optional project-owned instruction-only procedure Skill, created only by resumed setup from a complete Confirmed structured procedure record; no project-specific Skill is pre-generated. |
-| `.claude/settings.json` | Optional shared Claude Code settings. Absent by default; a reviewed deny-only file can be created only after exact preview approval and is never merged or rewritten. It is defense in depth, not a sandbox. |
-| `.claude/settings.local.json` | User/machine-local Claude settings; referenced by the ignore block but never generated, read, or managed. |
-| `.reporivet-version` | Small create-if-missing package ownership/version marker. |
-| `ARCHITECTURE.md` | Current system structure, ownership, dependency direction, runtime, data, and external boundaries. |
-| `docs/README.md` | This generated-tree inventory and authority-routing map. |
+| `AGENTS.md` | Canonical host-neutral Agent operating contract. |
+| `CLAUDE.md` | Optional host adapter, created only when selected and missing; its exact content is `@AGENTS.md` followed by one newline. |
+| `ARCHITECTURE.md` | Current structure, ownership, dependency direction, process boundaries, data, and external systems. |
+| `docs/README.md` | This project-tree inventory and authority-routing map. |
 | `docs/PRODUCT.md` | Current product, users, problem, scope, and observable success overview. |
 | `docs/product-specs/index.md` | Product-specification purpose and lifecycle. |
 | `docs/product-specs/_template.md` | Create-if-missing template for a bounded durable product requirement. |
-| `docs/product-specs/project-definition.draft.md` | Visible resumable guided-setup state. Confirmed, Proposed, Open, and Sources remain distinct. |
 | `docs/DESIGN.md` | Current product design, interaction, accessibility, and engineering principles. |
 | `docs/design-docs/index.md` | Durable design-document purpose and lifecycle. |
 | `docs/design-docs/core-beliefs.md` | Reusable engineering defaults; project authority may narrow them. |
 | `docs/design-docs/_template.md` | Create-if-missing template for durable interaction or technical design. |
-| `docs/QUALITY.md` | Project-owned test, lint, type, build, package, and smoke commands plus expected evidence. |
-| `docs/OPERATIONS.md` | Single current authority for run, release, observe, backup, rollback, recovery, and incidents. |
-| `docs/runbooks/index.md`, `docs/runbooks/_template.md` | Runbook lifecycle, guided procedure candidates, and the create-if-missing procedure template. |
+| `docs/QUALITY.md` | Project-owned test, lint, type, build, distribution, and smoke commands plus expected evidence. |
+| `docs/OPERATIONS.md` | Current authority for run, release, observation, backup, rollback, recovery, and incidents. |
+| `docs/runbooks/index.md`, `docs/runbooks/_template.md` | Static runbook catalog and manual procedure template. |
 | `docs/SECURITY.md` | Authentication, authorization, sensitive data, secrets, permissions, exposure, retention, and disclosure boundaries. |
-| `docs/PLANS.md` | Main-owned durable Plan policy and lifecycle. |
-| `docs/exec-plans/_template.md` | Compact create-if-missing Plan template without repository-local completion, run-manifest, or automatic-closure fields. |
-| `docs/exec-plans/active/.gitkeep`, `docs/exec-plans/completed/.gitkeep` | Keep the two Plan lifecycle directories visible until they contain Plans; the marker files carry no execution state. |
-| `docs/exec-plans/tech-debt-tracker.md` | Durable follow-ups that must survive a terminal Plan when no external tracker is declared. |
-| `docs/decisions/README.md`, `docs/decisions/_template.md` | ADR purpose/lifecycle and a create-if-missing decision template. |
+| `docs/PLANS.md` | Main-owned Plan policy and lifecycle. |
+| `docs/exec-plans/_template.md` | Compact `format: 2` Plan template. |
+| `docs/exec-plans/active/.gitkeep`, `docs/exec-plans/completed/.gitkeep` | Keep both Plan lifecycle directories visible until they contain Plans. |
+| `docs/exec-plans/tech-debt-tracker.md` | Durable follow-ups that survive a terminal Plan when no external tracker is declared. |
+| `docs/decisions/README.md`, `docs/decisions/_template.md` | Decision purpose, lifecycle, and create-if-missing template. |
 | `docs/references/README.md` | Boundary and provenance rules for curated references. |
-| `docs/references/project-definition-protocol.md` | Evidence-state, guided-topic, preview, apply, and settings rules for definition setup. |
+| `docs/references/project-definition-protocol.md` | Evidence-state, guided-topic, and procedure-definition rules. |
 
-## Onboarding and procedure Skills
+## Durable document families
 
-- `reporivet setup` is the default integrated onboarding flow. `reporivet init` remains structure-only; the lower-level `reporivet define` flow remains available.
-- Only complete Confirmed structured procedure records can produce an instruction-only `.claude/skills/<slug>/SKILL.md` through resumed setup.
-- No procedure is inferred or executed. Existing differing, stale, or arbitrary Skills are preserved; setup never deletes them. Dynamic procedure Skills are project-owned and are not pre-generated in the package asset bundle.
-- Skill frontmatter is instruction-only and least privilege. It contains only the identity and description needed to guide a procedure, with no settings grants, hooks, tools, shell, executor, or other runtime metadata.
-- Main—not package runtime—creates or resumes Plans and keeps their state in visible Markdown.
-- Installation is pipx-primary: `pipx install` and `pip install` use the same wheel. Uninstalling Reporivet leaves repository artifacts useful, including documents, Plans, Skills, Git history, project commands, CI, and operational tools.
-- Reporivet installs no scheduler, dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+- `product-specs/` contains versioned product requirements and acceptance criteria. The visible definition draft is project-owned resume material only while definition needs resuming.
+- `design-docs/` contains durable interaction, accessibility, architecture, data, and engineering decisions.
+- `decisions/` contains append-only decision history and supersession links.
+- `exec-plans/` contains the compact Plan template, active and completed Markdown Plans, and bounded technical-debt follow-ups.
+- `references/` contains small protocols and explanatory notes that point back to current authority.
+- `runbooks/` contains ordinary Markdown procedure documentation subordinate to `OPERATIONS.md`.
 
-## Removal boundary
+## Static procedures and runbooks
 
-The installed package may be removed without deleting repository documents, Skills, Plans, Git history, project commands, CI, or operational tools. Those files remain ordinary project-owned knowledge. Reporivet does not promise repository-local maintenance commands after package removal.
+Only one complete, unique, user-confirmed strict structured procedure record becomes a deterministic ordinary Markdown runbook. The record has exactly these nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. The output is `docs/runbooks/<slug>.md` with no frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration. Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook. A runbook is reviewed project documentation, not an executor, and no procedure is inferred or executed.
 
-## Route by work
+Existing differing, stale, arbitrary, unsafe, symlinked, and nonregular content remains project-owned or is refused rather than guessed-owned. Names, markers, frontmatter, and locations alone do not authorize destructive changes.
 
-| Work | Minimum current authority |
-|---|---|
-| Product behavior | `PRODUCT.md`, relevant product spec, active Plan, nearby code/tests |
-| User interface or accessibility | `PRODUCT.md`, `DESIGN.md`, relevant design document |
-| Module or dependency boundary | `ARCHITECTURE.md`, relevant design/decision record |
-| Test, lint, type, build, or package change | `QUALITY.md`, project manifests/configuration |
-| Release, deployment, backup, rollback, recovery, or incident | `OPERATIONS.md`, matching runbook/configuration |
-| Authentication, permissions, secrets, or sensitive data | `SECURITY.md`, approved Plan, relevant architecture |
-| Local reversible fix | Reproduction, nearby code/tests; create a Plan if scope grows |
+## Plan handoff and task ownership
+
+Main searches active and completed history for ordinary Markdown Plans matching the goal, resumes exactly one matching active Plan, stops on ambiguity, or creates the lowest unused current-year Plan from `exec-plans/_template.md` without overwriting an existing file. Setup handoff does not create a Plan.
+
+Broad or multi-part roots default to `Role: Task Owner` with `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves. Each Owner first returns a finite child manifest; Main alone serializes accepted child rows and complete matching packets, then resumes that Owner. Owner-local aggregation is distinct from Main's final repository integration. Fresh verification depends on the integrated candidate and is read-only, nonrepairing, and nondelegating.
+
+The following host/project topology is the shared contract:
+
+`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... (parallel fresh verification)`
+
+## Repository boundary
+
+This target contains documents, visible Plan directories, static runbooks, project commands, Git history, optional host adapters, and Agent guidance. It does not generate a role or procedure Skill, package marker, generated settings, copied runtime, command wrapper, scheduler, dispatcher, task database, Gate, evidence archive, automatic closure, or hidden state. No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command.
 
 ## Evidence states
 
@@ -77,5 +73,7 @@ Repository inference is never authority by itself. Keep evidence in this order:
 
 1. **Confirmed** — explicit human input or verified accepted fact.
 2. **Proposed** — scanner observation or candidate interpretation awaiting review.
-3. **Open** — unresolved question or missing evidence.
+3. **Open** — an unanswered, uncertain, conflicting, or unavailable fact.
 4. **Sources** — provenance for the entries above.
+
+Keep all four states visibly separate in guided drafts and current authority. Scanner inference never enters Confirmed automatically.

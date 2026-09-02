@@ -1,5 +1,26 @@
-# Curated References
+# References
 
-Use this directory for small, versioned operating protocols and notes about external material that agents repeatedly need and cannot reliably infer from repository source alone.
+This directory contains small, curated protocols and explanatory references that help readers apply current project authority. References are project-owned ordinary Markdown; they do not replace the current documents linked from `AGENTS.md` and `docs/README.md`.
 
-Each reference states its authority and provenance. External references record the upstream source, relevant version or date, why it matters, and what remains authoritative upstream. Repository-local protocols identify the project-owned sources of truth they help people operate; a reference does not replace those sources.
+## Reference boundary
+
+A reference must state its purpose, scope, authority, evidence state, and sources. Keep Confirmed, Proposed, Open, and Sources visibly separate. Link to current product, architecture, design, quality, operations, security, Plan, decision, and runbook authority instead of copying mutable requirements or historical execution.
+
+The target remains independently useful after setup through Markdown, ordinary Plans, static runbooks, Git, project commands, and host-native Agents. No package, target runtime, generated settings, command wrapper, task store, or hidden state is required. No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command.
+
+## What belongs here
+
+- evidence-state and definition protocols;
+- provenance and source-selection rules;
+- concise terminology or routing guidance; and
+- references that explain how current authority relates without creating a second authority tree.
+
+Do not store credentials, hidden task state, executable metadata, command registration, hooks, or privilege-bearing configuration here. A reference cannot grant permission or authorize an external action.
+
+## Curated-reference lifecycle
+
+1. Identify the current authority and the narrow reader question.
+2. Write the smallest explanatory reference with explicit links and sources.
+3. Keep scanner observations or unapproved guidance Proposed or Open.
+4. Review links when the governing authority changes.
+5. Supersede or remove a reference only through an explicit project-owned decision; preserve historical rationale where it matters.

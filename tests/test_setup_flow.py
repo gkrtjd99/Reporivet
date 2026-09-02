@@ -15,9 +15,10 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
 sys.path.insert(0, str(SRC))
 
-from reporivet.guided import DEFINITION_DRAFT_PATH, DEFINITION_TOPICS, _GuidedSetupTransaction
-from reporivet.initializer import InitError, audit_project, read_asset
-from reporivet.procedures import ProcedureSpec, render_procedure_skill
+from reporivet import migration
+from reporivet.guided import DEFINITION_DRAFT_PATH, DEFINITION_TOPICS
+from reporivet.initializer import InitError, audit_project
+from reporivet.procedures import ProcedureSpec, render_procedure_runbook
 from reporivet.setup import SetupEnvelope, coordinate_setup
 
 
@@ -34,6 +35,7 @@ class SetupFlowTests(unittest.TestCase):
             "approve_preview": "",
             "stdin_is_tty": False,
             "input_fn": lambda _prompt: self.fail("input_fn must not be called"),
+            "backup_dir": None,
         }
         arguments.update(overrides)
         return coordinate_setup(**arguments)  # type: ignore[arg-type]
@@ -107,6 +109,7 @@ class SetupFlowTests(unittest.TestCase):
                     "changes",
                     "input",
                     "next_action",
+                    "backup",
                 },
             )
             self.assertEqual(payload["schema"], "reporivet.setup/v1")
@@ -263,7 +266,7 @@ class SetupFlowTests(unittest.TestCase):
             self.assertEqual(no_answers.as_dict()["input"], {"mode": "disabled-dry-run", "prompted": False, "recorded": False})
             self.assertEqual(self.snapshot(root), before)
 
-    def test_apply_mode_matrix_missing_draft_stale_preview_and_settings_binding(self) -> None:
+    def test_apply_mode_matrix_missing_draft_stale_preview_and_approval_binding(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as answer_directory:
             missing_root = Path(directory).resolve() / "missing-draft"
             missing_root.mkdir()
@@ -277,11 +280,36 @@ class SetupFlowTests(unittest.TestCase):
 
             root = Path(directory).resolve() / "project"
             root.mkdir()
-            preview_envelope = self.coordinate(root, with_claude_settings=True)
+            backup = Path(directory).resolve() / "external-backup"
+            preview_envelope = self.coordinate(
+                root,
+                with_claude_settings=True,
+                backup_dir=backup,
+            )
             preview = preview_envelope.as_dict()["preview"]
             fingerprint = str(preview["fingerprint"])  # type: ignore[index]
             actions = {action["path"]: action for action in preview["actions"]}  # type: ignore[index]
-            self.assertEqual(actions[".claude/settings.json"]["action"], "create")
+            self.assertNotIn(".claude/settings.json", actions)
+            self.assertFalse((root / ".claude/settings.json").exists())
+            self.assertEqual(
+                preview_envelope.as_dict()["backup"],
+                {
+                    "directory": str(backup),
+                    "manifest": None,
+                    "required": False,
+                    "status": "available",
+                },
+            )
+
+            without_compatibility_flag = self.coordinate(
+                root,
+                with_claude_settings=False,
+                backup_dir=backup,
+            )
+            self.assertEqual(
+                without_compatibility_flag.as_dict()["preview"]["fingerprint"],  # type: ignore[index]
+                fingerprint,
+            )
 
             answer_path = Path(answer_directory).resolve() / "answers.json"
             answer_path.write_text("{}\n", encoding="utf-8")
@@ -303,13 +331,6 @@ class SetupFlowTests(unittest.TestCase):
                 self.coordinate(root, apply=True, approve_preview="")
             with self.assertRaisesRegex(InitError, "requires setup --apply"):
                 self.coordinate(root, approve_preview=fingerprint)
-            with self.assertRaisesRegex(InitError, "does not match"):
-                self.coordinate(
-                    root,
-                    apply=True,
-                    approve_preview=fingerprint,
-                    with_claude_settings=False,
-                )
 
             (root / "AGENTS.md").write_text("# Changed after preview\n", encoding="utf-8")
             before_stale = self.snapshot(root)
@@ -318,11 +339,17 @@ class SetupFlowTests(unittest.TestCase):
                     root,
                     apply=True,
                     approve_preview=fingerprint,
-                    with_claude_settings=True,
+                    with_claude_settings=False,
+                    backup_dir=backup,
                 )
             self.assertEqual(self.snapshot(root), before_stale)
+            self.assertFalse(backup.exists())
 
-            refreshed = self.coordinate(root, with_claude_settings=True)
+            refreshed = self.coordinate(
+                root,
+                with_claude_settings=True,
+                backup_dir=backup,
+            )
             refreshed_fingerprint = str(refreshed.as_dict()["preview"]["fingerprint"])  # type: ignore[index]
             stdout = io.StringIO()
             with mock.patch("reporivet.setup.audit_project", wraps=audit_project) as audited:
@@ -332,6 +359,7 @@ class SetupFlowTests(unittest.TestCase):
                         apply=True,
                         approve_preview=refreshed_fingerprint,
                         with_claude_settings=True,
+                        backup_dir=backup,
                         stdin_is_tty=True,
                         input_fn=lambda _prompt: self.fail("apply must never prompt"),
                     )
@@ -341,10 +369,17 @@ class SetupFlowTests(unittest.TestCase):
             self.assertEqual(applied.as_dict()["mode"], "apply")
             self.assertFalse(applied.as_dict()["eligible_for_apply"])
             self.assertEqual(applied.as_dict()["input"], {"mode": "none", "prompted": False, "recorded": False})
+            self.assertFalse((root / ".claude/settings.json").exists())
             self.assertEqual(
-                (root / ".claude/settings.json").read_text(encoding="utf-8"),
-                read_asset("document-first/optional/claude-settings.deny-only.json.tmpl"),
+                applied.as_dict()["backup"],
+                {
+                    "directory": str(backup),
+                    "manifest": str(backup / "manifest.json"),
+                    "required": False,
+                    "status": "applied",
+                },
             )
+            self.assertTrue((backup / "manifest.json").is_file())
 
     def test_conflict_is_ineligible_and_apply_preserves_external_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
@@ -408,12 +443,12 @@ class SetupFlowTests(unittest.TestCase):
             self.assertIsInstance(preview, dict)
             assert isinstance(preview, dict)
             actions = {action["path"]: action for action in preview["actions"]}
-            target = ".claude/skills/release-check/SKILL.md"
+            target = "docs/runbooks/release-check.md"
             self.assertEqual(actions[target]["action"], "create")
-            self.assertEqual(actions[target]["content"], render_procedure_skill(valid))
+            self.assertEqual(actions[target]["content"], render_procedure_runbook(valid))
             for excluded in ("proposed-only", "open-only", "source-only", "incomplete"):
                 self.assertNotIn(
-                    f".claude/skills/{excluded}/SKILL.md",
+                    f"docs/runbooks/{excluded}.md",
                     actions,
                 )
             self.assertEqual(
@@ -436,14 +471,14 @@ class SetupFlowTests(unittest.TestCase):
             )
             self.assertEqual(
                 (root / target).read_text(encoding="utf-8"),
-                render_procedure_skill(valid),
+                render_procedure_runbook(valid),
             )
             self.assertEqual(
                 applied.as_dict()["preview"]["diagnostics"],  # type: ignore[index]
                 preview["diagnostics"],
             )
 
-    def test_procedure_skills_preserve_existing_and_stale_files_and_refuse_symlinks(self) -> None:
+    def test_legacy_procedure_skills_preserve_existing_and_stale_files_and_refuse_symlinks(self) -> None:
         valid = self.procedure()
         with tempfile.TemporaryDirectory() as answer_directory:
             answers = Path(answer_directory).resolve() / "answers.json"
@@ -470,7 +505,10 @@ class SetupFlowTests(unittest.TestCase):
                 preview = envelope.as_dict()["preview"]
                 actions = {action["path"]: action for action in preview["actions"]}  # type: ignore[index]
                 self.assertEqual(actions[".claude/skills/release-check/SKILL.md"]["action"], "preserve")
-                self.assertNotIn(".claude/skills/old-name/SKILL.md", actions)
+                self.assertEqual(
+                    actions[".claude/skills/old-name/SKILL.md"]["action"],
+                    "preserve",
+                )
                 applied = self.coordinate(
                     root,
                     apply=True,
@@ -510,21 +548,18 @@ class SetupFlowTests(unittest.TestCase):
             preview = self.coordinate(root)
             fingerprint = str(preview.as_dict()["preview"]["fingerprint"])  # type: ignore[index]
             before = self.snapshot(root)
-            original_create = _GuidedSetupTransaction.create_file
+            original_create = migration._apply_setup_create
             calls = 0
 
-            def fail_second_create(
-                transaction: _GuidedSetupTransaction,
-                relative: str,
-                content: bytes,
-            ) -> None:
+            def fail_second_create(*args: object, **kwargs: object) -> object:
                 nonlocal calls
                 calls += 1
+                result = original_create(*args, **kwargs)
                 if calls == 2:
                     raise OSError("injected setup failure")
-                original_create(transaction, relative, content)
+                return result
 
-            with mock.patch.object(_GuidedSetupTransaction, "create_file", fail_second_create):
+            with mock.patch.object(migration, "_apply_setup_create", side_effect=fail_second_create):
                 with self.assertRaisesRegex(InitError, "rolled back"):
                     self.coordinate(
                         root,

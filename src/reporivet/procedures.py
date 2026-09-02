@@ -1,7 +1,7 @@
-"""Validation and rendering for confirmed project procedure Skills.
+"""Validation and rendering for confirmed project procedure runbooks.
 
 This module is deliberately pure.  It parses the visible Confirmed values from
-``project-definition.draft.md`` and calculates instruction-only Skill targets;
+``project-definition.draft.md`` and calculates static Markdown runbook targets;
 filesystem classification, preservation, and writes belong to guided setup.
 """
 
@@ -181,8 +181,8 @@ class ProcedureCollection:
 
 
 @dataclass(frozen=True, slots=True)
-class ProcedureSkillTarget:
-    """Pure calculated content for one project-owned Skill target."""
+class ProcedureRunbookTarget:
+    """Pure calculated content for one project-owned Markdown runbook."""
 
     procedure: ProcedureSpec
     path: str
@@ -201,14 +201,14 @@ class ProcedureSkillTarget:
 
 
 @dataclass(frozen=True, slots=True)
-class ProcedureSkillPlan:
-    """Calculated Skill targets plus parse diagnostics for guided integration."""
+class ProcedureRunbookPlan:
+    """Calculated runbook targets plus parse diagnostics for guided integration."""
 
-    targets: tuple[ProcedureSkillTarget, ...]
+    targets: tuple[ProcedureRunbookTarget, ...]
     diagnostics: tuple[ProcedureDiagnostic, ...]
 
     @property
-    def skills(self) -> tuple[ProcedureSkillTarget, ...]:
+    def runbooks(self) -> tuple[ProcedureRunbookTarget, ...]:
         return self.targets
 
     @property
@@ -216,7 +216,7 @@ class ProcedureSkillPlan:
         return tuple(target.procedure for target in self.targets)
 
     @property
-    def eligible(self) -> tuple[ProcedureSkillTarget, ...]:
+    def eligible(self) -> tuple[ProcedureRunbookTarget, ...]:
         return self.targets
 
     def as_dict(self) -> dict[str, object]:
@@ -380,7 +380,7 @@ def parse_confirmed_procedures(
 
     The caller supplies the ``procedures`` topic's Confirmed values explicitly.
     Proposed, Open, and Sources values therefore cannot accidentally become
-    Skills through this API.  No value is executed or read from the filesystem.
+    runbooks through this API.  No value is executed or read from the filesystem.
     """
 
     values = _confirmed_values(confirmed)
@@ -427,22 +427,26 @@ parse_confirmed_procedure_records = parse_confirmed_procedures
 canonical_procedure_record = canonicalize_procedure_record
 
 
-def procedure_skill_path(procedure: ProcedureSpec | str) -> Path:
-    """Calculate the relative target path for a procedure Skill."""
+def procedure_runbook_path(procedure: ProcedureSpec | str) -> Path:
+    """Calculate the relative target path for a procedure runbook."""
 
     slug = procedure.slug if isinstance(procedure, ProcedureSpec) else _validate_slug(procedure)
-    return Path(".claude") / "skills" / slug / "SKILL.md"
+    return Path("docs") / "runbooks" / f"{slug}.md"
 
 
-def calculate_procedure_skill_path(procedure: ProcedureSpec | str) -> str:
-    """Return the calculated Skill path in repository-relative POSIX form."""
+def calculate_procedure_runbook_path(procedure: ProcedureSpec | str) -> str:
+    """Return the calculated runbook path in repository-relative POSIX form."""
 
-    return procedure_skill_path(procedure).as_posix()
+    return procedure_runbook_path(procedure).as_posix()
 
 
 def _frontmatter_scalar(value: str) -> str:
-    # Keep ordinary output as readable as the fixed role Skills.  Quote values
-    # containing YAML-significant punctuation while retaining deterministic UTF-8.
+    """Render one legacy Skill frontmatter scalar deterministically.
+
+    This helper is retained only for the private legacy ownership proof below;
+    current generated output never uses frontmatter.
+    """
+
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _.,;!?()/+'`-]*", value):
         return value
     return json.dumps(value, ensure_ascii=False)
@@ -452,11 +456,246 @@ def _bullet_section(title: str, values: tuple[str, ...]) -> list[str]:
     return [f"## {title}", "", *(f"- {value}" for value in values)]
 
 
-def render_procedure_skill(procedure: ProcedureSpec) -> str:
-    """Render one deterministic instruction-only Claude Skill."""
+def render_procedure_runbook(procedure: ProcedureSpec) -> str:
+    """Render one deterministic plain Markdown procedure runbook.
+
+    The returned content is ordinary Markdown only.  It intentionally has no
+    frontmatter, executor, command-registration, hook, or permission metadata.
+    """
 
     if not isinstance(procedure, ProcedureSpec):
-        raise ProcedureValidationError("render_procedure_skill expects a ProcedureSpec")
+        raise ProcedureValidationError("render_procedure_runbook expects a ProcedureSpec")
+    lines = [
+        f"# {procedure.title}",
+        "",
+        "## Trigger",
+        "",
+        procedure.trigger,
+        "",
+        *_bullet_section("Required reads", procedure.reads),
+        "",
+        *_bullet_section("Actions", procedure.actions),
+        "",
+        *_bullet_section("Stop conditions", procedure.stop_conditions),
+        "",
+        *_bullet_section("Evidence", procedure.evidence),
+        "",
+        *_bullet_section("Permissions", procedure.permissions),
+        "",
+        *_bullet_section("Rollback", procedure.rollback),
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# A descriptive alias for callers that treat the rendered file as content.
+procedure_runbook_content = render_procedure_runbook
+
+
+def build_procedure_runbook_plan(
+    confirmed: Iterable[object] | object,
+) -> ProcedureRunbookPlan:
+    """Calculate eligible runbook targets and retain all validation diagnostics."""
+
+    collection = parse_confirmed_procedures(confirmed)
+    targets = tuple(
+        ProcedureRunbookTarget(
+            procedure=procedure,
+            path=calculate_procedure_runbook_path(procedure),
+            content=render_procedure_runbook(procedure),
+        )
+        for procedure in collection.procedures
+    )
+    return ProcedureRunbookPlan(targets=targets, diagnostics=collection.diagnostics)
+
+
+# Integration-friendly aliases; all are pure calculations and perform no I/O.
+procedure_runbook_targets = build_procedure_runbook_plan
+confirmed_procedure_runbooks = build_procedure_runbook_plan
+
+
+# The following parser and renderer are intentionally private and frozen.  They
+# recognize only the exact Skill format emitted by the pre-runbook generator.
+# Cleanup code may claim a legacy file only when this parser succeeds and the
+# canonical legacy rerender is byte-for-byte identical to the candidate bytes.
+_LEGACY_SKILL_SECTIONS = (
+    ("reads", "Required reads"),
+    ("actions", "Actions"),
+    ("stop_conditions", "Stop conditions"),
+    ("evidence", "Evidence"),
+    ("permissions", "Permissions"),
+    ("rollback", "Rollback"),
+)
+
+
+def _parse_legacy_frontmatter_scalar(value: str) -> str | None:
+    if not value:
+        return None
+    if value.startswith('"'):
+        try:
+            decoded = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(decoded, str) or json.dumps(decoded, ensure_ascii=False) != value:
+            return None
+        return decoded
+    if _frontmatter_scalar(value) != value:
+        return None
+    return value
+
+
+def _parse_legacy_bullets(
+    lines: list[str],
+    cursor: int,
+    *,
+    field_name: str,
+    heading: str,
+) -> tuple[tuple[str, ...], int] | None:
+    if cursor >= len(lines) or lines[cursor] != f"## {heading}":
+        return None
+    if cursor + 1 >= len(lines) or lines[cursor + 1] != "":
+        return None
+    cursor += 2
+    values: list[str] = []
+    while cursor < len(lines) and lines[cursor].startswith("- "):
+        value = lines[cursor][2:]
+        try:
+            normalized = _validate_scalar(value, f"{field_name}[{len(values)}]")
+        except ProcedureValidationError:
+            return None
+        if normalized != value:
+            return None
+        values.append(value)
+        cursor += 1
+    if not values:
+        return None
+    return tuple(values), cursor
+
+
+def _parse_legacy_procedure_skill(content: bytes | str) -> ProcedureSpec | None:
+    """Parse an exact known-format legacy procedure Skill, if owned.
+
+    Returning a spec is useful to setup transition code that converts an exact
+    legacy Skill into its corresponding static runbook.  ``None`` means the
+    bytes are not a strict instance of the frozen legacy format.
+    """
+
+    if isinstance(content, bytes):
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+        original_bytes = content
+    elif isinstance(content, str):
+        text = content
+        try:
+            original_bytes = text.encode("utf-8")
+        except UnicodeEncodeError:
+            return None
+    else:
+        return None
+    if not text.endswith("\n") or "\r" in text:
+        return None
+    lines = text[:-1].split("\n")
+    if len(lines) < 1 or lines[0] != "---":
+        return None
+    if len(lines) < 4 or lines[3] != "---":
+        return None
+
+    name_prefix = "name: "
+    description_prefix = "description: "
+    if not lines[1].startswith(name_prefix) or not lines[2].startswith(description_prefix):
+        return None
+    try:
+        slug = _validate_slug(lines[1][len(name_prefix) :])
+    except ProcedureValidationError:
+        return None
+    description = _parse_legacy_frontmatter_scalar(
+        lines[2][len(description_prefix) :]
+    )
+    if description is None:
+        return None
+
+    cursor = 4
+    if cursor >= len(lines) or lines[cursor] != "":
+        return None
+    cursor += 1
+    if cursor >= len(lines) or not lines[cursor].startswith("# ") or lines[cursor].startswith("## "):
+        return None
+    title = lines[cursor][2:]
+    try:
+        if _validate_scalar(title, "title") != title:
+            return None
+    except ProcedureValidationError:
+        return None
+    cursor += 1
+    if cursor >= len(lines) or lines[cursor] != "":
+        return None
+    cursor += 1
+    if cursor >= len(lines) or lines[cursor] != "## Trigger":
+        return None
+    if cursor + 1 >= len(lines) or lines[cursor + 1] != "":
+        return None
+    cursor += 2
+    if cursor >= len(lines):
+        return None
+    trigger = lines[cursor]
+    try:
+        if _validate_scalar(trigger, "trigger") != trigger:
+            return None
+    except ProcedureValidationError:
+        return None
+    cursor += 1
+    if cursor >= len(lines) or lines[cursor] != "":
+        return None
+    cursor += 1
+
+    parsed_fields: dict[str, tuple[str, ...]] = {}
+    for section_index, (field_name, heading) in enumerate(_LEGACY_SKILL_SECTIONS):
+        parsed = _parse_legacy_bullets(
+            lines,
+            cursor,
+            field_name=field_name,
+            heading=heading,
+        )
+        if parsed is None:
+            return None
+        values, cursor = parsed
+        parsed_fields[field_name] = values
+        if section_index < len(_LEGACY_SKILL_SECTIONS) - 1:
+            if cursor >= len(lines) or lines[cursor] != "":
+                return None
+            cursor += 1
+    if cursor != len(lines):
+        return None
+
+    try:
+        procedure = ProcedureSpec(
+            slug=slug,
+            title=title,
+            trigger=trigger,
+            reads=parsed_fields["reads"],
+            actions=parsed_fields["actions"],
+            stop_conditions=parsed_fields["stop_conditions"],
+            evidence=parsed_fields["evidence"],
+            permissions=parsed_fields["permissions"],
+            rollback=parsed_fields["rollback"],
+        )
+    except ProcedureValidationError:
+        return None
+    if description != f"{procedure.title}. Use when {procedure.trigger}.":
+        return None
+    if _render_legacy_procedure_skill(procedure).encode("utf-8") != original_bytes:
+        return None
+    return procedure
+
+
+def _render_legacy_procedure_skill(procedure: ProcedureSpec) -> str:
+    """Render the frozen pre-runbook procedure Skill format for proof only."""
+
+    if not isinstance(procedure, ProcedureSpec):
+        raise ProcedureValidationError(
+            "_render_legacy_procedure_skill expects a ProcedureSpec"
+        )
     description = f"{procedure.title}. Use when {procedure.trigger}."
     lines = [
         "---",
@@ -485,30 +724,23 @@ def render_procedure_skill(procedure: ProcedureSpec) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-# A descriptive alias for callers that treat the rendered file as content.
-procedure_skill_content = render_procedure_skill
+def _legacy_procedure_skill_ownership_proof(
+    content: bytes | str,
+) -> ProcedureSpec | None:
+    """Return the spec only when strict parse and exact legacy rerender agree."""
+
+    return _parse_legacy_procedure_skill(content)
 
 
-def build_procedure_skill_plan(
-    confirmed: Iterable[object] | object,
-) -> ProcedureSkillPlan:
-    """Calculate eligible Skill targets and preserve all validation diagnostics."""
+def _is_exact_legacy_procedure_skill(content: bytes | str) -> bool:
+    """Return whether content is an exact canonical legacy procedure Skill."""
 
-    collection = parse_confirmed_procedures(confirmed)
-    targets = tuple(
-        ProcedureSkillTarget(
-            procedure=procedure,
-            path=calculate_procedure_skill_path(procedure),
-            content=render_procedure_skill(procedure),
-        )
-        for procedure in collection.procedures
-    )
-    return ProcedureSkillPlan(targets=targets, diagnostics=collection.diagnostics)
+    return _legacy_procedure_skill_ownership_proof(content) is not None
 
 
-# Integration-friendly aliases; all are pure calculations and perform no I/O.
-procedure_skill_targets = build_procedure_skill_plan
-confirmed_procedure_skills = build_procedure_skill_plan
+# Descriptive private aliases for setup transition code and focused checks.
+_parse_legacy_skill = _parse_legacy_procedure_skill
+_prove_legacy_procedure_skill_ownership = _legacy_procedure_skill_ownership_proof
 
 
 __all__ = [
@@ -517,21 +749,21 @@ __all__ = [
     "RESERVED_PROCEDURE_SLUGS",
     "ProcedureCollection",
     "ProcedureDiagnostic",
-    "ProcedureSkillPlan",
-    "ProcedureSkillTarget",
+    "ProcedureRunbookPlan",
+    "ProcedureRunbookTarget",
     "ProcedureSpec",
     "ProcedureValidationError",
-    "build_procedure_skill_plan",
-    "calculate_procedure_skill_path",
+    "build_procedure_runbook_plan",
+    "calculate_procedure_runbook_path",
     "canonical_procedure_record",
     "canonicalize_procedure_record",
-    "confirmed_procedure_skills",
+    "confirmed_procedure_runbooks",
     "parse_confirmed_procedure_records",
     "parse_confirmed_procedures",
-    "procedure_skill_content",
-    "procedure_skill_path",
-    "procedure_skill_targets",
-    "render_procedure_skill",
+    "procedure_runbook_content",
+    "procedure_runbook_path",
+    "procedure_runbook_targets",
+    "render_procedure_runbook",
     "serialize_procedure_record",
     "serialize_procedure_spec",
 ]

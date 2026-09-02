@@ -1,11 +1,47 @@
 # Runbooks
 
-Runbooks contain reviewed, repeatable operational procedures. `docs/OPERATIONS.md` remains the current operations authority and links applicable runbooks.
+This directory contains static, project-owned operation documentation subordinate to [`../OPERATIONS.md`](../OPERATIONS.md). A runbook explains a reviewed procedure and its evidence; it is not an executor, command registry, hook, scheduler, or permission-bearing configuration.
 
-Use `_template.md`. Every runbook states trigger and scope, prerequisites and authorization, exact project-owned commands, expected observations, stop conditions, rollback or recovery, retained evidence, and escalation. Keep unknown environment-specific details Open rather than inventing them.
+## Generation boundary
 
-## Guided procedure candidates
+Only one complete, unique, user-confirmed strict structured procedure record in `Confirmed` can produce a deterministic ordinary Markdown file at `docs/runbooks/<slug>.md`. The record must contain exactly these nine fields:
+
+- `slug`
+- `title`
+- `trigger`
+- `reads`
+- `actions`
+- `stop_conditions`
+- `evidence`
+- `permissions`
+- `rollback`
+
+All nine fields are required. No aliases, additional fields, values, or defaults are accepted or inferred. Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook.
+
+Generated runbooks contain no frontmatter, executor metadata, hooks, command registration, shell metadata, tool permissions, or other privilege-bearing configuration. They are ordinary Markdown and remain useful after setup without a package or target runtime. Project and host owners perform any actual command execution, Agent dispatch, deployment, publication, signing, or external action.
+
+No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command. Do not infer or execute a procedure from a partial record, a generic note, a filename, a marker, or a location.
+
+## Guided procedure evidence
 
 {{PROCEDURE_EVIDENCE}}
 
-A procedure becomes eligible for a project-owned Skill only when its structured record is complete and Confirmed. Completeness requires Confirmed owner, trigger and scope, prerequisites and authorization, exact steps, expected observations or evidence, stop conditions, rollback or recovery, and escalation. Only complete Confirmed structured procedure records can produce an instruction-only `.claude/skills/<slug>/SKILL.md` through resumed `reporivet setup`. Do not pre-generate a project-specific Skill: no procedure is inferred or executed, and existing differing, stale, or arbitrary Skills are preserved rather than deleted. Keep Skill frontmatter instruction-only and least privilege, without settings grants, hooks, tools, shell, executor, or other runtime metadata.
+The evidence above remains separated into Confirmed, Proposed, Open, and Sources. Only the complete, unique, user-confirmed strict record described above can render a static runbook.
+
+## Existing content and review
+
+Preserve existing differing, stale, arbitrary, unsafe, symlinked, and nonregular runbooks rather than overwriting them by inference. Review exact ownership, the nine-field record, permissions, stop conditions, rollback, and evidence before accepting a new static document. A `permissions` field describes the project-approved boundary; it does not grant capability.
+
+## Runbook sections
+
+A qualifying runbook should make the following visible in ordinary Markdown:
+
+- purpose and trigger;
+- exact reads and prerequisites;
+- ordered actions owned by the project;
+- stop conditions and refusal cases;
+- required permissions and external boundaries;
+- observable evidence and expected result; and
+- rollback or recovery conditions.
+
+Keep project-specific commands in the runbook only when the project has confirmed them. Keep credentials and secret values out of the file. Link back to `OPERATIONS.md`, the governing Plan, and relevant decisions or quality evidence.

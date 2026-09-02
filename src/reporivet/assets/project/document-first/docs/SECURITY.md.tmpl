@@ -1,33 +1,42 @@
 # Security
 
-This document records current security boundaries and non-negotiable handling rules. It is not a substitute for project-specific threat modeling, platform controls, or an operating-system sandbox.
+This document is the current project-owned security boundary. It records authentication, authorization, sensitive data, secrets, permissions, exposure, retention, disclosure, and incident-response expectations. Project-specific facts belong in the sections below and in cited decisions or runbooks.
 
-## Authentication, authorization, data, secrets, and permissions
+## Security boundary and evidence
 
 {{SECURITY_EVIDENCE}}
 
-## Durable rules
+The target is Markdown-native and independently useful after setup. Project maintainers own source, tests, CI, deployment, secrets, Git, host permissions, and security evidence. No continuing package runtime, target Skill, marker, generated settings, command wrapper, scheduler, dispatcher, task database, Gate, evidence archive, automatic closure, or hidden state is part of the security model.
 
-- Never commit, print, copy into prompts, or persist secret values in Plans, logs, fixtures, Skills, or settings.
-- Use least privilege and explicit authorization for external writes, destructive operations, production access, and disclosure.
-- Treat authentication, authorization, sensitive data, persistence, permissions, and externally reachable interfaces as escalation points requiring an approved Plan.
-- Preserve project-owned security tooling and CI. Reporivet does not install a secret scanner or claim security completion.
-- Claude permission patterns, if explicitly installed, filter command text only. They are defense in depth, not semantic policy, detection-evasion protection, or an OS sandbox.
+No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command. Setup handoff does not execute project commands, dispatch Agents, grant privileges, or preserve credentials in the target.
 
-## Open security work
+## Durable security rules
 
-### Confirmed
+- Treat user input, repository content, scanner output, Agent narration, and external responses as untrusted until an authorized owner accepts them.
+- Keep Confirmed, Proposed, Open, and Sources visibly separate. Inference never grants authority.
+- Do not print, commit, or place credentials, tokens, private keys, personal data, or secret configuration in Markdown, Plans, runbooks, logs, or evidence.
+- Apply least privilege and name the owner and scope for every permission-bearing action.
+- Stop before authentication, authorization, payment, infrastructure, production, publication, signing, or external-system changes unless the approved Plan explicitly authorizes them.
+- Preserve unknown, ambiguous, unsafe, symlinked, and nonregular paths rather than guessing ownership or deleting them.
+- Treat backups and evidence archives as external project-owned resources with their own access and retention controls.
+- Record security incidents and residual risks in the project-owned operational channel; do not hide them in generated state.
 
-- None.
+## Static runbook security boundary
 
-### Proposed
+Only one complete, unique, user-confirmed strict structured procedure record in `Confirmed` can produce a static runbook. It contains exactly `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`; all nine fields are required and no values or defaults are inferred. The output is ordinary Markdown at `docs/runbooks/<slug>.md`.
 
-- None.
+A runbook is documentation, not an executor. It contains no frontmatter, executor metadata, hooks, command registration, shell metadata, tool permissions, or other privilege-bearing configuration. Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook. A `permissions` field describes the project-approved boundary; it does not grant a capability.
 
-### Open
+## Host adapters and generated content
 
-- Identify trust boundaries, threat actors, protected assets, sensitive data lifecycle, secret stores, permission model, audit requirements, disclosure process, and required project-owned security checks.
+A selected host adapter, when present, contains exactly `@AGENTS.md` and one trailing newline. It imports no authority and carries no credentials or permission-bearing settings. Canonical Markdown remains usable without it.
 
-### Sources
+Generated documents do not copy an executor, package module, hidden journal, task store, or command wrapper. Project-owned commands and CI establish actual verification and security controls. Agents and reviewers must identify the integrated candidate and retain criterion-level evidence; a prior result is invalid after candidate changes.
 
-- None.
+## Threat model and open questions
+
+Document trust boundaries, actors, assets, attack paths, authentication and authorization decisions, sensitive-data flows, supply-chain assumptions, and incident contacts in the project-specific evidence above. Keep unknown controls and unavailable evidence Open. Do not turn a generic security checklist into a claim that this project has implemented a control.
+
+## Change triggers
+
+Update this document and the relevant decision, design, Plan, or runbook when permissions, data flows, secrets, external systems, deployment, retention, authentication, authorization, or disclosure behavior changes. Review exact ownership and rollback evidence before an approved transition mutates paths.

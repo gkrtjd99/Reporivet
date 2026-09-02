@@ -9,26 +9,32 @@ import stat
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
+from types import SimpleNamespace
+from typing import Callable, Mapping, Sequence
 
 from .guided import (
     ACTIVE_PLAN_STATES,
     LEGACY_RUNTIME_PATHS,
+    DefinitionDraft,
     SetupAction,
     SetupPreview,
     _GuidedSetupTransaction,
     _assert_action_current,
-    _build_guided_setup_preview,
     _initial_definition,
     _open_absolute_directory,
+    _open_absolute_parent,
     _open_directory_component,
     _parse_frontmatter,
+    _path_state,
     _read_open_regular_file,
     _regular_file_open_flags,
+    _setup_action,
     _stat_content_identity,
     _stat_identity,
+    _target_asset_contents,
 )
 from .initializer import MANAGED_MARKER, InitError, validate_root
+from .procedures import build_procedure_runbook_plan
 
 MIGRATION_FROM = "0.2"
 LEGACY_ASSET_VERSION = "0.2.0"
@@ -495,6 +501,95 @@ def _canonical_json(payload: object) -> bytes:
     ).encode("utf-8")
 
 
+def _rebuild_setup_preview(
+    actions: Sequence[SetupAction],
+    diagnostics: Sequence[object] = (),
+) -> SetupPreview:
+    """Recompute the frozen setup-preview fingerprint after bounded filtering."""
+
+    action_tuple = tuple(actions)
+    diagnostic_tuple = tuple(diagnostics)
+    payload = {
+        "actions": [action.as_dict() for action in action_tuple],
+        "diagnostics": [
+            SetupPreview._diagnostic_dict(diagnostic)
+            for diagnostic in diagnostic_tuple
+        ],
+        "schema": "reporivet.setup-preview/v1",
+    }
+    return SetupPreview(
+        action_tuple,
+        _sha256(_canonical_json(payload)),
+        diagnostic_tuple,
+    )
+
+
+def _bind_setup_preview(
+    preview: SetupPreview,
+    *,
+    root: Path | None = None,
+    backup_dir: Path | None,
+) -> SetupPreview:
+    """Bind an optional external backup destination into setup approval."""
+
+    payload = {
+        "backup_dir": None if backup_dir is None else str(backup_dir),
+        "root": None if root is None else str(root),
+        "schema": "reporivet.setup-approval/v1",
+        "setup_fingerprint": preview.fingerprint,
+    }
+    return SetupPreview(
+        preview.actions,
+        _sha256(_canonical_json(payload)),
+        preview.diagnostics,
+    )
+
+
+def _build_migration_setup_preview(
+    *,
+    root: Path,
+    draft: DefinitionDraft,
+    state_reader: Callable[[str], tuple[str, bytes]] | None = None,
+) -> SetupPreview:
+    """Build only the historical migrate setup surface, without cleanup actions.
+
+    Existing-target Skill/settings/marker cleanup belongs to explicit setup.  The
+    public 0.2 migration preview keeps its setup actions limited to the current
+    generated bundle while retaining the frozen setup-preview shape.
+    """
+
+    contents = _target_asset_contents(
+        root,
+        draft,
+        with_claude_settings=False,
+    )
+    procedure_plan = build_procedure_runbook_plan(
+        draft.evidence["procedures"].confirmed
+    )
+    for target in procedure_plan.targets:
+        contents[target.path] = target.content
+    actions = tuple(
+        sorted(
+            (
+                _setup_action(
+                    root,
+                    relative,
+                    contents[relative],
+                    state_reader=state_reader,
+                    path_state=_path_state(root, relative),
+                )
+                for relative in sorted(contents)
+            ),
+            key=lambda action: (
+                action.path,
+                action.action,
+                action.proposed_path or "",
+            ),
+        )
+    )
+    return _rebuild_setup_preview(actions, procedure_plan.diagnostics)
+
+
 def _require_from_version(from_version: str) -> None:
     if from_version != MIGRATION_FROM:
         raise InitError("migration supports only --from 0.2")
@@ -923,9 +1018,8 @@ def preview_migration(
     view = _RootView(root)
     try:
         draft = _initial_definition(root, None)
-        setup = _build_guided_setup_preview(
+        setup = _build_migration_setup_preview(
             root=root,
-            with_claude_settings=False,
             state_reader=view.regular_file_state,
             draft=draft,
         )
@@ -1066,6 +1160,28 @@ def _planned_postimage(spec: _MutationSpec, preimage: _PathState) -> dict[str, o
     }
 
 
+def _transaction_manifest_payload(
+    *,
+    root: Path,
+    backup_dir: Path,
+    from_version: str,
+    fingerprint: str,
+    entries: Sequence[dict[str, object]],
+    status_value: str,
+    unrecovered: Sequence[str] = (),
+) -> dict[str, object]:
+    return {
+        "backup_dir": str(backup_dir),
+        "entries": list(entries),
+        "from": from_version,
+        "preview_fingerprint": fingerprint,
+        "root": str(root),
+        "schema": "reporivet.migration-backup/v1",
+        "status": status_value,
+        "unrecovered": list(unrecovered),
+    }
+
+
 def _manifest_payload(
     *,
     preview: MigrationPreview,
@@ -1073,16 +1189,15 @@ def _manifest_payload(
     status_value: str,
     unrecovered: Sequence[str] = (),
 ) -> dict[str, object]:
-    return {
-        "backup_dir": str(preview.backup_dir),
-        "entries": list(entries),
-        "from": preview.from_version,
-        "preview_fingerprint": preview.fingerprint,
-        "root": str(preview.root),
-        "schema": "reporivet.migration-backup/v1",
-        "status": status_value,
-        "unrecovered": list(unrecovered),
-    }
+    return _transaction_manifest_payload(
+        root=preview.root,
+        backup_dir=preview.backup_dir,
+        from_version=preview.from_version,
+        fingerprint=preview.fingerprint,
+        entries=entries,
+        status_value=status_value,
+        unrecovered=unrecovered,
+    )
 
 
 def _write_manifest(path: Path, payload: Mapping[str, object]) -> None:
@@ -1114,78 +1229,241 @@ def _write_manifest(path: Path, payload: Mapping[str, object]) -> None:
         raise
 
 
+def _remove_partial_backup_tree(descriptor: int, *, label: str) -> None:
+    """Remove only the mode-restricted tree created during backup preparation."""
+
+    for name in sorted(os.listdir(descriptor), reverse=True):
+        try:
+            metadata = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        mode = stat.S_IMODE(metadata.st_mode)
+        if mode & 0o077:
+            raise InitError(
+                f"{label} partial backup path is no longer mode-restricted: {name}"
+            )
+        if stat.S_ISDIR(metadata.st_mode):
+            child_descriptor = _open_directory_component(descriptor, name)
+            try:
+                _remove_partial_backup_tree(child_descriptor, label=label)
+            finally:
+                os.close(child_descriptor)
+            try:
+                current = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if _stat_identity(current) != _stat_identity(metadata):
+                raise InitError(
+                    f"{label} partial backup directory changed during cleanup: {name}"
+                )
+            os.rmdir(name, dir_fd=descriptor)
+            continue
+        if stat.S_ISREG(metadata.st_mode):
+            file_descriptor = os.open(
+                name,
+                _regular_file_open_flags(),
+                dir_fd=descriptor,
+            )
+            try:
+                opened = os.fstat(file_descriptor)
+            finally:
+                os.close(file_descriptor)
+            if _stat_identity(opened) != _stat_identity(metadata):
+                raise InitError(
+                    f"{label} partial backup file changed during cleanup: {name}"
+                )
+            try:
+                current = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if _stat_identity(current) != _stat_identity(metadata):
+                raise InitError(
+                    f"{label} partial backup file changed during cleanup: {name}"
+                )
+            os.unlink(name, dir_fd=descriptor)
+            continue
+        raise InitError(
+            f"{label} partial backup contains an unsafe or nonregular path: {name}"
+        )
+
+
+def _remove_partial_external_backup(
+    backup: Path,
+    *,
+    expected_identity: tuple[int, int, int],
+    label: str,
+) -> None:
+    """Remove a newly created backup only while its root identity is unchanged."""
+
+    try:
+        parent_descriptor, name = _open_absolute_parent(backup)
+    except FileNotFoundError:
+        return
+    try:
+        try:
+            metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or _stat_identity(metadata) != expected_identity
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+        ):
+            raise InitError(
+                f"{label} partial backup directory changed; preserving it"
+            )
+        descriptor = _open_directory_component(parent_descriptor, name)
+        try:
+            _remove_partial_backup_tree(descriptor, label=label)
+        finally:
+            os.close(descriptor)
+        current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(current.st_mode)
+            or _stat_identity(current) != expected_identity
+            or stat.S_IMODE(current.st_mode) != 0o700
+        ):
+            raise InitError(
+                f"{label} partial backup directory changed during cleanup; preserving it"
+            )
+        os.rmdir(name, dir_fd=parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+
+def _create_external_backup_for_transaction(
+    *,
+    root: Path,
+    backup: Path,
+    from_version: str,
+    fingerprint: str,
+    specs: Sequence[_MutationSpec],
+    label: str,
+) -> tuple[Path, dict[str, object]]:
+    parent = backup.parent
+    if not parent.exists() or not parent.is_dir():
+        raise InitError(
+            f"{label} backup parent must already exist as an external directory"
+        )
+    if backup.exists() or backup.is_symlink():
+        raise InitError(f"{label} backup directory must not already exist")
+
+    backup_identity: tuple[int, int, int] | None = None
+    view: _RootView | None = None
+    try:
+        try:
+            backup.mkdir(mode=0o700, parents=False, exist_ok=False)
+            metadata = os.stat(backup, follow_symlinks=False)
+            backup_identity = _stat_identity(metadata)
+            backup.chmod(0o700)
+            metadata = os.stat(backup, follow_symlinks=False)
+            if (
+                not stat.S_ISDIR(metadata.st_mode)
+                or stat.S_IMODE(metadata.st_mode) != 0o700
+            ):
+                raise InitError(
+                    f"external {label} backup directory is not mode-restricted"
+                )
+        except OSError as exc:
+            raise InitError(f"cannot create external {label} backup: {exc}") from exc
+
+        entries: list[dict[str, object]] = []
+        view = _RootView(root)
+        try:
+            for spec in specs:
+                state = view.snapshot(
+                    spec.path,
+                    list_directory=spec.expected_type == "directory",
+                )
+                if not _state_matches_spec(state, spec):
+                    raise InitError(
+                        f"{label} target changed before backup: {spec.path}; rerun preview"
+                    )
+                backup_path: str | None = None
+                if state.kind == "regular":
+                    if state.content is None:
+                        raise InitError(
+                            f"{label} preimage could not be read safely: {spec.path}"
+                        )
+                    relative_backup = Path("preimages") / spec.path
+                    destination = backup / relative_backup
+                    destination.parent.mkdir(
+                        parents=True,
+                        exist_ok=True,
+                        mode=0o700,
+                    )
+                    for parent_path in (destination.parent, *destination.parent.parents):
+                        if parent_path == backup.parent:
+                            break
+                        if parent_path == backup or backup in parent_path.parents:
+                            parent_path.chmod(0o700)
+                    descriptor = os.open(
+                        destination,
+                        os.O_WRONLY
+                        | os.O_CREAT
+                        | os.O_EXCL
+                        | getattr(os, "O_NOFOLLOW", 0),
+                        0o600,
+                    )
+                    try:
+                        _RootView._write_all(descriptor, state.content)
+                        os.fchmod(descriptor, 0o600)
+                    finally:
+                        os.close(descriptor)
+                    backup_path = relative_backup.as_posix()
+                entries.append(
+                    {
+                        "operation": spec.operation,
+                        "path": spec.path,
+                        "postimage": _planned_postimage(spec, state),
+                        "preimage": _preimage_dict(state, backup_path),
+                    }
+                )
+        finally:
+            view.close()
+            view = None
+
+        manifest = _transaction_manifest_payload(
+            root=root,
+            backup_dir=backup,
+            from_version=from_version,
+            fingerprint=fingerprint,
+            entries=entries,
+            status_value="prepared",
+        )
+        manifest_path = backup / MANIFEST_NAME
+        _write_manifest(manifest_path, manifest)
+        return manifest_path, manifest
+    except Exception as exc:
+        if view is not None:
+            view.close()
+        if backup_identity is None:
+            raise
+        try:
+            _remove_partial_external_backup(
+                backup,
+                expected_identity=backup_identity,
+                label=label,
+            )
+        except Exception as cleanup_exc:
+            raise InitError(
+                f"{label} backup preparation failed ({exc}); partial backup was preserved: {cleanup_exc}"
+            ) from exc
+        raise
+
+
 def _create_external_backup(
     preview: MigrationPreview,
     specs: Sequence[_MutationSpec],
 ) -> tuple[Path, dict[str, object]]:
-    backup = preview.backup_dir
-    parent = backup.parent
-    if not parent.exists() or not parent.is_dir():
-        raise InitError("migration backup parent must already exist as an external directory")
-    if backup.exists() or backup.is_symlink():
-        raise InitError("migration backup directory must not already exist")
-    try:
-        backup.mkdir(mode=0o700, parents=False, exist_ok=False)
-        backup.chmod(0o700)
-    except OSError as exc:
-        raise InitError(f"cannot create external migration backup: {exc}") from exc
-
-    entries: list[dict[str, object]] = []
-    view = _RootView(preview.root)
-    try:
-        for spec in specs:
-            state = view.snapshot(
-                spec.path,
-                list_directory=spec.expected_type == "directory",
-            )
-            if not _state_matches_spec(state, spec):
-                raise InitError(
-                    f"migration target changed before backup: {spec.path}; rerun preview"
-                )
-            backup_path: str | None = None
-            if state.kind == "regular":
-                if state.content is None:
-                    raise InitError(f"migration preimage could not be read safely: {spec.path}")
-                relative_backup = Path("preimages") / spec.path
-                destination = backup / relative_backup
-                destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                for parent_path in (destination.parent, *destination.parent.parents):
-                    if parent_path == backup.parent:
-                        break
-                    if parent_path == backup or backup in parent_path.parents:
-                        parent_path.chmod(0o700)
-                descriptor = os.open(
-                    destination,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-                    0o600,
-                )
-                try:
-                    _RootView._write_all(descriptor, state.content)
-                    os.fchmod(descriptor, 0o600)
-                finally:
-                    os.close(descriptor)
-                backup_path = relative_backup.as_posix()
-            entries.append(
-                {
-                    "operation": spec.operation,
-                    "path": spec.path,
-                    "postimage": _planned_postimage(spec, state),
-                    "preimage": _preimage_dict(state, backup_path),
-                }
-            )
-    except Exception:
-        view.close()
-        raise
-    view.close()
-
-    manifest = _manifest_payload(
-        preview=preview,
-        entries=entries,
-        status_value="prepared",
+    return _create_external_backup_for_transaction(
+        root=preview.root,
+        backup=preview.backup_dir,
+        from_version=preview.from_version,
+        fingerprint=preview.fingerprint,
+        specs=specs,
+        label="migration",
     )
-    manifest_path = backup / MANIFEST_NAME
-    _write_manifest(manifest_path, manifest)
-    return manifest_path, manifest
 
 
 def _image_matches(state: _PathState, image: Mapping[str, object]) -> bool:
@@ -1243,14 +1521,419 @@ def _apply_setup_update(transaction: _GuidedSetupTransaction, action: SetupActio
     )
 
 
+_SETUP_MUTATING_ACTIONS = frozenset({"create", "update", "remove", "convert"})
+_SETUP_FILE_MODE = 0o644
+_SETUP_DIRECTORY_MODE = 0o755
+
+
+def _setup_path_is_forbidden(relative: str) -> bool:
+    return relative == ".harness/runs" or relative.startswith(".harness/runs/")
+
+
+def _setup_mutation_specs(
+    *,
+    root: Path,
+    preview: SetupPreview,
+) -> tuple[_MutationSpec, ...]:
+    """Translate the frozen guided classifications into one setup transaction."""
+
+    specs: dict[str, _MutationSpec] = {}
+
+    def add(spec: _MutationSpec) -> None:
+        if _setup_path_is_forbidden(spec.path):
+            raise InitError("setup transaction must not access retained .harness/runs content")
+        previous = specs.get(spec.path)
+        if previous is not None and previous != spec:
+            raise InitError(f"setup preview contains conflicting mutations: {spec.path}")
+        specs[spec.path] = spec
+
+    for action in preview.actions:
+        if action.action not in _SETUP_MUTATING_ACTIONS:
+            continue
+        if _setup_path_is_forbidden(action.path):
+            raise InitError("setup preview must not access retained .harness/runs content")
+
+        if action.action in {"update", "remove", "convert"}:
+            if action.ownership != "reporivet-generated":
+                raise InitError(
+                    f"setup mutation ownership is unproven and cannot be mutated: {action.path}"
+                )
+            if action.current_type != "regular" or not action.current_sha256:
+                raise InitError(
+                    f"setup mutation target lacks a regular-file, byte, and mode proof: {action.path}"
+                )
+            if action.current_mode is None:
+                raise InitError(
+                    f"setup mutation target lacks a mode proof: {action.path}"
+                )
+
+        if action.action == "create":
+            add(
+                _MutationSpec(
+                    path=action.path,
+                    operation="setup-create",
+                    expected_type="missing",
+                    proposed_content=action.content.encode("utf-8"),
+                )
+            )
+            continue
+
+        if action.action == "update":
+            if action.current_type != "regular" or not action.current_sha256:
+                raise InitError(
+                    f"setup update target is not a proven regular file: {action.path}"
+                )
+            add(
+                _MutationSpec(
+                    path=action.path,
+                    operation="setup-update",
+                    expected_type="regular",
+                    expected_sha256=action.current_sha256,
+                    expected_mode=action.current_mode,
+                    proposed_content=action.content.encode("utf-8"),
+                )
+            )
+            continue
+
+        if action.action == "remove":
+            add(
+                _MutationSpec(
+                    path=action.path,
+                    operation="remove-file",
+                    expected_type="regular",
+                    expected_sha256=action.current_sha256,
+                    expected_mode=action.current_mode,
+                )
+            )
+            continue
+
+        # A conversion either updates the exact marker-bearing source in place,
+        # or removes that source and creates its exact static runbook destination.
+        destination = action.proposed_path
+        if destination is None:
+            if action.proposed_type == "regular":
+                add(
+                    _MutationSpec(
+                        path=action.path,
+                        operation="setup-update",
+                        expected_type="regular",
+                        expected_sha256=action.current_sha256,
+                        expected_mode=action.current_mode,
+                        proposed_content=action.content.encode("utf-8"),
+                    )
+                )
+            elif action.proposed_type == "missing":
+                add(
+                    _MutationSpec(
+                        path=action.path,
+                        operation="remove-file",
+                        expected_type="regular",
+                        expected_sha256=action.current_sha256,
+                        expected_mode=action.current_mode,
+                    )
+                )
+            else:
+                raise InitError(f"setup conversion has an invalid postimage: {action.path}")
+            continue
+
+        if _setup_path_is_forbidden(destination):
+            raise InitError(
+                "setup conversion must not create content below retained .harness/runs"
+            )
+        destination_type = action.destination_current_type
+        if destination_type == "missing":
+            if action.destination_type != "regular" or not action.destination_content:
+                raise InitError(
+                    f"setup conversion destination lacks an exact regular runbook: {destination}"
+                )
+            add(
+                _MutationSpec(
+                    path=action.path,
+                    operation="remove-file",
+                    expected_type="regular",
+                    expected_sha256=action.current_sha256,
+                    expected_mode=action.current_mode,
+                )
+            )
+            add(
+                _MutationSpec(
+                    path=destination,
+                    operation="setup-create",
+                    expected_type="missing",
+                    proposed_content=action.destination_content.encode("utf-8"),
+                )
+            )
+        elif destination_type == "regular":
+            if (
+                action.destination_sha256
+                and action.destination_current_sha256 != action.destination_sha256
+            ):
+                raise InitError(
+                    f"setup conversion destination is not the exact existing runbook: {destination}"
+                )
+            add(
+                _MutationSpec(
+                    path=action.path,
+                    operation="remove-file",
+                    expected_type="regular",
+                    expected_sha256=action.current_sha256,
+                    expected_mode=action.current_mode,
+                )
+            )
+        else:
+            raise InitError(
+                f"setup conversion destination is unsafe or ambiguous: {destination}"
+            )
+
+    # Every generated destination must have a descriptor-safe parent. Missing
+    # parents are transaction-owned directories; existing non-directories are
+    # refusal conditions rather than paths to follow or replace.
+    view = _RootView(root)
+    try:
+        create_paths = [
+            spec.path
+            for spec in specs.values()
+            if spec.operation == "setup-create"
+        ]
+        for target in create_paths:
+            path = Path(target)
+            for parent in reversed(path.parents):
+                if parent == Path("."):
+                    continue
+                relative = parent.as_posix()
+                if _setup_path_is_forbidden(relative):
+                    raise InitError(
+                        "setup transaction must not create content below retained .harness/runs"
+                    )
+                state = view.snapshot(relative, read_regular=False)
+                if state.kind == "missing":
+                    add(
+                        _MutationSpec(
+                            path=relative,
+                            operation="setup-create-directory",
+                            expected_type="missing",
+                        )
+                    )
+                elif state.kind != "directory":
+                    raise InitError(f"setup parent is unsafe or non-directory: {relative}")
+    finally:
+        view.close()
+
+    return tuple(specs[path] for path in sorted(specs))
+
+
+class _SetupRootTransactionAdapter:
+    """Adapt the existing setup phase hooks to descriptor-relative mutation."""
+
+    def __init__(self, view: _RootView, specs: Sequence[_MutationSpec]) -> None:
+        self.view = view
+        self.specs = {spec.path: spec for spec in specs}
+
+    def create_file(self, relative: str, content: bytes) -> None:
+        spec = self.specs.get(relative)
+        if spec is None or spec.operation != "setup-create":
+            raise InitError(f"setup create is not part of the approved transaction: {relative}")
+        self.view.create_regular(relative, content, _SETUP_FILE_MODE)
+
+    def update_file(self, relative: str, content: bytes, current_sha256: str) -> None:
+        spec = self.specs.get(relative)
+        if spec is None or spec.operation != "setup-update":
+            raise InitError(f"setup update is not part of the approved transaction: {relative}")
+        mode = spec.expected_mode
+        if mode is None:
+            raise InitError(f"setup update has no mode proof: {relative}")
+        self.view.replace_regular(
+            relative,
+            expected_sha256=current_sha256,
+            expected_mode=mode,
+            content=content,
+            mode=mode,
+        )
+
+
+def _apply_setup_remove(view: _RootView, spec: _MutationSpec) -> None:
+    if spec.operation != "remove-file":
+        raise InitError(f"setup removal is not part of the approved transaction: {spec.path}")
+    view.unlink_regular(
+        spec.path,
+        expected_sha256=spec.expected_sha256,
+        expected_mode=spec.expected_mode,
+    )
+
+
+def _apply_setup_create_directory(view: _RootView, spec: _MutationSpec) -> None:
+    if spec.operation != "setup-create-directory":
+        raise InitError(
+            f"setup directory creation is not part of the approved transaction: {spec.path}"
+        )
+    view.make_directory(spec.path, _SETUP_DIRECTORY_MODE)
+
+
+def _setup_entries_without_backup(
+    *,
+    root: Path,
+    specs: Sequence[_MutationSpec],
+) -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    view = _RootView(root)
+    try:
+        for spec in specs:
+            state = view.snapshot(
+                spec.path,
+                list_directory=spec.expected_type == "directory",
+            )
+            if not _state_matches_spec(state, spec):
+                raise InitError(
+                    f"setup target changed before mutation: {spec.path}; rerun setup preview"
+                )
+            if state.kind == "regular":
+                raise InitError(
+                    "setup destructive target requires an external backup: " + spec.path
+                )
+            entries.append(
+                {
+                    "operation": spec.operation,
+                    "path": spec.path,
+                    "postimage": _planned_postimage(spec, state),
+                    "preimage": _preimage_dict(state, None),
+                }
+            )
+    finally:
+        view.close()
+    return entries
+
+
+def _setup_requires_backup(specs: Sequence[_MutationSpec]) -> bool:
+    return any(spec.expected_type == "regular" for spec in specs)
+
+
+def _apply_setup_transition(
+    *,
+    root: Path,
+    preview: SetupPreview,
+    backup_dir: Path | None,
+    preview_factory: Callable[[], SetupPreview],
+) -> Path | None:
+    """Apply one complete setup preview, optionally retaining rollback state."""
+
+    specs = _setup_mutation_specs(root=root, preview=preview)
+    if not specs:
+        return None
+    if _setup_requires_backup(specs) and backup_dir is None:
+        raise InitError(
+            "setup cleanup requires an external backup directory; rerun preview with --backup-dir"
+        )
+
+    manifest_path: Path | None = None
+    manifest: dict[str, object] | None = None
+    if backup_dir is None:
+        entries = _setup_entries_without_backup(root=root, specs=specs)
+    else:
+        manifest_path, manifest = _create_external_backup_for_transaction(
+            root=root,
+            backup=backup_dir,
+            from_version="setup",
+            fingerprint=preview.fingerprint,
+            specs=specs,
+            label="setup",
+        )
+        raw_entries = manifest["entries"]
+        if not isinstance(raw_entries, list):
+            raise InitError("setup backup manifest entries are malformed")
+        entries = raw_entries
+
+    try:
+        current = _bind_setup_preview(
+            preview_factory(),
+            root=root,
+            backup_dir=backup_dir,
+        )
+        if current.fingerprint != preview.fingerprint:
+            raise InitError(
+                "setup target or fingerprint changed after backup and immediately before mutation"
+            )
+        _validate_preimages_current(root, entries)
+
+        view = _RootView(root)
+        adapter = _SetupRootTransactionAdapter(view, specs)
+        try:
+            for spec in specs:
+                if spec.operation == "setup-create-directory":
+                    _apply_setup_create_directory(view, spec)
+                elif spec.operation == "setup-create":
+                    action = SimpleNamespace(
+                        path=spec.path,
+                        content=(spec.proposed_content or b"").decode("utf-8"),
+                    )
+                    _apply_setup_create(adapter, action)  # type: ignore[arg-type]
+                elif spec.operation == "setup-update":
+                    action = SimpleNamespace(
+                        path=spec.path,
+                        content=(spec.proposed_content or b"").decode("utf-8"),
+                        current_sha256=spec.expected_sha256,
+                    )
+                    _apply_setup_update(adapter, action)  # type: ignore[arg-type]
+                elif spec.operation == "remove-file":
+                    _apply_setup_remove(view, spec)
+                else:
+                    raise InitError(
+                        f"setup transaction contains an unsupported operation: {spec.operation}"
+                    )
+        finally:
+            view.close()
+
+        successful_entries = _capture_postimages(root, entries)
+        if manifest_path is not None:
+            successful_manifest = _transaction_manifest_payload(
+                root=root,
+                backup_dir=backup_dir,
+                from_version="setup",
+                fingerprint=preview.fingerprint,
+                entries=successful_entries,
+                status_value="successful",
+            )
+            _write_manifest(manifest_path, successful_manifest)
+        return manifest_path
+    except Exception as exc:
+        backup = backup_dir if backup_dir is not None else root
+        unrecovered = _automatic_restore(
+            root=root,
+            backup=backup,
+            entries=entries,
+        )
+        if manifest_path is not None:
+            failure_manifest = _transaction_manifest_payload(
+                root=root,
+                backup_dir=backup_dir,
+                from_version="setup",
+                fingerprint=preview.fingerprint,
+                entries=entries,
+                status_value=(
+                    "failed-with-unrecovered-paths"
+                    if unrecovered
+                    else "rolled-back-after-failure"
+                ),
+                unrecovered=unrecovered,
+            )
+            try:
+                _write_manifest(manifest_path, failure_manifest)
+            except Exception as manifest_exc:
+                unrecovered.append(f"backup manifest status: {manifest_exc}")
+        if unrecovered:
+            raise InitError(
+                f"setup failed ({exc}); automatic rollback left unrecovered truth: "
+                + "; ".join(unrecovered)
+            ) from exc
+        raise InitError(f"setup failed ({exc}) and was automatically rolled back") from exc
+
+
 def _apply_document_first_setup(preview: MigrationPreview) -> None:
     transaction = _GuidedSetupTransaction(preview.root)
     try:
         try:
             draft = _initial_definition(preview.root, None)
-            current = _build_guided_setup_preview(
+            current = _build_migration_setup_preview(
                 root=preview.root,
-                with_claude_settings=False,
                 state_reader=transaction.regular_file_state,
                 draft=draft,
             )

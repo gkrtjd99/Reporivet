@@ -6,13 +6,100 @@ This document records current product design, interaction, accessibility, and du
 
 {{DESIGN_EVIDENCE}}
 
-## Durable defaults
+The target favors rich, inspectable repository knowledge and a thin setup handoff. After handoff, the project explains itself through Markdown authority, ordinary Plans, static runbooks, Git, and project-owned tools rather than hidden state or a continuing package runtime.
 
-- Preserve user intent and existing project conventions unless current authority explicitly changes them.
-- Prefer clear state, predictable interaction, visible failure, and recovery over hidden automation.
-- Treat accessibility, keyboard use, focus, contrast, reduced motion, localization, and responsive behavior as design inputs rather than polish.
-- Match the repository's established visual and technical language before adding a new system.
+## Canonical authority over duplicated instructions
+
+- `AGENTS.md` is the host-neutral entry point.
+- `docs/README.md` maps current authority and the generated target surface.
+- One matching active Plan carries substantive work state.
+- Versioned specifications, designs, decisions, and completed Plans preserve durable context without becoming general startup material.
+- The optional exact `CLAUDE.md` adapter is removable and points only to `AGENTS.md`; it is not product authority.
+
+## Rich content over hidden state
+
+- Product intent, system structure, quality, security, operations, decisions, work state, and evidence stay in readable Markdown.
+- A Plan contains one task table and matching Task Packets rather than referring to a separate task database.
+- Main records decisions, discoveries, integration, verification, and terminal outcome in the Plan.
+- Generated documents and static runbooks remain useful with ordinary repository tools.
+- No target marker, hidden journal, runtime, package-resolution instruction, or generated settings is needed after setup.
+
+## Static runbooks over procedure executors
+
+- A procedure is eligible only when exactly one complete, unique, user-confirmed strict structured record is present in `Confirmed`.
+- The record has exactly nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`.
+- The deterministic output is ordinary Markdown at `docs/runbooks/<slug>.md`.
+- A runbook has no frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration. It is reviewed project documentation, not an executor.
+- Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook.
+
+## Visible evidence over inference
+
+Every guided definition draft separates:
+
+- **Confirmed**: facts explicitly supported by user input or cited repository evidence;
+- **Proposed**: suggestions awaiting approval;
+- **Open**: unresolved questions, unavailable facts, and assumptions that must not drive mutation; and
+- **Sources**: paths or references that support confirmed statements.
+
+Deterministic scan results remain observations until a person approves their use. Do not infer missing project facts or rewrite them into authority.
+
+## Exact review over implicit mutation
+
+- Keep the visible Markdown draft and proposed changes reviewable before authorized mutation.
+- Show exact create, preserve, conflict, refuse, and opt-in actions when a project operation changes files.
+- Existing project-owned, customized, ambiguous, unsafe, symlinked, and nonregular content is preserved or refused.
+- Keep backup and rollback state external to a target when a project-owned transition requires it.
+
+## Bounded roles over self-approval
+
+- Broad or multi-part roots default to `Role: Task Owner` with `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves.
+- Main owns intent, acceptance, decomposition, root-owner dispatch, integration, serialized Plan edits, and evidence judgment; Main dispatches through host-native facilities, while the setup package does not spawn or dispatch Agents.
+- Each Owner first returns a finite child manifest inside its approved envelope. Main alone serializes accepted child rows and complete matching packets into the Plan and resumes that serialized Owner; only the resumed Task Owner dispatches its declared dependency-ready descendants.
+- Descendants inherit scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces. Mutable siblings use disjoint allowed-write sets and separate exact-baseline worktrees.
+- Owner-local aggregation is distinct from Main's final repository integration.
+- A Verification Sub starts fresh, identifies the integrated candidate, and checks each acceptance criterion independently. Verification is read-only, nonrepairing, and nondelegating; project/host workflows execute project commands.
+- The target provides no scheduler, dispatcher, task database, command runner, Gate, evidence archive, automatic closure, hidden state, or workflow runtime.
 
 ## Change protocol
 
-For material UX, interaction, accessibility, or cross-cutting technical design, record alternatives, decision, consequences, rollout, and verification in a durable design document or ADR. Open design questions remain Open; do not fill them with inferred preference.
+1. Validate the selected repository root and classify relevant paths without following unsafe links.
+2. Present deterministic observations in understandable language.
+3. Ask guided questions in plain language; do not require the user to know the documentation schema.
+4. Render one visible draft covering identity and goals, users and workflows, system boundary, quality, security, operations, and Plan working agreements.
+5. Keep uncertain claims in Proposed or Open.
+6. Show exact create, preserve, conflict, refuse, and opt-in actions.
+7. Apply only an authorized, reviewed change after immediate precondition checks.
+8. Return a concise summary and route future work through canonical repository documents.
+
+Resume must preserve the visible draft and evidence separation. Finalization must reject unresolved required fields rather than manufacture answers.
+
+## Information design
+
+- Use descriptive headings and explicit relative links.
+- Keep current summaries short enough to route readers, while versioned records hold detail.
+- Keep terminal history immutable except for explicit supersession metadata.
+- Use searchable role names, task identifiers, acceptance identifiers, and path names.
+- Put exact project commands in `QUALITY.md` or `OPERATIONS.md`, not in generic agent instructions.
+- Label unavailable facts Open instead of substituting placeholders that look authoritative.
+- Describe package-side setup as setup-time only and package absence after handoff as expected.
+
+## Accessibility
+
+- Do not rely on color, icon shape, or interface position alone to convey status.
+- Prefer plain text labels such as Confirmed, Proposed, Open, accepted, failed, and not run.
+- Keep headings hierarchical and tables readable as linear text.
+- Give actions descriptive names and include complete command text where execution is required.
+- Make errors actionable by naming the unsafe path, failed condition, and non-destructive next step.
+- Avoid unnecessary jargon; define project-specific terms where first used.
+- Keep static runbooks readable as ordinary Markdown without host-specific metadata.
+
+## Non-goals
+
+The design does not introduce:
+
+- a general orchestration platform, scheduler, dispatcher, task store, or workflow runtime;
+- hidden agent memory or autonomous Plan mutation;
+- project-independent build, deployment, or incident procedures;
+- provider-specific authority in canonical documents;
+- a target Skill, package marker, generated settings, copied executor, or package-resolution requirement after setup; or
+- speculative configuration for projects that have not supplied facts.

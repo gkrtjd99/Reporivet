@@ -13,16 +13,19 @@ from reporivet.procedures import (
     PROCEDURE_FIELDS,
     ProcedureSpec,
     ProcedureValidationError,
-    build_procedure_skill_plan,
+    _legacy_procedure_skill_ownership_proof,
+    _render_legacy_procedure_skill,
+    build_procedure_runbook_plan,
+    calculate_procedure_runbook_path,
     parse_confirmed_procedures,
     parse_procedure_record,
-    procedure_skill_path,
-    render_procedure_skill,
+    procedure_runbook_path,
+    render_procedure_runbook,
     serialize_procedure_spec,
 )
 
 
-class ProcedureSkillTests(unittest.TestCase):
+class ProcedureRunbookTests(unittest.TestCase):
     def spec(self, **overrides: object) -> ProcedureSpec:
         values: dict[str, object] = {
             "slug": "release-check",
@@ -120,22 +123,20 @@ class ProcedureSkillTests(unittest.TestCase):
         self.assertEqual([item.slug for item in unique.eligible], ["release-check", "backup-check"])
         self.assertTrue(unique.valid)
 
-    def test_skill_path_and_render_are_deterministic_instruction_only_content(self) -> None:
+    def test_runbook_path_and_render_are_deterministic_instruction_only_content(self) -> None:
         spec = self.spec()
-        expected_path = ".claude/skills/release-check/SKILL.md"
-        self.assertEqual(procedure_skill_path(spec).as_posix(), expected_path)
-        self.assertEqual(procedure_skill_path("release-check").as_posix(), expected_path)
+        expected_path = "docs/runbooks/release-check.md"
+        self.assertEqual(procedure_runbook_path(spec).as_posix(), expected_path)
+        self.assertEqual(procedure_runbook_path("release-check").as_posix(), expected_path)
+        self.assertEqual(calculate_procedure_runbook_path(spec), expected_path)
 
-        rendered = render_procedure_skill(spec)
-        self.assertEqual(rendered, render_procedure_skill(spec))
-        self.assertEqual(rendered.count("---\n"), 2)
-        frontmatter = rendered.split("---\n", 2)[1]
-        self.assertEqual(
-            [line.split(":", 1)[0] for line in frontmatter.splitlines()],
-            ["name", "description"],
-        )
-        self.assertRegex(frontmatter, r"(?m)^name: release-check$")
-        self.assertIn("description: Release check. Use when A release candidate is ready for review.", frontmatter)
+        rendered = render_procedure_runbook(spec)
+        self.assertEqual(rendered, render_procedure_runbook(spec))
+        self.assertTrue(rendered.startswith("# Release check\n"))
+        self.assertNotIn("---\n", rendered)
+        self.assertNotIn("allowed-tools", rendered)
+        self.assertNotIn("hooks", rendered)
+        self.assertNotIn("shell:", rendered)
         for heading in (
             "## Trigger",
             "## Required reads",
@@ -146,14 +147,13 @@ class ProcedureSkillTests(unittest.TestCase):
             "## Rollback",
         ):
             self.assertIn(heading, rendered)
-        self.assertNotRegex(frontmatter, r"(?m)^(allowed-tools|hooks|shell):")
         self.assertNotIn("settings.json", rendered)
         self.assertNotIn("subprocess", rendered)
         self.assertTrue(rendered.endswith("\n"))
 
     def test_evidence_mapping_reads_only_confirmed_values(self) -> None:
         valid = self.spec().canonical_record()
-        plan = build_procedure_skill_plan(
+        plan = build_procedure_runbook_plan(
             {
                 "confirmed": [valid],
                 "proposed": [self.spec(slug="proposed-check").canonical_record()],
@@ -166,20 +166,32 @@ class ProcedureSkillTests(unittest.TestCase):
 
     def test_plan_exposes_targets_and_diagnostics_without_io_or_execution(self) -> None:
         valid = self.spec().canonical_record()
-        plan = build_procedure_skill_plan(("generic evidence", valid))
+        plan = build_procedure_runbook_plan(("generic evidence", valid))
         self.assertEqual(len(plan.targets), 1)
-        self.assertEqual(plan.targets[0].path, ".claude/skills/release-check/SKILL.md")
-        self.assertEqual(plan.targets[0].content, render_procedure_skill(self.spec()))
+        self.assertEqual(plan.targets[0].path, "docs/runbooks/release-check.md")
+        self.assertEqual(plan.targets[0].content, render_procedure_runbook(self.spec()))
         self.assertEqual(len(plan.diagnostics), 1)
         self.assertEqual(plan.diagnostics[0].code, "generic")
         self.assertEqual(plan.procedures, (self.spec(),))
 
-    def test_frontmatter_quotes_yaml_sensitive_values_without_extra_fields(self) -> None:
+    def test_runbook_render_preserves_markdown_sensitive_values_as_plain_content(self) -> None:
         spec = self.spec(title="Release: production", trigger="When #approved is set")
-        rendered = render_procedure_skill(spec)
-        frontmatter = rendered.split("---\n", 2)[1]
-        self.assertEqual([line.split(":", 1)[0] for line in frontmatter.splitlines()], ["name", "description"])
-        self.assertIn('description: "Release: production. Use when When #approved is set."', frontmatter)
+        rendered = render_procedure_runbook(spec)
+        self.assertTrue(rendered.startswith("# Release: production\n"))
+        self.assertIn("When #approved is set", rendered)
+        self.assertNotIn("description:", rendered)
+        self.assertNotIn("---\n", rendered)
+
+    def test_exact_legacy_skill_ownership_requires_canonical_bytes(self) -> None:
+        spec = self.spec()
+        legacy = _render_legacy_procedure_skill(spec).encode("utf-8")
+        self.assertEqual(_legacy_procedure_skill_ownership_proof(legacy), spec)
+        self.assertIsNone(
+            _legacy_procedure_skill_ownership_proof(
+                legacy.replace(b"## Actions", b"## Action", 1)
+            )
+        )
+        self.assertIsNone(_legacy_procedure_skill_ownership_proof(legacy + b"\n"))
 
 
 if __name__ == "__main__":

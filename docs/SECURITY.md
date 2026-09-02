@@ -1,18 +1,20 @@
 ---
 owner: security
 status: active
-last_reviewed: 2026-08-31
+last_reviewed: 2026-09-02
 ---
 
 # Security
 
 ## Authentication, authorization, data, secrets, and permissions
 
-Reporivet operates on repositories that may contain untrusted paths and sensitive content. The installed package may inspect path metadata, read bounded project files for deterministic definition, and mutate only explicitly approved setup or migration targets. The default integrated `reporivet setup` coordinates that package-side work; `reporivet init` is structure-only and `reporivet define` remains lower-level. Generated Markdown, host adapters, and project Skills do not create a security sandbox.
+Reporivet operates on repositories that may contain untrusted paths and sensitive content. During explicit setup or legacy transition, the installed package or an explicitly selected local source may inspect bounded path metadata and project files and mutate only an approved target transaction. Setup is a bounded one-shot package-side operation; it does not leave a target runtime or package requirement.
 
-Setup never executes project commands, spawns or dispatches Agents, creates a Plan, or creates a target runtime. Only a complete user-confirmed structured procedure may produce an instruction-only project Skill through resumed setup; unresolved or inferred records produce none.
+Fresh targets receive project-owned Markdown, Plans, static runbooks, and at most an exact root `CLAUDE.md` adapter. They receive no Reporivet role or procedure Skill, marker, generated settings, copied runtime, doctor gate, command registry, or hidden state. Generated documents and the optional adapter do not create a security sandbox.
 
-The target project remains responsible for credentials, dependency policy, CI security, deployment controls, production access, logs, backups, and incident handling.
+Setup never executes project commands, spawns or dispatches Agents, or creates a Plan. Only a complete, unique, user-confirmed strict nine-field procedure record can render a static runbook under `docs/runbooks/<slug>.md`; the ordinary Markdown output has no frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration. Reporivet does not infer or execute procedures.
+
+The target project remains responsible for credentials, dependency policy, CI security, deployment controls, production access, logs, backups, incident handling, and project-command execution. Package removal after setup is expected and is not a security or operational blocker for ordinary target work.
 
 ## Threat model
 
@@ -22,10 +24,11 @@ Relevant threats include:
 - symlink swaps and nonregular targets during scan or mutation;
 - overwriting project-owned or ambiguous content;
 - applying a stale preview after target files change;
-- rollback that destroys changes made after migration;
+- rollback that destroys changes made after a successful transition;
 - leaking secrets through drafts, backups, command output, diffs, or reports;
-- treating generated host settings as a complete containment boundary;
-- allowing procedural adapters to become hidden executors or alternate authority;
+- treating host adapters or deny settings as a complete containment boundary;
+- allowing legacy procedural artifacts to be mistaken for current executors or authority;
+- allowing an external setup wrapper to become an installer or target mutator; and
 - treating retained historical state as safe current working data.
 
 ## Durable rules
@@ -33,36 +36,38 @@ Relevant threats include:
 ### Root and path safety
 
 - Resolve and validate the selected repository root before work begins.
-- Keep reads and writes beneath that root except for the user-selected external migration backup.
+- Keep reads and writes beneath that root except for the user-selected external transition backup.
 - Use descriptor-relative, no-follow traversal for sensitive mutations.
 - Reject symlinked, nonregular, or unexpectedly replaced targets.
-- Revalidate fingerprints immediately before applying an approved preview.
+- Revalidate the complete preview and every preimage immediately before applying an approved transaction.
 
 ### Preservation and transactions
 
-- Create current assets only when missing unless a recognized migration explicitly owns a fingerprinted path.
-- Preserve existing project-owned and ambiguous content.
-- Show exact path actions before mutation.
-- Use a mode-restricted backup directory outside the target for migration.
-- Restore the pre-migration state after failed apply when the target can be restored safely.
+- Create current assets only when missing unless an explicit setup rerun or recognized transition proves ownership of a fingerprinted path.
+- Preserve existing project-owned, customized, ambiguous, unknown, unsafe, symlinked, and nonregular content.
+- Show exact path actions before mutation and bind destructive actions to the exact approval fingerprint.
+- Use a mode-restricted backup directory outside the target for destructive transition actions.
+- Restore the approved preimage after failed apply when the target can be restored safely.
 - Refuse post-success rollback when later user changes would be overwritten.
-- Never use a project-local backup as the only recovery source for a repository-wide migration.
+- Never use a project-local backup as the only recovery source for a repository-wide transition.
+- Do not recursively delete `.claude`; remove only transaction-proven empty child directories.
 
 ### Secrets and sensitive content
 
 - Do not place credentials, tokens, private keys, exploit details, private repository content, or personal data in Plans, generated drafts, prompts, command output, diffs, issue reports, or vulnerability reports.
 - Scanner observations must be bounded and attributable; they must not be sent to a model or promoted to confirmed truth automatically.
-- Treat migration backups and manifests as sensitive even when they contain only selected managed files.
-- Use least-privilege local permissions and delete external migration backups only under the maintainer's retention policy.
-- `.harness/runs` is retired historical sensitive state. Current code does not read its contents. Current code does not write it. Current code does not delete it. Do not use it as current evidence or working storage.
+- Treat transition backups and manifests as sensitive even when they contain only selected managed files.
+- Use least-privilege local permissions and delete external transition backups only under the maintainer's retention policy.
+- `.harness/runs` is retired historical sensitive state. Current code does not read its contents, write it, or delete it. Do not use it as current evidence or working storage.
 
-### Host adapters and settings
+### Host adapters and generated content
 
 - `AGENTS.md` remains canonical; a host adapter may only route to it.
-- Instruction-only role and complete-procedure Skills may express bounded Main, implementation, verification, or project procedure guidance, but may not contain copied command execution, Agent spawn/dispatch, hidden state management, or privileged frontmatter.
-- `.claude/settings.json` is absent by default. Creation requires exact preview approval, and an existing settings file is never merged or rewritten.
-- Deny-only host settings are defense in depth, not a sandbox. Repository instructions cannot prevent all tool, host, plugin, shell, network, or credential actions.
-- Removing a host adapter must not remove canonical documents or project-owned evidence.
+- The optional root `CLAUDE.md`, when selected, is exactly `@AGENTS.md\n` and contains no additional authority.
+- Reporivet generates no target role or procedure Skill. A complete procedure becomes a static ordinary Markdown runbook only; it never contains an executor, hooks, command registration, or privilege-bearing configuration.
+- An optional external user-scoped `/reporivet-setup` wrapper remains outside the target, is instruction-only, and only relays deterministic preview/apply; it never installs, resolves, or edits target files itself.
+- `.claude/settings.json` is not a fresh setup output. An existing settings path is considered for cleanup only when exact canonical ownership evidence proves it, and it is never merged or rewritten.
+- Removing a host adapter or the package must not remove canonical documents, Plans, runbooks, or project-owned evidence.
 
 ### External and irreversible actions
 
@@ -74,9 +79,9 @@ Require explicit security review for changes to:
 
 - root validation, traversal, no-follow file operations, or write boundaries;
 - backup, manifest, apply, restore, or rollback behavior;
-- settings generation or host permissions;
+- settings cleanup, host permissions, or adapter handling;
 - handling of secrets, sensitive drafts, logs, or retained history;
-- package publication, network access, authentication, authorization, CI permissions, or deployment;
+- package publication, network access, authentication, authorization, CI permissions, or deployment; and
 - production dependencies or external services.
 
 Record the threat, control, evidence, and residual risk in the active Plan.
@@ -85,6 +90,7 @@ Record the threat, control, evidence, and residual risk in the active Plan.
 
 - Unreviewed host plugins, shell configuration, project CI, deployment environments, and external backup retention have no current Reporivet security assurance.
 - Project-owned CI requires separate repair and security review before its result can be treated as current evidence.
+- No security claim is made for the target's own commands, credentials, deployment, or project-owned operational controls.
 
 ## Vulnerability reporting
 
@@ -93,9 +99,10 @@ Follow the repository policy in [`.github/SECURITY.md`](../.github/SECURITY.md).
 ### Confirmed
 
 - Current file mutation paths use root confinement and reject unsafe target types.
-- Migration uses an external backup, exact fingerprints, immediate revalidation, restricted permissions, and conflict-aware rollback.
-- Integrated setup is preview-first, creates no Plan/runtime, and permits only complete user-confirmed procedure Skills.
+- Setup and transition use exact previews, external backups, immediate preimage revalidation, restricted permissions, transaction restoration, and conflict-aware rollback.
+- Integrated setup is preview-first, creates no Plan or runtime, and permits only static runbooks from complete unique user-confirmed procedure records.
 - Current package code has no production dependencies and performs no model call for definition.
+- Package absence after approved setup is expected and is not an unknown, blocker, or residual security risk for ordinary target work.
 
 ### Proposed
 
@@ -109,6 +116,8 @@ Follow the repository policy in [`.github/SECURITY.md`](../.github/SECURITY.md).
 ### Sources
 
 - [`../.github/SECURITY.md`](../.github/SECURITY.md)
-- [`product-specs/SPEC-REPORIVET-003-document-first-harness.md`](product-specs/SPEC-REPORIVET-003-document-first-harness.md)
-- [`design-docs/DESIGN-REPORIVET-003-document-first-harness.md`](design-docs/DESIGN-REPORIVET-003-document-first-harness.md)
-- [`decisions/ADR-0001-document-first-product-boundary.md`](decisions/ADR-0001-document-first-product-boundary.md)
+- [`../docs/decisions/ADR-0002-one-shot-bootstrapper-boundary.md`](../docs/decisions/ADR-0002-one-shot-bootstrapper-boundary.md)
+- [`../docs/product-specs/SPEC-REPORIVET-004-one-shot-bootstrapper.md`](../docs/product-specs/SPEC-REPORIVET-004-one-shot-bootstrapper.md)
+- [`../docs/design-docs/DESIGN-REPORIVET-004-one-shot-setup.md`](../docs/design-docs/DESIGN-REPORIVET-004-one-shot-setup.md)
+- [`../docs/product-specs/SPEC-REPORIVET-003-document-first-harness.md`](../docs/product-specs/SPEC-REPORIVET-003-document-first-harness.md) (historical)
+- [`../docs/design-docs/DESIGN-REPORIVET-003-document-first-harness.md`](../docs/design-docs/DESIGN-REPORIVET-003-document-first-harness.md) (historical)

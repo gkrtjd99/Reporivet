@@ -8,4 +8,5 @@ Use [`_template.md`](_template.md). Do not rewrite accepted history to reflect a
 
 | ID | Status | Area | Summary | Document |
 |---|---|---|---|---|
-| `ADR-0001` | accepted | harness | Retire copied execution in favor of a document-first product boundary | [`ADR-0001-document-first-product-boundary.md`](ADR-0001-document-first-product-boundary.md) |
+| `ADR-0001` | superseded | harness | Historical document-first product boundary | [`ADR-0001-document-first-product-boundary.md`](ADR-0001-document-first-product-boundary.md) |
+| `ADR-0002` | accepted | harness | One-shot bootstrapper with independent generated targets | [`ADR-0002-one-shot-bootstrapper-boundary.md`](ADR-0002-one-shot-bootstrapper-boundary.md) |

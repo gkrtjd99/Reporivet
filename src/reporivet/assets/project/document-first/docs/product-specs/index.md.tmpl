@@ -1,8 +1,25 @@
 # Product Specifications
 
-Product specifications turn confirmed product intent into observable requirements and acceptance criteria. `docs/PRODUCT.md` remains the current overview; a spec records a bounded change and its lifecycle.
+This directory contains versioned, durable product requirements subordinate to the current overview in [`../PRODUCT.md`](../PRODUCT.md). A specification states user intent, scope, non-goals, acceptance criteria, and evidence expectations; it does not replace an active implementation Plan.
 
-- Use `_template.md` for a new specification.
-- Keep scanner observations Proposed until a project owner confirms them.
-- Preserve Confirmed, Proposed, Open, and Sources when provenance matters.
-- Supersede obsolete specifications instead of rewriting accepted history.
+## Current product boundary
+
+The durable target is project-owned Markdown authority, ordinary Plans, static runbooks, Git, project commands, and host-native Agent workflows. It remains independently useful after setup and does not require a target package, runtime, marker, generated settings, command wrapper, task store, or hidden state. No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command.
+
+## Specification lifecycle
+
+1. Start from current product intent and a user or maintainer need.
+2. State the problem, users, desired outcome, scope, non-goals, constraints, and acceptance criteria.
+3. Keep evidence in separate `Confirmed`, `Proposed`, `Open`, and `Sources` sections.
+4. Link implementation Plans and design or decision records without copying their execution history into the specification.
+5. Supersede rather than rewrite a published requirement when product intent changes.
+
+Only approved product intent belongs in `Confirmed`. Scanner inference, an Agent summary, an implementation detail, and an unresolved proposal do not become requirements automatically.
+
+## Files
+
+- `_template.md` is the create-if-missing template for a bounded specification.
+- Versioned `SPEC-*.md` files are durable requirement records.
+- `project-definition.draft.md`, when present, is visible resume material for definition and is not a substitute for a confirmed specification.
+
+Do not use this directory as a task queue, runtime configuration, procedure executor, or general note dump.

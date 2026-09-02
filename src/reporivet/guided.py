@@ -6,7 +6,6 @@ import json
 import os
 import re
 import stat
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -14,28 +13,25 @@ from typing import Callable, Iterable, Mapping, Sequence
 
 from . import __version__
 from .initializer import (
-    AGENTS_END,
-    AGENTS_START,
-    GITIGNORE_END,
-    GITIGNORE_START,
     AuditReport,
     ChangeSet,
     InitError,
     audit_project,
     ensure_safe_write_path,
-    extract_block,
-    is_managed_file,
     read_asset,
     symlink_component,
-    upsert_block_text_preserving,
     validate_root,
 )
-from .procedures import ProcedureDiagnostic, build_procedure_skill_plan
+from .procedures import (
+    build_procedure_runbook_plan,
+    calculate_procedure_runbook_path,
+    render_procedure_runbook,
+    _legacy_procedure_skill_ownership_proof,
+)
 
 DEFINITION_DRAFT_PATH = Path("docs/product-specs/project-definition.draft.md")
 EVIDENCE_HEADINGS = ("Confirmed", "Proposed", "Open", "Sources")
 ACTIVE_PLAN_STATES = frozenset({"proposed", "approved", "in-progress", "verifying", "blocked"})
-TERMINAL_PLAN_STATES = frozenset({"complete", "cancelled", "superseded"})
 
 
 @dataclass(frozen=True)
@@ -79,7 +75,7 @@ DEFINITION_TOPICS = (
     DefinitionTopic(
         "procedures",
         "Repeatable procedures",
-        "Which repeated procedures deserve a runbook or optional Skill, including their trigger, stop conditions, evidence, permissions, and rollback?",
+        "Which repeated procedures deserve a static runbook, including their trigger, stop conditions, evidence, permissions, and rollback?",
     ),
 )
 TOPIC_BY_KEY = {topic.key: topic for topic in DEFINITION_TOPICS}
@@ -121,66 +117,160 @@ class _SetupDefinitionStep:
     recorded: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class SetupDiagnostic:
+    """A deterministic diagnostic attached to one setup classification."""
+
+    path: str
+    code: str
+    detail: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {"code": self.code, "detail": self.detail, "path": self.path}
+
+
+@dataclass(frozen=True, slots=True)
 class SetupAction:
+    """One preview classification and its safe, bounded postimage proposal.
+
+    The first six fields are retained for migration compatibility.  The
+    additional fields make the classification self-describing without exposing
+    existing file bytes in the serialized preview.
+    """
+
     path: str
     action: str
     reason: str
     current_sha256: str
     proposed_sha256: str
     content: str
+    ownership: str = "project-owned"
+    current_type: str = "missing"
+    current_mode: int | None = None
+    current_size: int | None = None
+    current_children: tuple[str, ...] = ()
+    proposed_type: str = "regular"
+    proposed_mode: int | None = None
+    proposed_path: str | None = None
+    destination_type: str | None = None
+    destination_sha256: str = ""
+    destination_mode: int | None = None
+    destination_size: int | None = None
+    destination_current_type: str | None = None
+    destination_current_sha256: str = ""
+    destination_current_mode: int | None = None
+    destination_current_size: int | None = None
+    destination_content: str = field(default="", repr=False, compare=False)
+    diagnostics: tuple[SetupDiagnostic, ...] = ()
 
-    def as_dict(self) -> dict[str, str]:
+    @property
+    def operation(self) -> str:
+        """Descriptive alias for the legacy ``action`` field."""
+
+        return self.action
+
+    @property
+    def preimage(self) -> dict[str, object]:
         return {
+            "children": list(self.current_children),
+            "mode": self.current_mode,
+            "sha256": self.current_sha256 or None,
+            "size": self.current_size,
+            "type": self.current_type,
+        }
+
+    @property
+    def postimage(self) -> dict[str, object]:
+        if self.action in {"preserve", "conflict"}:
+            return {
+                "mode": self.current_mode,
+                "sha256": self.current_sha256 or None,
+                "size": self.current_size,
+                "type": self.current_type,
+            }
+        result: dict[str, object] = {
+            "mode": self.proposed_mode,
+            "sha256": self.proposed_sha256 or None,
+            "size": (
+                len(self.content.encode("utf-8"))
+                if self.proposed_type == "regular"
+                else None
+            ),
+            "type": self.proposed_type,
+        }
+        if self.proposed_path is not None:
+            result["path"] = self.proposed_path
+        return result
+
+    @property
+    def destination(self) -> dict[str, object] | None:
+        if self.proposed_path is None:
+            return None
+        return {
+            "content": self.destination_content or None,
+            "current": {
+                "mode": self.destination_current_mode,
+                "sha256": self.destination_current_sha256 or None,
+                "size": self.destination_current_size,
+                "type": self.destination_current_type,
+            },
+            "mode": self.destination_mode,
+            "path": self.proposed_path,
+            "sha256": self.destination_sha256 or None,
+            "size": self.destination_size,
+            "type": self.destination_type,
+        }
+
+    def as_dict(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            # Legacy fields remain stable for migration consumers.
             "action": self.action,
             "content": self.content,
             "current_sha256": self.current_sha256,
             "path": self.path,
             "proposed_sha256": self.proposed_sha256,
             "reason": self.reason,
+            # The frozen classification contract.
+            "current_mode": self.current_mode,
+            "current_type": self.current_type,
+            "diagnostics": [diagnostic.as_dict() for diagnostic in self.diagnostics],
+            "operation": self.operation,
+            "ownership": self.ownership,
+            "postimage": self.postimage,
+            "preimage": self.preimage,
+            "proposed_mode": self.proposed_mode,
+            "proposed_path": self.proposed_path,
+            "proposed_type": self.proposed_type,
         }
+        destination = self.destination
+        if destination is not None:
+            result["destination"] = destination
+        return result
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SetupPreview:
     actions: tuple[SetupAction, ...]
     fingerprint: str
-    diagnostics: tuple[ProcedureDiagnostic, ...] = ()
+    diagnostics: tuple[object, ...] = ()
+
+    @staticmethod
+    def _diagnostic_dict(diagnostic: object) -> dict[str, object] | str:
+        as_dict = getattr(diagnostic, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+            if isinstance(value, dict):
+                return value
+        return str(diagnostic)
 
     def as_dict(self) -> dict[str, object]:
         return {
             "actions": [action.as_dict() for action in self.actions],
-            "diagnostics": [diagnostic.as_dict() for diagnostic in self.diagnostics],
+            "diagnostics": [
+                self._diagnostic_dict(diagnostic) for diagnostic in self.diagnostics
+            ],
             "fingerprint": self.fingerprint,
             "schema": "reporivet.setup-preview/v1",
-        }
-
-    def render(self) -> str:
-        return json.dumps(self.as_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-
-
-@dataclass(frozen=True)
-class DoctorFinding:
-    severity: str
-    path: str
-    detail: str
-
-    def as_dict(self) -> dict[str, str]:
-        return {"detail": self.detail, "path": self.path, "severity": self.severity}
-
-
-@dataclass(frozen=True)
-class DoctorReport:
-    findings: tuple[DoctorFinding, ...]
-
-    @property
-    def errors(self) -> tuple[DoctorFinding, ...]:
-        return tuple(finding for finding in self.findings if finding.severity == "error")
-
-    def as_dict(self) -> dict[str, object]:
-        return {
-            "findings": [finding.as_dict() for finding in self.findings],
-            "schema": "reporivet.doctor/v2",
         }
 
     def render(self) -> str:
@@ -211,154 +301,8 @@ DOCUMENT_FIRST_DOCUMENTS: dict[str, str] = {
     "docs/runbooks/_template.md": "document-first/docs/runbooks/_template.md.tmpl",
 }
 
-CLAUDE_PROFILE_ASSETS: dict[str, str] = {
-    "CLAUDE.md": "document-first/claude/CLAUDE.md.tmpl",
-    ".claude/skills/reporivet-main/SKILL.md": "document-first/claude/skills/reporivet-main/SKILL.md.tmpl",
-    ".claude/skills/reporivet-implementation/SKILL.md": "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl",
-    ".claude/skills/reporivet-verification/SKILL.md": "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl",
-}
+CLAUDE_ADAPTER_ASSET = "document-first/claude/CLAUDE.md.tmpl"
 
-REQUIRED_DOCUMENT_FIRST_DIRECTORIES = (
-    "docs/exec-plans/active",
-    "docs/exec-plans/completed",
-)
-
-REQUIRED_DOCUMENT_FIRST_PATHS = (
-    "AGENTS.md",
-    "ARCHITECTURE.md",
-    ".reporivet-version",
-    "docs/README.md",
-    "docs/PRODUCT.md",
-    "docs/DESIGN.md",
-    "docs/QUALITY.md",
-    "docs/OPERATIONS.md",
-    "docs/SECURITY.md",
-    "docs/PLANS.md",
-    "docs/exec-plans/_template.md",
-    "docs/exec-plans/active",
-    "docs/exec-plans/completed",
-)
-
-CURRENT_AUTHORITY_REQUIREMENTS: dict[str, tuple[str, ...]] = {
-    "AGENTS.md": (
-        "# Repository Agent Operating Contract",
-        "## Start here",
-        "## Sources of truth",
-        "## Main, implementation, and verification",
-        "### Confirmed",
-        "### Proposed",
-        "### Open",
-        "### Sources",
-    ),
-    "ARCHITECTURE.md": (
-        "# Architecture",
-        "## Current system map",
-        "## Ownership and dependency direction",
-        "## Runtime, data, and external systems",
-        "### Confirmed",
-        "### Proposed",
-        "### Open",
-        "### Sources",
-    ),
-    "docs/README.md": (
-        "# Repository Knowledge Map",
-        "## Reading protocol",
-        "## Canonical paths",
-        "## Route by work",
-        "## Evidence states",
-    ),
-    "docs/PRODUCT.md": (
-        "# Product",
-        "## Product, users, problem, and success",
-        "## Current scope",
-        "### Confirmed",
-        "### Proposed",
-        "### Open",
-        "### Sources",
-    ),
-    "docs/DESIGN.md": (
-        "# Design",
-        "## Design direction and accessibility",
-        "## Durable defaults",
-        "## Change protocol",
-        "### Confirmed",
-        "### Proposed",
-        "### Open",
-        "### Sources",
-    ),
-    "docs/QUALITY.md": (
-        "# Quality",
-        "## Required checks and commands",
-        "## Evidence contract",
-        "## Quality gaps",
-        "### Confirmed",
-        "### Proposed",
-        "### Open",
-        "### Sources",
-    ),
-    "docs/OPERATIONS.md": (
-        "# Operations",
-        "## Operating model",
-        "## Required operational knowledge",
-        "## Procedure requirements",
-        "### Confirmed",
-        "### Proposed",
-        "### Open",
-        "### Sources",
-    ),
-    "docs/SECURITY.md": (
-        "# Security",
-        "## Authentication, authorization, data, secrets, and permissions",
-        "## Durable rules",
-        "## Open security work",
-        "### Confirmed",
-        "### Proposed",
-        "### Open",
-        "### Sources",
-    ),
-    "docs/PLANS.md": (
-        "# Plans",
-        "## When to use a Plan",
-        "## Ownership and lifecycle",
-        "## Minimum active Plan content",
-        "## Completion",
-    ),
-}
-
-RETIRED_CURRENT_PATTERNS = (
-    (re.compile(r"(?<![A-Za-z0-9_])\./dev/", re.IGNORECASE), "live reference to a retired Reporivet `./dev/*` command"),
-    (re.compile(r"\.harness/runs", re.IGNORECASE), "live reference to retired Reporivet run evidence"),
-    (re.compile(r"\bclose-plan\b", re.IGNORECASE), "live reference to retired automatic Plan closure"),
-    (re.compile(r"\bverification run\b", re.IGNORECASE), "live reference to the retired Verification Run"),
-    (re.compile(r"\bgate verdict\b|\bgate_verdict\b", re.IGNORECASE), "live reference to the retired Gate verdict"),
-    (re.compile(r"(?<![A-Za-z0-9_])gate(?!s\b|[A-Za-z0-9_])", re.IGNORECASE), "live reference to the retired singular Gate mechanism"),
-    (re.compile(r"\b(?:harness|reporivet|repository-local|verification)\s+runtime\b", re.IGNORECASE), "live reference to the retired Reporivet runtime"),
-    (re.compile(r"\b(?:automatic|generated|reporivet|repository-local|plan)\s+(?:plan\s+)?closure\b", re.IGNORECASE), "live reference to retired automatic Plan closure"),
-)
-
-LEGACY_MANAGED_FILES = (
-    "dev/harness.py",
-    "dev/bootstrap",
-    "dev/context",
-    "dev/define",
-    "dev/audit",
-    "dev/code-map",
-    "dev/run",
-    "dev/check",
-    "dev/verify",
-    "dev/smoke",
-    "dev/security-check",
-    "dev/docs-index",
-    "dev/docs-check",
-    "dev/plan-check",
-    "dev/architecture-check",
-    "dev/new-plan",
-    "dev/task",
-    "dev/close-plan",
-    "dev/garden",
-    ".github/workflows/harness-verify.yml",
-    ".github/workflows/harness-garden.yml",
-)
 
 LEGACY_RUNTIME_PATHS = (
     ".harness/runs",
@@ -776,23 +720,19 @@ def _target_asset_contents(
     *,
     with_claude_settings: bool,
 ) -> dict[str, str]:
+    # Keep the protected compatibility parameter, but generate only surviving
+    # project Markdown plus the thin optional host adapter.
+    del with_claude_settings
     values = _bundle_values(root, draft)
     contents = {
         "AGENTS.md": _read_guided_asset("document-first/root/AGENTS.md.tmpl", values),
-        ".gitignore": _read_guided_asset("document-first/root/gitignore.block.tmpl", values),
-        ".reporivet-version": _read_guided_asset("root/reporivet-version.tmpl", values),
+        "CLAUDE.md": _read_guided_asset(CLAUDE_ADAPTER_ASSET, values),
     }
     for destination, asset in DOCUMENT_FIRST_DOCUMENTS.items():
         contents[destination] = _read_guided_asset(asset, values)
-    for destination, asset in CLAUDE_PROFILE_ASSETS.items():
-        contents[destination] = _read_guided_asset(asset, values)
+    # Lifecycle directories remain available without creating an active Plan.
     contents["docs/exec-plans/active/.gitkeep"] = ""
     contents["docs/exec-plans/completed/.gitkeep"] = ""
-    if with_claude_settings:
-        contents[".claude/settings.json"] = _read_guided_asset(
-            "document-first/optional/claude-settings.deny-only.json.tmpl",
-            values,
-        )
     return contents
 
 
@@ -1491,160 +1431,733 @@ def _prepare_setup_definition(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _SetupPathState:
+    """Safe, read-only filesystem facts used by one preview classification."""
+
+    kind: str
+    content: bytes = field(default=b"", repr=False, compare=False)
+    mode: int | None = None
+    size: int | None = None
+    children: tuple[str, ...] = ()
+    error: str = ""
+
+    @property
+    def sha256(self) -> str:
+        return _sha256_bytes(self.content) if self.kind == "regular" else ""
+
+
+def _filesystem_type(mode: int) -> str:
+    if stat.S_ISREG(mode):
+        return "regular"
+    if stat.S_ISDIR(mode):
+        return "directory"
+    if stat.S_ISLNK(mode):
+        return "symlink"
+    if stat.S_ISFIFO(mode):
+        return "fifo"
+    if stat.S_ISSOCK(mode):
+        return "socket"
+    if stat.S_ISCHR(mode):
+        return "character-device"
+    if stat.S_ISBLK(mode):
+        return "block-device"
+    return "nonregular"
+
+
+def _safe_relative_parts(relative: str) -> tuple[str, ...]:
+    path = Path(relative)
+    parts = path.parts
+    if (
+        path.is_absolute()
+        or not parts
+        or any(part in {"", ".", ".."} for part in parts)
+    ):
+        raise InitError(f"guided setup target is not a safe relative path: {relative}")
+    return parts
+
+
+def _path_state(root: Path, relative: str) -> _SetupPathState:
+    """Read one path without following target symlinks or unsafe ancestors."""
+
+    _safe_relative_parts(relative)
+    path = root / relative
+    try:
+        parent_descriptor, name = _open_absolute_parent(path)
+    except FileNotFoundError:
+        return _SetupPathState("missing")
+    except OSError as exc:
+        return _SetupPathState("unsafe-ancestor", error=str(exc))
+
+    try:
+        try:
+            metadata = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return _SetupPathState("missing")
+        except OSError as exc:
+            return _SetupPathState("unreadable", error=str(exc))
+
+        kind = _filesystem_type(metadata.st_mode)
+        mode = stat.S_IMODE(metadata.st_mode)
+        parent_metadata = os.fstat(parent_descriptor)
+        if kind == "regular":
+            try:
+                content = _read_regular_file_bytes(
+                    path,
+                    parent_descriptor=parent_descriptor,
+                    name=name,
+                )
+            except OSError as exc:
+                return _SetupPathState(
+                    "unreadable",
+                    mode=mode,
+                    size=metadata.st_size,
+                    error=str(exc),
+                )
+            if not _absolute_parent_binding_is_current(path, parent_metadata):
+                return _SetupPathState(
+                    "unsafe-ancestor",
+                    mode=mode,
+                    size=len(content),
+                    error="parent directory identity changed during read",
+                )
+            return _SetupPathState(
+                "regular",
+                content=content,
+                mode=mode,
+                size=len(content),
+            )
+        if kind == "directory":
+            directory_descriptor = -1
+            try:
+                directory_descriptor = _open_directory_component(parent_descriptor, name)
+                children = tuple(sorted(os.listdir(directory_descriptor)))
+                opened = os.fstat(directory_descriptor)
+                current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+                if (
+                    _stat_identity(opened) != _stat_identity(metadata)
+                    or _stat_identity(current) != _stat_identity(metadata)
+                    or not _absolute_parent_binding_is_current(path, parent_metadata)
+                ):
+                    return _SetupPathState(
+                        "unsafe-ancestor",
+                        mode=mode,
+                        size=metadata.st_size,
+                        children=children,
+                        error="directory identity changed during inventory",
+                    )
+            except OSError as exc:
+                return _SetupPathState(
+                    "unreadable",
+                    mode=mode,
+                    size=metadata.st_size,
+                    error=str(exc),
+                )
+            finally:
+                if directory_descriptor >= 0:
+                    os.close(directory_descriptor)
+            return _SetupPathState(
+                "directory",
+                mode=mode,
+                size=metadata.st_size,
+                children=children,
+            )
+        return _SetupPathState(kind, mode=mode, size=metadata.st_size)
+    finally:
+        os.close(parent_descriptor)
+
+
+def _state_from_reader(
+    relative: str,
+    state_reader: Callable[[str], tuple[str, bytes]],
+) -> _SetupPathState:
+    state, content = state_reader(relative)
+    if state == "file":
+        return _SetupPathState("regular", content=content, size=len(content))
+    if state == "missing":
+        return _SetupPathState("missing")
+    return _SetupPathState("unsafe")
+
+
+AGENTS_START = "<!-- reporivet:start -->"
+AGENTS_END = "<!-- reporivet:end -->"
+GITIGNORE_START = "# reporivet:start"
+GITIGNORE_END = "# reporivet:end"
+
+
+def _marker_line_spans(text: str, marker: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    markdown_marker = marker.startswith("<!--")
+    fence_character = ""
+    fence_length = 0
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        content = line[:-1] if line.endswith("\n") else line
+        probe = content[:-1] if content.endswith("\r") else content
+        stripped = probe.lstrip(" \t")
+        indentation = len(probe) - len(stripped)
+        consider_marker = True
+        if markdown_marker and fence_character:
+            closing = re.match(
+                rf"{re.escape(fence_character)}{{{fence_length},}}",
+                stripped,
+            )
+            if closing is not None and not stripped[closing.end() :].strip():
+                fence_character = ""
+                fence_length = 0
+            consider_marker = False
+        elif markdown_marker and indentation <= 3:
+            opening = re.match(r"`{3,}|~{3,}", stripped)
+            if opening is not None:
+                fence_character = opening.group(0)[0]
+                fence_length = len(opening.group(0))
+                consider_marker = False
+        if (
+            consider_marker
+            and probe.strip(" \t") == marker
+            and (not markdown_marker or indentation <= 3)
+        ):
+            spans.append((offset, offset + len(content)))
+        offset += len(line)
+    return spans
+
+
+def _managed_marker_span(text: str, start: str, end: str) -> tuple[int, int] | None:
+    starts = _marker_line_spans(text, start)
+    ends = _marker_line_spans(text, end)
+    if not starts and not ends:
+        return None
+    if len(starts) != 1 or len(ends) != 1 or ends[0][0] < starts[0][1]:
+        raise InitError(f"existing file has malformed managed markers: {start} / {end}")
+    return starts[0][0], ends[0][1]
+
+
+# These are retained as data for exact, one-shot cleanup proof only.  They are
+# never emitted by current guided generation.
+_LEGACY_AGENTS_TEMPLATE = "<!-- reporivet:start -->\n# Repository Agent Operating Contract\n\n`AGENTS.md` is the canonical, host-neutral entry point for repository work. Host adapters may import it, but they do not replace its authority.\n\n## Start here\n\n1. Read [`docs/README.md`](docs/README.md) for the knowledge map.\n2. For a substantive goal, create or resume exactly one matching Plan in [`docs/exec-plans/active/`](docs/exec-plans/active/).\n3. Read only the current authority and code named by that Plan or the local task.\n4. Use commands already owned by this project. Reporivet documents commands; it does not wrap or execute them.\n\nThe default onboarding entry point is integrated `reporivet setup`. `reporivet init` remains structure-only, and the lower-level `reporivet define` flow remains available for staged definition work.\n\n## Sources of truth\n\n- Product intent and requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)\n- Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)\n- Design and accessibility: [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/design-docs/`](docs/design-docs/)\n- Quality and project-owned checks: [`docs/QUALITY.md`](docs/QUALITY.md)\n- Operations, deployment, backup, rollback, recovery, and incidents: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) and [`docs/runbooks/`](docs/runbooks/)\n- Security: [`docs/SECURITY.md`](docs/SECURITY.md)\n- Plan lifecycle: [`docs/PLANS.md`](docs/PLANS.md)\n\nWhen current sources conflict, stop and report the conflict. Do not silently choose the easiest interpretation.\n\n## Main, implementation, and verification\n\n- **Main** owns user intent, scope, acceptance criteria, decomposition, dispatch, integration order, decisions, the serialized Plan lifecycle, and final evidence judgment. Main keeps context small and does not normally repeat a Verification Sub's detailed command run.\n- **Implementation Sub** receives one bounded Task Packet, reads only named authority, stays within allowed writes and protected paths, uses project-owned commands, and returns changed paths, command results, discoveries, and residual risks. A default leaf may not broaden scope, change acceptance, delegate, move the Plan, or approve its own candidate.\n- **Verification Sub** uses a fresh context, reads the Plan goal and acceptance criteria plus current authority and the integrated candidate, treats implementer narration as unverified, runs project-owned checks, and returns criterion-level pass/fail, candidate identity, and residual risks. Fresh verification is read-only, nonrepairing, and nondelegating; it does not repair the candidate unless Main assigns a separate implementation packet.\n\n### Broad-milestone native-Agent dispatch\n\nFor every milestone classified as broad, this is a common installed-project rule:\n\n`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, all ready leaves dispatched concurrently) -> T<n>-I (integration) -> T<n>-V1/V2/... (parallel fresh verification)`\n\nMain serializes a finite accepted manifest before resuming an Owner. Broad or multi-part roots default to `Role: Task Owner` and `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves. Main dispatches independent root Owners concurrently using only the host's native Agent execution. A resumed Owner dispatches its complete dependency-ready descendants through host-native Agent execution and only within the predeclared child budget. Main still dispatches the complete dependency-ready root set concurrently: independent Owners for broad work and direct leaves for narrow or inherently serial work.\n\nEvery child row retains an explicit owner and matching bounded packet. Owner boundaries, child budget, disjoint allowed-write sets, exact baseline, and separate worktrees remain explicit. Descendants inherit parent scope, protected paths, acceptance, exact baseline, and frozen shared interfaces and cannot broaden them. An Owner performs local aggregation of descendant results and returns one evidence package to Main without editing the shared Plan; Main alone performs final integration. This rule does not apply to inherently single or serial milestones.\n\nIf a child is itself broad, only a packet explicitly marked `Role: Task Owner` and `May delegate: yes` may run its predeclared bounded descendant packets such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Existing narrow or inherently serial packets remain compatible as direct nondelegating leaves and may omit hierarchy-only fields.\n\nParallel mutable siblings require disjoint allowed-write sets, frozen shared interfaces, an exact common baseline, and separate worktrees. Read-only review and verification lanes may run concurrently. Siblings converge on an explicit integration node; fresh verification nodes depend on the integrated candidate and do not repair it.\n\nReporivet installs no scheduler, task store, lease, lock, or automatic dispatcher; it also installs no dispatcher, runtime, hidden state, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.\n\nMeaningful behavior changes should separate implementation and verification contexts. Explanations are not evidence.\n\nDynamic procedure Skills are project-owned under `.claude/skills/<slug>/SKILL.md`. Only complete Confirmed structured procedure records can produce an instruction-only Skill through resumed `reporivet setup`; no project-specific Skill is pre-generated. Keep frontmatter instruction-only and least privilege. No procedure is inferred or executed, and an existing differing, stale, or arbitrary Skill is preserved rather than deleted. Main—not package runtime—creates/resumes Plans and keeps their state in visible Markdown.\n\n## Working boundaries\n\n- Prefer the smallest durable change that satisfies current requirements.\n- Preserve explicit ownership and dependency direction.\n- Do not add speculative infrastructure, compatibility shims, generated command runners, CI, deployment engines, task databases, journals, Gates, evidence archives, or hidden orchestration state. Reporivet installs no scheduler, dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.\n- Stop before changing public APIs, persisted data, authentication, authorization, payments, infrastructure, or production deployment unless the approved Plan explicitly covers the change.\n- Do not weaken acceptance tests, rewrite unrelated code, add production dependencies, or perform external actions without explicit authority.\n- Record out-of-scope discoveries in the active Plan; do not implement them implicitly.\n\n## Project-specific working agreements\n\n{{AGENT_EVIDENCE}}\n<!-- reporivet:end -->\n"
+_LEGACY_GITIGNORE_BLOCK = """# reporivet:start
+# Claude Code machine-local settings. Shared project Skills and explicitly reviewed
+# .claude/settings.json remain visible and version-controlled when present.
+.claude/settings.local.json
+# reporivet:end"""
+_LEGACY_FIXED_HASHES = {
+    ".claude/skills/reporivet-main/SKILL.md":
+        "42d62ba802c6c385183d84d5a40fe35fa63a97af39c9bc6464992d9f322e8a1d",
+    ".claude/skills/reporivet-implementation/SKILL.md":
+        "697ef4a2138ce91dbea007a6dd17b2c9856b895784a95207eda0a9a41649a0cc",
+    ".claude/skills/reporivet-verification/SKILL.md":
+        "672bf819ddf43ee7bb20b7e20385eacfc2534cbbc70fd8cad8efbe639f582b09",
+    ".claude/settings.json":
+        "aa661eccd0aa127c2ae60fdaa42997e7eae1cc4926ea380281dcc7967dc4b82c",
+}
+_LEGACY_VERSION_CONTENT = f"# reporivet:managed version={__version__}\n{__version__}\n"
+_LEGACY_FIXED_HASHES[".reporivet-version"] = _sha256_text(_LEGACY_VERSION_CONTENT)
+
+
+def _legacy_agents_content(values: Mapping[str, str]) -> str:
+    return re.sub(
+        r"\{\{([A-Z0-9_]+)\}\}",
+        lambda match: values.get(match.group(1), match.group(0)),
+        _LEGACY_AGENTS_TEMPLATE,
+    )
+
+
+def _legacy_marker_expected(relative: str, values: Mapping[str, str]) -> str:
+    if relative == "AGENTS.md":
+        return _legacy_agents_content(values).rstrip("\n")
+    return _LEGACY_GITIGNORE_BLOCK
+
+
+def _make_setup_action(
+    relative: str,
+    operation: str,
+    reason: str,
+    state: _SetupPathState,
+    *,
+    proposed: str = "",
+    ownership: str | None = None,
+    proposed_type: str | None = None,
+    proposed_path: str | None = None,
+    destination_state: _SetupPathState | None = None,
+    destination_content: str = "",
+    diagnostics: tuple[SetupDiagnostic, ...] = (),
+    normalize_proposed: bool = True,
+) -> SetupAction:
+    normalized = (
+        proposed.rstrip() + "\n"
+        if proposed and normalize_proposed
+        else proposed
+    )
+    current_hash = state.sha256
+    if ownership is None:
+        ownership = "absent" if state.kind == "missing" else "project-owned"
+    if proposed_type is None:
+        if operation == "remove":
+            proposed_type = "missing"
+        elif operation == "preserve":
+            proposed_type = state.kind
+        else:
+            proposed_type = "regular"
+
+    if operation in {"preserve", "conflict"}:
+        proposed_hash = current_hash if operation == "preserve" else (
+            _sha256_text(normalized) if normalized else ""
+        )
+    elif proposed_type == "regular":
+        proposed_hash = _sha256_text(normalized)
+    else:
+        proposed_hash = ""
+
+    destination_normalized = (
+        destination_content.rstrip() + "\n" if destination_content else ""
+    )
+    destination_type = None
+    destination_hash = ""
+    destination_mode = None
+    destination_size = None
+    destination_current_type = None
+    destination_current_hash = ""
+    destination_current_mode = None
+    destination_current_size = None
+    if destination_state is not None:
+        destination_type = "regular" if destination_normalized else "missing"
+        destination_hash = (
+            _sha256_text(destination_normalized) if destination_normalized else ""
+        )
+        destination_mode = None
+        destination_size = len(destination_normalized.encode("utf-8")) if destination_normalized else None
+        destination_current_type = destination_state.kind
+        destination_current_hash = destination_state.sha256
+        destination_current_mode = destination_state.mode
+        destination_current_size = destination_state.size
+
+    return SetupAction(
+        path=relative,
+        action=operation,
+        reason=reason,
+        current_sha256=current_hash,
+        proposed_sha256=proposed_hash,
+        content=normalized,
+        ownership=ownership,
+        current_type=state.kind,
+        current_mode=state.mode,
+        current_size=state.size,
+        current_children=state.children,
+        proposed_type=proposed_type,
+        proposed_mode=None,
+        proposed_path=proposed_path,
+        destination_type=destination_type,
+        destination_sha256=destination_hash,
+        destination_mode=destination_mode,
+        destination_size=destination_size,
+        destination_current_type=destination_current_type,
+        destination_current_sha256=destination_current_hash,
+        destination_current_mode=destination_current_mode,
+        destination_current_size=destination_current_size,
+        destination_content=destination_normalized,
+        diagnostics=diagnostics,
+    )
+
+
 def _setup_action(
     root: Path,
     relative: str,
     proposed: str,
     *,
     state_reader: Callable[[str], tuple[str, bytes]] | None = None,
+    path_state: _SetupPathState | None = None,
 ) -> SetupAction:
-    path = root / relative
-    state, current = (
-        state_reader(relative)
-        if state_reader is not None
-        else _regular_file_state(path)
+    state = path_state or (
+        _path_state(root, relative)
+        if state_reader is None
+        else _state_from_reader(relative, state_reader)
     )
     normalized = proposed.rstrip() + "\n" if proposed else ""
     proposed_bytes = normalized.encode("utf-8")
-    current_hash = _sha256_bytes(current) if state == "file" else ""
-    proposed_hash = _sha256_bytes(proposed_bytes)
 
-    if state == "conflict":
-        return SetupAction(
+    if state.kind not in {"missing", "regular"}:
+        return _make_setup_action(
             relative,
             "conflict",
-            "target is symlinked, nonregular, or unreadable and will not be changed",
-            current_hash,
-            proposed_hash,
-            normalized,
+            "target is symlinked, nonregular, unsafe, or unreadable and will not be changed",
+            state,
+            proposed=normalized,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    relative,
+                    "unsafe-path",
+                    "current filesystem type is not a safely readable regular file or absence",
+                ),
+            ),
         )
-
-    if relative == "AGENTS.md":
-        block = extract_block(normalized, AGENTS_START, AGENTS_END)
-        try:
-            updated = upsert_block_text_preserving(
-                current.decode("utf-8") if state == "file" else "",
-                block,
-                AGENTS_START,
-                AGENTS_END,
-            )
-        except (InitError, UnicodeError):
-            return SetupAction(
-                relative,
-                "conflict",
-                "existing canonical instruction file cannot receive a safe bounded block",
-                current_hash,
-                proposed_hash,
-                normalized,
-            )
-        proposed_hash = _sha256_text(updated)
-        if state == "file" and current == updated.encode("utf-8"):
-            return SetupAction(relative, "unchanged", "canonical instruction block is current", current_hash, proposed_hash, updated)
-        return SetupAction(
-            relative,
-            "update" if state == "file" else "create",
-            "write only the bounded Reporivet instruction block and preserve surrounding project text",
-            current_hash,
-            proposed_hash,
-            updated,
-        )
-
-    if relative == ".gitignore":
-        block = normalized.strip()
-        try:
-            updated = upsert_block_text_preserving(
-                current.decode("utf-8") if state == "file" else "",
-                block,
-                GITIGNORE_START,
-                GITIGNORE_END,
-            )
-        except (InitError, UnicodeError):
-            return SetupAction(
-                relative,
-                "conflict",
-                "existing ignore file cannot receive a safe bounded block",
-                current_hash,
-                proposed_hash,
-                normalized,
-            )
-        proposed_hash = _sha256_text(updated)
-        if state == "file" and current == updated.encode("utf-8"):
-            return SetupAction(relative, "unchanged", "bounded ignore block is current", current_hash, proposed_hash, updated)
-        return SetupAction(
-            relative,
-            "update" if state == "file" else "create",
-            "write only the bounded Reporivet ignore block and preserve surrounding project text",
-            current_hash,
-            proposed_hash,
-            updated,
-        )
-
-    if state == "missing":
-        return SetupAction(
+    if state.kind == "missing":
+        return _make_setup_action(
             relative,
             "create",
-            "create the missing document-first bundle path",
-            "",
-            proposed_hash,
-            normalized,
+            "create the missing document-first Markdown asset",
+            state,
+            proposed=normalized,
         )
-    if current == proposed_bytes:
-        return SetupAction(
+    if state.content == proposed_bytes:
+        return _make_setup_action(
             relative,
             "unchanged",
-            "existing bytes already match the proposed asset",
-            current_hash,
-            proposed_hash,
-            normalized,
+            "existing bytes already match the proposed Markdown asset",
+            state,
+            proposed=normalized,
         )
-    if relative == ".claude/settings.json":
-        reason = "existing project settings are preserved; Reporivet never merges or rewrites them"
-    elif relative == "CLAUDE.md":
-        reason = "existing host instructions are preserved for manual reconciliation"
-    else:
-        reason = "existing project-owned content is preserved byte-for-byte"
-    return SetupAction(relative, "preserve", reason, current_hash, proposed_hash, normalized)
-
-
-def _settings_setup_action(
-    root: Path,
-    proposed: str | None,
-    *,
-    state_reader: Callable[[str], tuple[str, bytes]] | None = None,
-) -> SetupAction | None:
-    relative = ".claude/settings.json"
-    state, current = (
-        state_reader(relative)
-        if state_reader is not None
-        else _regular_file_state(root / relative)
+    reason = (
+        "existing host instructions are preserved for manual reconciliation"
+        if relative == "CLAUDE.md"
+        else "existing project-owned content is preserved byte-for-byte"
     )
-    redacted_hash = _sha256_bytes(b"")
-    if state == "missing":
-        if proposed is None:
-            return None
-        return _setup_action(
-            root,
-            relative,
-            proposed,
-            state_reader=state_reader,
-        )
-    if state == "conflict":
-        return SetupAction(
-            relative,
-            "conflict",
-            "project settings target is unsafe, symlinked, nonregular, or unreadable; Reporivet will not expose or change its content",
-            "",
-            redacted_hash,
-            "",
-        )
-    return SetupAction(
+    return _make_setup_action(
         relative,
         "preserve",
-        "existing project settings are preserved; Reporivet never merges or rewrites them",
-        _sha256_bytes(current),
-        redacted_hash,
-        "",
+        reason,
+        state,
+        proposed=normalized,
     )
+
+
+def _legacy_fixed_action(
+    root: Path,
+    relative: str,
+    *,
+    path_state_reader: Callable[[str], _SetupPathState],
+) -> SetupAction | None:
+    state = path_state_reader(relative)
+    if state.kind == "missing":
+        return None
+    expected_hash = _LEGACY_FIXED_HASHES[relative]
+    if state.kind != "regular":
+        return _make_setup_action(
+            relative,
+            "conflict",
+            "retired generated path is unsafe or nonregular; ownership cannot be proved",
+            state,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    relative,
+                    "unsafe-path",
+                    "cleanup refuses symlinked, nonregular, or unreadable retired content",
+                ),
+            ),
+        )
+    if state.sha256 == expected_hash:
+        return _make_setup_action(
+            relative,
+            "remove",
+            "exact legacy generated bytes are proven package-owned and may be removed by cleanup",
+            state,
+            ownership="reporivet-generated",
+            proposed_type="missing",
+        )
+    return _make_setup_action(
+        relative,
+        "preserve",
+        "retired path is not an exact known generated artifact; preserve project-owned bytes",
+        state,
+        ownership="ambiguous",
+        diagnostics=(
+            SetupDiagnostic(
+                relative,
+                "ownership-unproven",
+                "path name and location do not establish Reporivet ownership",
+            ),
+        ),
+    )
+
+
+def _legacy_marker_action(
+    root: Path,
+    relative: str,
+    desired: str,
+    values: Mapping[str, str],
+    *,
+    path_state_reader: Callable[[str], _SetupPathState],
+) -> SetupAction | None:
+    state = path_state_reader(relative)
+    if state.kind == "missing":
+        return None
+    if state.kind != "regular":
+        return _make_setup_action(
+            relative,
+            "conflict",
+            "managed-marker cleanup cannot inspect an unsafe or nonregular path",
+            state,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    relative,
+                    "unsafe-path",
+                    "marker cleanup refuses symlinked, nonregular, or unreadable paths",
+                ),
+            ),
+        )
+    try:
+        text = state.content.decode("utf-8")
+    except UnicodeDecodeError:
+        return _make_setup_action(
+            relative,
+            "preserve",
+            "marker-bearing bytes are not valid UTF-8; ownership cannot be proved",
+            state,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    relative,
+                    "ownership-unproven",
+                    "managed marker cleanup requires exact UTF-8 canonical bytes",
+                ),
+            ),
+        )
+    markers = (
+        (AGENTS_START, AGENTS_END)
+        if relative == "AGENTS.md"
+        else (GITIGNORE_START, GITIGNORE_END)
+    )
+    try:
+        span = _managed_marker_span(text, *markers)
+    except InitError as exc:
+        return _make_setup_action(
+            relative,
+            "conflict",
+            "managed marker structure is malformed and cannot be classified safely",
+            state,
+            ownership="ambiguous",
+            diagnostics=(SetupDiagnostic(relative, "malformed-markers", str(exc)),),
+        )
+    if span is None:
+        return None
+    expected = _legacy_marker_expected(relative, values)
+    if text[span[0] : span[1]] != expected:
+        return _make_setup_action(
+            relative,
+            "preserve",
+            "marker bytes are present but do not exactly match the known generated block",
+            state,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    relative,
+                    "ownership-unproven",
+                    "marker names alone never establish generated ownership",
+                ),
+            ),
+        )
+
+    updated = text[: span[0]] + text[span[1] :]
+    if not updated.strip():
+        if relative == "AGENTS.md":
+            return _make_setup_action(
+                relative,
+                "convert",
+                "replace the exact legacy managed instruction file with the current unmarked asset",
+                state,
+                proposed=desired,
+                ownership="reporivet-generated",
+            )
+        return _make_setup_action(
+            relative,
+            "remove",
+            "exact legacy generated marker block is proven package-owned and may be removed by cleanup",
+            state,
+            ownership="reporivet-generated",
+            proposed_type="missing",
+        )
+    return _make_setup_action(
+        relative,
+        "convert",
+        "remove only the exact legacy generated marker block and preserve surrounding project bytes",
+        state,
+        proposed=updated,
+        ownership="reporivet-generated",
+        normalize_proposed=False,
+    )
+
+
+def _legacy_procedure_action(
+    root: Path,
+    relative: str,
+    state: _SetupPathState,
+    *,
+    path_state_reader: Callable[[str], _SetupPathState],
+) -> SetupAction:
+    if state.kind != "regular":
+        return _make_setup_action(
+            relative,
+            "conflict",
+            "legacy procedure candidate is unsafe or nonregular; ownership cannot be proved",
+            state,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    relative,
+                    "unsafe-path",
+                    "legacy procedure cleanup refuses symlinked, nonregular, or unreadable paths",
+                ),
+            ),
+        )
+    procedure = _legacy_procedure_skill_ownership_proof(state.content)
+    if procedure is None:
+        return _make_setup_action(
+            relative,
+            "preserve",
+            "Claude Skill is not an exact known legacy procedure rendering; preserve project-owned bytes",
+            state,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    relative,
+                    "ownership-unproven",
+                    "strict legacy parser and byte-for-byte canonical rerender did not prove ownership",
+                ),
+            ),
+        )
+    destination = calculate_procedure_runbook_path(procedure)
+    runbook = render_procedure_runbook(procedure)
+    destination_state = path_state_reader(destination)
+    if destination_state.kind == "missing":
+        return _make_setup_action(
+            relative,
+            "convert",
+            "convert the exact legacy procedure Skill into a static Markdown runbook during cleanup",
+            state,
+            ownership="reporivet-generated",
+            proposed_type="missing",
+            proposed_path=destination,
+            destination_state=destination_state,
+            destination_content=runbook,
+        )
+    if (
+        destination_state.kind == "regular"
+        and destination_state.content == runbook.encode("utf-8")
+    ):
+        return _make_setup_action(
+            relative,
+            "remove",
+            "remove the exact legacy procedure Skill; its exact static runbook already exists",
+            state,
+            ownership="reporivet-generated",
+            proposed_type="missing",
+            proposed_path=destination,
+            destination_state=destination_state,
+            destination_content=runbook,
+        )
+    return _make_setup_action(
+        relative,
+        "conflict",
+        "exact legacy procedure Skill cannot be converted because the runbook destination is occupied or unsafe",
+        state,
+        ownership="ambiguous",
+        proposed_path=destination,
+        destination_state=destination_state,
+        destination_content=runbook,
+        diagnostics=(
+            SetupDiagnostic(
+                relative,
+                "runbook-collision",
+                f"conversion destination is not the exact expected runbook: {destination}",
+            ),
+        ),
+    )
+
+
+def _legacy_cleanup_actions(
+    *,
+    root: Path,
+    draft: DefinitionDraft,
+    desired_contents: Mapping[str, str],
+    path_state_reader: Callable[[str], _SetupPathState],
+) -> tuple[dict[str, SetupAction], tuple[SetupDiagnostic, ...]]:
+    values = _bundle_values(root, draft)
+    actions: dict[str, SetupAction] = {}
+    diagnostics: list[SetupDiagnostic] = []
+
+    for relative in (*_LEGACY_FIXED_HASHES,):
+        action = _legacy_fixed_action(
+            root,
+            relative,
+            path_state_reader=path_state_reader,
+        )
+        if action is not None:
+            actions[relative] = action
+            diagnostics.extend(action.diagnostics)
+
+    for relative in ("AGENTS.md", ".gitignore"):
+        action = _legacy_marker_action(
+            root,
+            relative,
+            desired_contents.get(relative, ""),
+            values,
+            path_state_reader=path_state_reader,
+        )
+        if action is not None:
+            actions[relative] = action
+            diagnostics.extend(action.diagnostics)
+
+    skills_root = path_state_reader(".claude/skills")
+    if skills_root.kind == "missing":
+        return actions, tuple(diagnostics)
+    if skills_root.kind != "directory":
+        action = _make_setup_action(
+            ".claude/skills",
+            "conflict",
+            "Claude Skill inventory root is unsafe or nonregular; cleanup will not traverse it",
+            skills_root,
+            ownership="ambiguous",
+            diagnostics=(
+                SetupDiagnostic(
+                    ".claude/skills",
+                    "unsafe-path",
+                    "cleanup uses no-follow traversal and refuses an unsafe Skill inventory root",
+                ),
+            ),
+        )
+        actions[".claude/skills"] = action
+        diagnostics.extend(action.diagnostics)
+        return actions, tuple(diagnostics)
+
+    for child in skills_root.children:
+        child_relative = f".claude/skills/{child}"
+        child_state = path_state_reader(child_relative)
+        if child_state.kind != "directory":
+            if child_state.kind != "missing":
+                action = _make_setup_action(
+                    child_relative,
+                    "conflict",
+                    "Claude Skill directory candidate is unsafe or nonregular",
+                    child_state,
+                    ownership="ambiguous",
+                    diagnostics=(
+                        SetupDiagnostic(
+                            child_relative,
+                            "unsafe-path",
+                            "cleanup refuses to traverse a symlinked or non-directory Skill child",
+                        ),
+                    ),
+                )
+                actions[child_relative] = action
+                diagnostics.extend(action.diagnostics)
+            continue
+        relative = f"{child_relative}/SKILL.md"
+        if relative in actions:
+            continue
+        state = path_state_reader(relative)
+        if state.kind == "missing":
+            continue
+        action = _legacy_procedure_action(
+            root,
+            relative,
+            state,
+            path_state_reader=path_state_reader,
+        )
+        actions[relative] = action
+        diagnostics.extend(action.diagnostics)
+    return actions, tuple(diagnostics)
 
 
 def _build_guided_setup_preview(
@@ -1652,40 +2165,90 @@ def _build_guided_setup_preview(
     root: Path,
     with_claude_settings: bool,
     state_reader: Callable[[str], tuple[str, bytes]] | None = None,
+    path_state_reader: Callable[[str], _SetupPathState] | None = None,
     draft: DefinitionDraft | None = None,
 ) -> SetupPreview:
+    # The compatibility argument remains accepted by protected callers, but no
+    # settings asset is generated in the one-shot bundle.
+    del with_claude_settings
     if draft is None:
         _, draft = _read_definition(root)
     contents = _target_asset_contents(
         root,
         draft,
-        with_claude_settings=with_claude_settings,
+        with_claude_settings=False,
     )
-    procedure_plan = build_procedure_skill_plan(
+    procedure_plan = build_procedure_runbook_plan(
         draft.evidence["procedures"].confirmed
     )
     for target in procedure_plan.targets:
         contents[target.path] = target.content
-    settings_proposed = contents.pop(".claude/settings.json", None)
-    action_list = [
-        _setup_action(
+
+    reader = path_state_reader or (lambda relative: _path_state(root, relative))
+    cleanup_actions, cleanup_diagnostics = _legacy_cleanup_actions(
+        root=root,
+        draft=draft,
+        desired_contents=contents,
+        path_state_reader=reader,
+    )
+    conversion_destinations = {
+        action.proposed_path
+        for action in cleanup_actions.values()
+        if action.action == "convert"
+        and action.proposed_path is not None
+        and action.destination_current_type == "missing"
+    }
+    for destination in conversion_destinations:
+        contents.pop(destination, None)
+
+    action_map: dict[str, SetupAction] = {
+        relative: _setup_action(
             root,
             relative,
             contents[relative],
             state_reader=state_reader,
+            path_state=reader(relative),
         )
         for relative in sorted(contents)
-    ]
-    settings_action = _settings_setup_action(
-        root,
-        settings_proposed,
-        state_reader=state_reader,
+    }
+    # Cleanup classification is authoritative for paths it claims, including
+    # the unmarked replacement of an exact old AGENTS.md file.
+    action_map.update(cleanup_actions)
+    actions = tuple(
+        sorted(
+            action_map.values(),
+            key=lambda action: (
+                action.path,
+                action.action,
+                action.proposed_path or "",
+            ),
+        )
     )
-    if settings_action is not None:
-        action_list.append(settings_action)
-    actions = tuple(sorted(action_list, key=lambda action: action.path))
+    diagnostics: list[object] = [*procedure_plan.diagnostics, *cleanup_diagnostics]
+    diagnostics = sorted(
+        {
+            json.dumps(
+                SetupPreview._diagnostic_dict(diagnostic),
+                ensure_ascii=False,
+                sort_keys=True,
+            ): diagnostic
+            for diagnostic in diagnostics
+        }.values(),
+        key=lambda diagnostic: json.dumps(
+            SetupPreview._diagnostic_dict(diagnostic),
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+    )
+    fingerprint_payload = {
+        "actions": [action.as_dict() for action in actions],
+        "diagnostics": [
+            SetupPreview._diagnostic_dict(diagnostic) for diagnostic in diagnostics
+        ],
+        "schema": "reporivet.setup-preview/v1",
+    }
     canonical = json.dumps(
-        [action.as_dict() for action in actions],
+        fingerprint_payload,
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
@@ -1693,7 +2256,7 @@ def _build_guided_setup_preview(
     return SetupPreview(
         actions,
         _sha256_bytes(canonical),
-        procedure_plan.diagnostics,
+        tuple(diagnostics),
     )
 
 
@@ -1738,6 +2301,7 @@ def maintain_document_first_bundle(
             root=root,
             with_claude_settings=False,
             state_reader=lambda _relative: ("missing", b""),
+            path_state_reader=lambda _relative: _SetupPathState("missing"),
             draft=draft,
         )
     else:
@@ -1747,6 +2311,7 @@ def maintain_document_first_bundle(
                 root=root,
                 with_claude_settings=False,
                 state_reader=transaction.regular_file_state,
+                path_state_reader=lambda relative: _path_state(root, relative),
                 draft=draft,
             )
         except BaseException:
@@ -1829,6 +2394,7 @@ def _preview_setup_from_definition(
             root=root,
             with_claude_settings=with_claude_settings,
             state_reader=transaction.regular_file_state,
+            path_state_reader=lambda relative: _path_state(root, relative),
             draft=draft,
         )
     finally:
@@ -1847,6 +2413,7 @@ def preview_guided_setup(
             root=root,
             with_claude_settings=with_claude_settings,
             state_reader=transaction.regular_file_state,
+            path_state_reader=lambda relative: _path_state(root, relative),
         )
     finally:
         transaction.close()
@@ -1869,7 +2436,7 @@ def _assert_action_current(
         raise InitError(
             f"setup target changed after preview: {action.path}; rerun finalize preview"
         )
-    if action.action in {"update", "preserve", "unchanged"} and (
+    if action.action in {"update", "preserve", "unchanged", "remove", "convert"} and (
         state != "file" or _sha256_bytes(content) != action.current_sha256
     ):
         raise InitError(
@@ -1893,6 +2460,7 @@ def _apply_guided_setup_quiet(
                 root=root,
                 with_claude_settings=with_claude_settings,
                 state_reader=transaction.regular_file_state,
+                path_state_reader=lambda relative: _path_state(root, relative),
                 draft=draft,
             )
             if not approve_preview or approve_preview != preview.fingerprint:
@@ -1981,7 +2549,8 @@ def apply_guided_setup(
     changes.print(root)
     return changes
 
-
+# Narrow compatibility helper retained for migration's legacy Plan inventory.
+# Guided setup no longer diagnoses or validates active Plans.
 def _parse_frontmatter(text: str) -> dict[str, str]:
     lines = text.splitlines()
     if not lines or lines[0] != "---":
@@ -1997,1680 +2566,3 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
         key, value = line.split(":", 1)
         values[key.strip()] = value.strip().strip('"\'')
     return values
-
-
-COMPACT_PLAN_HEADINGS = (
-    "## Original goal",
-    "## Observable outcome and acceptance",
-    "## Scope",
-    "## Non-goals",
-    "## Task state",
-    "## Task Packets",
-    "## Current checkpoint",
-    "## Exact next action",
-    "## Decisions",
-    "## Discoveries",
-    "## Documentation impact",
-    "## Integration summary",
-    "## Verification summary",
-    "## Follow-ups",
-    "## Outcome",
-)
-
-
-def _markdown_section(text: str, heading: str) -> str:
-    match = re.search(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)
-    if match is None:
-        return ""
-    next_heading = re.search(r"^## [^#].*$", text[match.end() :], re.MULTILINE)
-    end = len(text) if next_heading is None else match.end() + next_heading.start()
-    return text[match.end() : end].strip()
-
-
-COMPACT_PLAN_SIGNATURE_HEADINGS = (
-    "## Original goal",
-    "## Observable outcome and acceptance",
-    "## Task state",
-    "## Integration summary",
-    "## Verification summary",
-    "## Outcome",
-)
-OWNER_PLACEHOLDERS = frozenset(
-    {"", "-", "none", "pending", "placeholder", "tbd", "todo", "unassigned", "unknown"}
-)
-UNRESOLVED_PLACEHOLDER = re.compile(
-    r"\b(?:not yet|pending|placeholder|tbd|to be determined|todo|unknown|unresolved)\b",
-    re.IGNORECASE,
-)
-TASK_ID_PATTERN = re.compile(r"T[0-9]+(?:[-.][A-Za-z0-9]+)*")
-
-
-def _normalized_markdown_text(text: str) -> str:
-    normalized = re.sub(r"[`*_#|\-]", " ", text)
-    return re.sub(r"\s+", " ", normalized).strip(" .:;\t\r\n").casefold()
-
-
-def _owner_is_placeholder(value: str) -> bool:
-    normalized = _normalized_markdown_text(value)
-    return (
-        normalized in OWNER_PLACEHOLDERS
-        or UNRESOLVED_PLACEHOLDER.search(normalized) is not None
-    )
-
-
-def _contains_unresolved_placeholder(normalized: str) -> bool:
-    for match in UNRESOLVED_PLACEHOLDER.finditer(normalized):
-        if match.group(0).casefold() != "not yet" and re.search(
-            r"\b(?:no|not|without)\s+$",
-            normalized[: match.start()],
-        ):
-            continue
-        return True
-    return False
-
-
-def _section_is_unresolved(text: str, *, allow_none: bool) -> bool:
-    normalized = _normalized_markdown_text(text)
-    if not normalized or _contains_unresolved_placeholder(normalized):
-        return True
-    return not allow_none and normalized in {"n/a", "none", "not applicable"}
-
-
-def _has_markdown_heading(text: str, heading: str) -> bool:
-    return re.search(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE) is not None
-
-
-def _has_compact_plan_signature(text: str) -> bool:
-    present = {
-        heading for heading in COMPACT_PLAN_SIGNATURE_HEADINGS if _has_markdown_heading(text, heading)
-    }
-    return "## Task state" in present or len(present) >= 2
-
-
-def _compact_plan_structure_findings(
-    *,
-    relative: str,
-    text: str,
-    metadata: Mapping[str, str],
-    status: str,
-) -> list[DoctorFinding]:
-    findings: list[DoctorFinding] = []
-    for heading in COMPACT_PLAN_HEADINGS:
-        if not _has_markdown_heading(text, heading):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan is missing {heading[3:]}",
-                )
-            )
-
-    if _owner_is_placeholder(metadata.get("owner", "")):
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                "compact Plan is missing an explicit Plan owner",
-            )
-        )
-
-    for heading in ("## Current checkpoint", "## Exact next action"):
-        if _has_markdown_heading(text, heading) and _section_is_unresolved(
-            _markdown_section(text, heading),
-            allow_none=False,
-        ):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan {heading[3:]} is missing or placeholder",
-                )
-            )
-
-    task_section = _markdown_section(text, "## Task state")
-    rows = [line for line in task_section.splitlines() if line.strip().startswith("|")]
-    header = [cell.strip() for cell in rows[0].strip().strip("|").split("|")] if rows else []
-    task_ids: list[str] = []
-    row_owners: dict[str, list[str]] = {}
-    if "Task" not in header or "Owner" not in header:
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                "compact Plan task state table must contain Task and Owner columns",
-            )
-        )
-    else:
-        task_index = header.index("Task")
-        owner_index = header.index("Owner")
-        for row in rows[2:]:
-            cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
-            if len(cells) <= max(task_index, owner_index):
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        "compact Plan task state contains a malformed task row",
-                    )
-                )
-                continue
-            task_id = cells[task_index]
-            if TASK_ID_PATTERN.fullmatch(task_id) is None:
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan task row has invalid Task id '{task_id or 'missing'}'",
-                    )
-                )
-                continue
-            owner = cells[owner_index]
-            task_ids.append(task_id)
-            row_owners.setdefault(task_id, []).append(owner)
-            if _owner_is_placeholder(owner):
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan task {task_id} is missing an explicit Owner",
-                    )
-                )
-        if not task_ids:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    "compact Plan task state must contain at least one valid task row",
-                )
-            )
-
-    for task_id, count in sorted(Counter(task_ids).items()):
-        if count > 1:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan has duplicate task row id {task_id}",
-                )
-            )
-
-    packet_section = _markdown_section(text, "## Task Packets")
-    packet_matches = list(
-        re.finditer(
-            r"^### (T[0-9]+(?:[-.][A-Za-z0-9]+)*)\b.*$",
-            packet_section,
-            re.MULTILINE,
-        )
-    )
-    packets: list[tuple[str, str]] = []
-    for index, match in enumerate(packet_matches):
-        end = (
-            packet_matches[index + 1].start()
-            if index + 1 < len(packet_matches)
-            else len(packet_section)
-        )
-        packets.append((match.group(1), packet_section[match.end() : end]))
-    packet_ids = [task_id for task_id, _ in packets]
-    if not packet_ids:
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                "compact Plan Task Packets must contain at least one packet",
-            )
-        )
-    for task_id, count in sorted(Counter(packet_ids).items()):
-        if count > 1:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan has duplicate Task Packet id {task_id}",
-                )
-            )
-
-    task_id_set = set(task_ids)
-    packet_id_set = set(packet_ids)
-    for task_id in sorted(task_id_set - packet_id_set):
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                f"compact Plan task {task_id} is missing a Task Packet",
-            )
-        )
-    for task_id in sorted(packet_id_set - task_id_set):
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                f"compact Plan has unexpected Task Packet {task_id} without a task row",
-            )
-        )
-
-    packet_owners: dict[str, list[str]] = {}
-    for task_id, packet in packets:
-        owner_match = re.search(r"^- \*\*Owner:\*\*\s*(.*?)\s*$", packet, re.MULTILINE)
-        owner = "" if owner_match is None else owner_match.group(1).strip()
-        packet_owners.setdefault(task_id, []).append(owner)
-        if _owner_is_placeholder(owner):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan Task Packet {task_id} is missing an explicit Owner",
-                )
-            )
-
-    for task_id in sorted(task_id_set & packet_id_set):
-        row_values = row_owners.get(task_id, [])
-        packet_values = packet_owners.get(task_id, [])
-        if (
-            len(row_values) == 1
-            and len(packet_values) == 1
-            and not _owner_is_placeholder(row_values[0])
-            and not _owner_is_placeholder(packet_values[0])
-            and row_values[0] != packet_values[0]
-        ):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} row and Task Packet owners disagree",
-                )
-            )
-
-    terminal_status = status if status in TERMINAL_PLAN_STATES else ""
-    if terminal_status:
-        terminal_sections = (
-            ("## Documentation impact", True),
-            ("## Integration summary", False),
-            ("## Verification summary", False),
-            ("## Follow-ups", True),
-            ("## Outcome", False),
-        )
-        for heading, allow_none in terminal_sections:
-            if _has_markdown_heading(text, heading) and _section_is_unresolved(
-                _markdown_section(text, heading),
-                allow_none=allow_none,
-            ):
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"terminal compact Plan must resolve {heading[3:]}",
-                    )
-                )
-        if _has_markdown_heading(text, "## Outcome"):
-            outcome = _markdown_section(text, "## Outcome")
-            stated = _normalized_markdown_text(outcome)
-            if stated != terminal_status:
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan Outcome must agree with terminal status '{terminal_status}'",
-                    )
-                )
-    return findings
-
-
-_STRICT_TASK_COLUMNS = (
-    "Task",
-    "Owner",
-    "State",
-    "Depends on",
-    "Parallel group",
-    "Outcome",
-    "Result",
-)
-_STRICT_PACKET_FIELDS = (
-    "Owner",
-    "Role",
-    "Parent",
-    "Parallel group",
-    "May delegate",
-    "Inherited boundaries",
-    "Outcome",
-    "Non-goals",
-    "Read",
-    "Allowed writes",
-    "Protected paths",
-    "Acceptance",
-    "Verification",
-    "Stop conditions",
-    "Return",
-    "Result",
-)
-_STRICT_ROLES = ("Task Owner", "leaf", "integration", "verification")
-_STRICT_ROLE_BY_CASEFOLD = {role.casefold(): role for role in _STRICT_ROLES}
-_STRICT_STATES = (
-    "ready",
-    "blocked",
-    "in-progress",
-    "verifying",
-    "complete",
-    "cancelled",
-    "superseded",
-)
-_STRICT_RESULTS = ("pending", "complete", "cancelled", "superseded")
-_STRICT_RESULT_FOR_STATE = {
-    "ready": "pending",
-    "blocked": "pending",
-    "in-progress": "pending",
-    "verifying": "pending",
-    "complete": "complete",
-    "cancelled": "cancelled",
-    "superseded": "superseded",
-}
-
-
-@dataclass(frozen=True)
-class _StrictTaskRow:
-    task_id: str
-    owner: str
-    state: str
-    dependencies: tuple[str, ...]
-    parallel_group: str
-    outcome: str
-    result: str
-    mapping_valid: bool
-    owner_valid: bool
-    state_valid: bool
-    dependencies_valid: bool
-    parallel_group_valid: bool
-    outcome_valid: bool
-    result_valid: bool
-
-
-@dataclass(frozen=True)
-class _StrictTaskPacket:
-    task_id: str
-    values: tuple[tuple[str, str], ...]
-    valid: bool
-
-
-@dataclass(frozen=True)
-class _StrictTaskGraph:
-    rows: tuple[_StrictTaskRow, ...]
-    packets: tuple[_StrictTaskPacket, ...]
-
-
-def _strict_packet_value(packet: _StrictTaskPacket, field: str) -> str:
-    return dict(packet.values).get(field, "")
-
-
-def _strict_parse_dependencies(
-    *,
-    relative: str,
-    task_id: str,
-    raw: str,
-) -> tuple[tuple[str, ...], bool, list[DoctorFinding]]:
-    value = raw.strip()
-    if value == "none":
-        return (), True, []
-    if not value:
-        return (
-            (),
-            False,
-            [
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} Depends on is missing; use none for no dependencies",
-                )
-            ],
-        )
-
-    tokens = tuple(piece.strip() for piece in value.split(","))
-    if any(not token for token in tokens):
-        return (
-            tokens,
-            False,
-            [
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} Depends on contains a blank dependency",
-                )
-            ],
-        )
-    if "none" in tokens:
-        return (
-            tokens,
-            False,
-            [
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} Depends on cannot mix none with task IDs",
-                )
-            ],
-        )
-    malformed = next(
-        (token for token in tokens if TASK_ID_PATTERN.fullmatch(token) is None),
-        None,
-    )
-    if malformed is not None:
-        return (
-            tokens,
-            False,
-            [
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} Depends on contains malformed Task ID '{malformed}'",
-                )
-            ],
-        )
-    duplicate = next(
-        (token for token in tokens if tokens.count(token) > 1),
-        None,
-    )
-    if duplicate is not None:
-        return (
-            tokens,
-            False,
-            [
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} has duplicate dependency {duplicate}",
-                )
-            ],
-        )
-    return tokens, True, []
-
-
-def _strict_parse_task_rows(
-    *,
-    relative: str,
-    text: str,
-) -> tuple[tuple[_StrictTaskRow, ...], list[DoctorFinding]]:
-    findings: list[DoctorFinding] = []
-    task_section = _markdown_section(text, "## Task state")
-    rows = [line for line in task_section.splitlines() if line.strip().startswith("|")]
-    header = [cell.strip() for cell in rows[0].strip().strip("|").split("|")] if rows else []
-    missing = [column for column in _STRICT_TASK_COLUMNS if column not in header]
-    duplicates = [
-        column
-        for column in _STRICT_TASK_COLUMNS
-        if header.count(column) > 1
-    ]
-    if missing:
-        if not header or any(column not in header for column in ("Task", "Owner")):
-            return (), findings
-        for column in missing:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task state table must contain {column} column",
-                )
-            )
-        return (), findings
-    if duplicates:
-        for column in duplicates:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task state table has duplicate {column} column",
-                )
-            )
-        return (), findings
-
-    indexes = {column: header.index(column) for column in _STRICT_TASK_COLUMNS}
-    parsed: list[_StrictTaskRow] = []
-    for raw_row in rows[2:]:
-        cells = [cell.strip() for cell in raw_row.strip().strip("|").split("|")]
-        if len(cells) <= max(indexes.values()):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    "compact Plan task state contains a malformed task row",
-                )
-            )
-            continue
-        task_id = cells[indexes["Task"]].strip()
-        if TASK_ID_PATTERN.fullmatch(task_id) is None:
-            continue
-
-        owner = cells[indexes["Owner"]].strip()
-        state = cells[indexes["State"]].strip()
-        parallel_group = cells[indexes["Parallel group"]].strip()
-        outcome = cells[indexes["Outcome"]].strip()
-        result = cells[indexes["Result"]].strip()
-        dependencies, dependencies_valid, dependency_findings = _strict_parse_dependencies(
-            relative=relative,
-            task_id=task_id,
-            raw=cells[indexes["Depends on"]],
-        )
-        findings.extend(dependency_findings)
-
-        owner_valid = bool(owner) and not _owner_is_placeholder(owner)
-        state_valid = state in _STRICT_STATES
-        result_valid = result in _STRICT_RESULTS
-        mapping_valid = True
-        parallel_group_valid = bool(parallel_group)
-        outcome_valid = bool(outcome)
-
-        if not state_valid:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} has invalid State '{state or 'missing'}'; expected one of {', '.join(_STRICT_STATES)}",
-                )
-            )
-        if not result_valid:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} has invalid Result '{result or 'missing'}'; expected one of {', '.join(_STRICT_RESULTS)}",
-                )
-            )
-        if state_valid and result_valid:
-            expected_result = _STRICT_RESULT_FOR_STATE[state]
-            if result != expected_result:
-                mapping_valid = False
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan task {task_id} State '{state}' requires Result '{expected_result}'",
-                    )
-                )
-        if not parallel_group_valid:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} is missing Parallel group; use none for no group",
-                )
-            )
-        if not outcome_valid:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} is missing Outcome",
-                )
-            )
-
-        parsed.append(
-            _StrictTaskRow(
-                task_id=task_id,
-                owner=owner,
-                state=state,
-                dependencies=dependencies,
-                parallel_group=parallel_group,
-                outcome=outcome,
-                result=result,
-                mapping_valid=mapping_valid,
-                owner_valid=owner_valid,
-                state_valid=state_valid,
-                dependencies_valid=dependencies_valid,
-                parallel_group_valid=parallel_group_valid,
-                outcome_valid=outcome_valid,
-                result_valid=result_valid,
-            )
-        )
-    return tuple(parsed), findings
-
-
-def _strict_parse_task_packets(
-    *,
-    relative: str,
-    text: str,
-) -> tuple[tuple[_StrictTaskPacket, ...], list[DoctorFinding]]:
-    findings: list[DoctorFinding] = []
-    packet_section = _markdown_section(text, "## Task Packets")
-    packet_matches = list(
-        re.finditer(
-            r"^### (T[0-9]+(?:[-.][A-Za-z0-9]+)*)\b.*$",
-            packet_section,
-            re.MULTILINE,
-        )
-    )
-    parsed: list[_StrictTaskPacket] = []
-    for index, match in enumerate(packet_matches):
-        end = (
-            packet_matches[index + 1].start()
-            if index + 1 < len(packet_matches)
-            else len(packet_section)
-        )
-        packet = packet_section[match.end() : end]
-        task_id = match.group(1)
-        fields: dict[str, str] = {}
-        errors: list[str] = []
-        for field_match in re.finditer(
-            r"^- \*\*([^*]+):\*\*\s*(.*?)\s*$",
-            packet,
-            re.MULTILINE,
-        ):
-            field = field_match.group(1).strip()
-            if field not in _STRICT_PACKET_FIELDS:
-                continue
-            value = field_match.group(2).strip()
-            if field in fields:
-                errors.append(field)
-                continue
-            fields[field] = value
-
-        for field in _STRICT_PACKET_FIELDS:
-            if field not in fields:
-                if field != "Owner":
-                    findings.append(
-                        DoctorFinding(
-                            "error",
-                            relative,
-                            f"compact Plan Task Packet {task_id} is missing required field {field}",
-                        )
-                    )
-                errors.append(field)
-            elif not fields[field]:
-                if field != "Owner":
-                    findings.append(
-                        DoctorFinding(
-                            "error",
-                            relative,
-                            f"compact Plan Task Packet {task_id} has empty required field {field}",
-                        )
-                    )
-                errors.append(field)
-        duplicate_fields: set[str] = set()
-        seen_fields: set[str] = set()
-        for field_match in re.finditer(
-            r"^- \*\*([^*]+):\*\*\s*(.*?)\s*$",
-            packet,
-            re.MULTILINE,
-        ):
-            field = field_match.group(1).strip()
-            if field not in _STRICT_PACKET_FIELDS:
-                continue
-            if field in seen_fields:
-                duplicate_fields.add(field)
-            seen_fields.add(field)
-        for field in sorted(duplicate_fields):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan Task Packet {task_id} has duplicate field {field}",
-                )
-            )
-            errors.append(field)
-
-        parsed.append(
-            _StrictTaskPacket(
-                task_id=task_id,
-                values=tuple((field, fields.get(field, "")) for field in _STRICT_PACKET_FIELDS),
-                valid=not errors,
-            )
-        )
-    return tuple(parsed), findings
-
-
-def _strict_lexical_parent(task_id: str) -> str | None:
-    separator = max(task_id.rfind("-"), task_id.rfind("."))
-    return task_id[:separator] if separator > 0 else None
-
-
-def _strict_task_graph_findings(
-    *,
-    relative: str,
-    text: str,
-) -> list[DoctorFinding]:
-    rows, row_findings = _strict_parse_task_rows(relative=relative, text=text)
-    packets, packet_findings = _strict_parse_task_packets(relative=relative, text=text)
-    findings = [*row_findings, *packet_findings]
-
-    row_groups: dict[str, list[_StrictTaskRow]] = {}
-    for row in rows:
-        row_groups.setdefault(row.task_id, []).append(row)
-    packet_groups: dict[str, list[_StrictTaskPacket]] = {}
-    for packet in packets:
-        packet_groups.setdefault(packet.task_id, []).append(packet)
-    unique_rows = {
-        task_id: values[0]
-        for task_id, values in row_groups.items()
-        if len(values) == 1
-    }
-    unique_packets = {
-        task_id: values[0]
-        for task_id, values in packet_groups.items()
-        if len(values) == 1
-    }
-    common_ids = sorted(set(unique_rows) & set(unique_packets))
-
-    for task_id in common_ids:
-        row = unique_rows[task_id]
-        packet = unique_packets[task_id]
-        packet_group = _strict_packet_value(packet, "Parallel group")
-        if (
-            row.parallel_group_valid
-            and packet_group
-            and row.parallel_group != packet_group
-        ):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} row and Task Packet parallel groups disagree",
-                )
-            )
-
-    graph = _StrictTaskGraph(
-        rows=tuple(unique_rows[task_id] for task_id in common_ids),
-        packets=tuple(unique_packets[task_id] for task_id in common_ids),
-    )
-    if (
-        not graph.rows
-        or set(unique_rows) != set(unique_packets)
-        or any(len(values) != 1 for values in row_groups.values())
-        or any(len(values) != 1 for values in packet_groups.values())
-        or any(not row.owner_valid or not row.state_valid or not row.mapping_valid
-               or not row.dependencies_valid or not row.parallel_group_valid
-               or not row.outcome_valid or not row.result_valid
-               for row in graph.rows)
-        or any(not packet.valid for packet in graph.packets)
-    ):
-        return findings
-
-    rows_by_id = {row.task_id: row for row in graph.rows}
-    packets_by_id = {packet.task_id: packet for packet in graph.packets}
-
-    dependency_references_valid = True
-    for row in graph.rows:
-        for dependency in row.dependencies:
-            if dependency == row.task_id:
-                dependency_references_valid = False
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan task {row.task_id} cannot depend on itself",
-                    )
-                )
-            elif dependency not in rows_by_id:
-                dependency_references_valid = False
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan task {row.task_id} depends on missing task {dependency}",
-                    )
-                )
-
-    if dependency_references_valid:
-        dependency_map = {
-            row.task_id: row.dependencies
-            for row in graph.rows
-        }
-        visit_state: dict[str, int] = {}
-        visit_stack: list[str] = []
-        reported_cycles: set[tuple[str, ...]] = set()
-
-        def visit(task_id: str) -> None:
-            visit_state[task_id] = 1
-            visit_stack.append(task_id)
-            for dependency in dependency_map[task_id]:
-                state = visit_state.get(dependency, 0)
-                if state == 0:
-                    visit(dependency)
-                elif state == 1:
-                    start = visit_stack.index(dependency)
-                    cycle = tuple((*visit_stack[start:], dependency))
-                    cycle_nodes = cycle[:-1]
-                    first = min(cycle_nodes)
-                    first_index = cycle_nodes.index(first)
-                    canonical = tuple(
-                        (*cycle_nodes[first_index:], *cycle_nodes[:first_index], first)
-                    )
-                    if canonical not in reported_cycles:
-                        reported_cycles.add(canonical)
-                        findings.append(
-                            DoctorFinding(
-                                "error",
-                                relative,
-                                f"compact Plan task {first} is part of dependency cycle: {' -> '.join(canonical)}",
-                            )
-                        )
-            visit_stack.pop()
-            visit_state[task_id] = 2
-
-        for task_id in sorted(dependency_map):
-            if visit_state.get(task_id, 0) == 0:
-                visit(task_id)
-
-        if not reported_cycles:
-            for row in graph.rows:
-                if row.state not in {"ready", "in-progress", "verifying", "complete"}:
-                    continue
-                incomplete = [
-                    dependency
-                    for dependency in row.dependencies
-                    if rows_by_id[dependency].result != "complete"
-                ]
-                if not incomplete:
-                    continue
-                role = _strict_packet_value(packets_by_id[row.task_id], "Role").casefold()
-                if role == "verification":
-                    detail = (
-                        f"verification task {row.task_id} must remain blocked until integration dependencies complete"
-                    )
-                else:
-                    detail = (
-                        f"compact Plan task {row.task_id} must remain blocked until dependencies complete"
-                    )
-                findings.append(DoctorFinding("error", relative, detail))
-
-    role_by_id: dict[str, str] = {}
-    delegate_by_id: dict[str, str] = {}
-    parent_by_id: dict[str, str] = {}
-    packet_semantics_valid = True
-    for packet in graph.packets:
-        task_id = packet.task_id
-        role_raw = _strict_packet_value(packet, "Role")
-        role = _STRICT_ROLE_BY_CASEFOLD.get(role_raw.casefold())
-        if role is None:
-            packet_semantics_valid = False
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan Task Packet {task_id} has invalid Role '{role_raw}'; expected one of {', '.join(_STRICT_ROLES)}",
-                )
-            )
-        else:
-            role_by_id[task_id] = role
-
-        delegate_raw = _strict_packet_value(packet, "May delegate")
-        delegate = delegate_raw.casefold()
-        if delegate not in {"yes", "no"}:
-            packet_semantics_valid = False
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan Task Packet {task_id} has invalid May delegate '{delegate_raw}'; expected yes or no",
-                )
-            )
-        else:
-            delegate_by_id[task_id] = delegate
-
-        parent = _strict_packet_value(packet, "Parent")
-        if parent != "none" and TASK_ID_PATTERN.fullmatch(parent) is None:
-            packet_semantics_valid = False
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan Task Packet {task_id} has invalid Parent '{parent or 'missing'}'; expected none or an exact Task ID",
-                )
-            )
-        else:
-            parent_by_id[task_id] = parent
-
-    if not packet_semantics_valid:
-        return findings
-
-    parent_graph_valid = True
-    for task_id in sorted(parent_by_id):
-        parent = parent_by_id[task_id]
-        expected = _strict_lexical_parent(task_id)
-        if expected is None:
-            if parent != "none":
-                parent_graph_valid = False
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan Task Packet {task_id} is a root packet and Parent must be none",
-                    )
-                )
-            continue
-        if parent == "none" or parent != expected:
-            parent_graph_valid = False
-            if parent != "none" and parent not in packets_by_id:
-                detail = (
-                    f"compact Plan Task Packet {task_id} Parent {parent} does not exist "
-                    f"and must be exact immediate lexical prefix {expected}"
-                )
-            else:
-                detail = (
-                    f"compact Plan Task Packet {task_id} Parent must be exact immediate lexical prefix {expected}"
-                )
-            findings.append(DoctorFinding("error", relative, detail))
-        elif parent not in packets_by_id:
-            parent_graph_valid = False
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan Task Packet {task_id} Parent {parent} does not exist",
-                )
-            )
-
-    if not parent_graph_valid:
-        return findings
-
-    children: dict[str, list[str]] = {task_id: [] for task_id in packets_by_id}
-    for task_id, parent in parent_by_id.items():
-        if parent != "none":
-            children[parent].append(task_id)
-    descendants: dict[str, tuple[str, ...]] = {}
-    for task_id in sorted(children):
-        found: list[str] = []
-        pending = list(sorted(children[task_id]))
-        while pending:
-            child = pending.pop(0)
-            found.append(child)
-            pending[0:0] = sorted(children[child])
-        descendants[task_id] = tuple(found)
-
-    for task_id in sorted(role_by_id):
-        role = role_by_id[task_id]
-        delegate = delegate_by_id[task_id]
-        has_descendants = bool(descendants[task_id])
-        if role == "Task Owner" or has_descendants:
-            if delegate != "yes":
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"compact Plan Task Packet {task_id} with role {role} must declare May delegate yes",
-                    )
-                )
-        if role in {"leaf", "integration", "verification"} and delegate != "no":
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan Task Packet {task_id} with role {role} must declare May delegate no",
-                )
-            )
-
-    for task_id in sorted(role_by_id):
-        role = role_by_id[task_id]
-        row = rows_by_id[task_id]
-        dependencies = row.dependencies
-        if role == "integration":
-            if descendants[task_id]:
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"integration task {task_id} must not have descendants",
-                    )
-                )
-            if dependency_references_valid:
-                implementation_dependencies = [
-                    dependency
-                    for dependency in dependencies
-                    if role_by_id.get(dependency) in {"leaf", "Task Owner"}
-                ]
-                if not implementation_dependencies:
-                    findings.append(
-                        DoctorFinding(
-                            "error",
-                            relative,
-                            f"integration task {task_id} must depend on at least one implementation leaf or Task Owner",
-                        )
-                    )
-                for dependency in dependencies:
-                    if role_by_id.get(dependency) == "verification":
-                        findings.append(
-                            DoctorFinding(
-                                "error",
-                                relative,
-                                f"integration task {task_id} must not depend on verification task {dependency}",
-                            )
-                        )
-                parent = parent_by_id[task_id]
-                if parent != "none":
-                    required_siblings = [
-                        sibling
-                        for sibling in sorted(role_by_id)
-                        if sibling != task_id
-                        and parent_by_id[sibling] == parent
-                        and role_by_id[sibling] in {"leaf", "Task Owner"}
-                    ]
-                    for sibling in required_siblings:
-                        if sibling not in dependencies:
-                            findings.append(
-                                DoctorFinding(
-                                    "error",
-                                    relative,
-                                    f"integration task {task_id} must depend on same-parent implementation sibling {sibling}",
-                                )
-                            )
-        elif role == "verification":
-            if descendants[task_id]:
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"verification task {task_id} must not have descendants",
-                    )
-                )
-            if dependency_references_valid:
-                integration_dependencies = [
-                    dependency
-                    for dependency in dependencies
-                    if role_by_id.get(dependency) == "integration"
-                ]
-                if not integration_dependencies:
-                    findings.append(
-                        DoctorFinding(
-                            "error",
-                            relative,
-                            f"verification task {task_id} must directly depend on at least one integration candidate",
-                        )
-                    )
-                for dependency in dependencies:
-                    if role_by_id.get(dependency) != "integration":
-                        findings.append(
-                            DoctorFinding(
-                                "error",
-                                relative,
-                                f"verification task {task_id} may directly depend only on integration task {dependency}",
-                            )
-                        )
-        if row.state == "verifying" and role != "verification":
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"compact Plan task {task_id} may use State verifying only with verification Role",
-                )
-            )
-
-    return findings
-
-
-def _plan_findings(root: Path) -> list[DoctorFinding]:
-    findings: list[DoctorFinding] = []
-    seen: dict[str, str] = {}
-    for directory, allowed in (
-        (Path("docs/exec-plans/active"), ACTIVE_PLAN_STATES),
-        (Path("docs/exec-plans/completed"), TERMINAL_PLAN_STATES),
-    ):
-        target = root / directory
-        if symlink_component(target) is not None:
-            findings.append(DoctorFinding("error", directory.as_posix(), "Plan directory is behind a symlink"))
-            continue
-        if not target.exists():
-            findings.append(DoctorFinding("error", directory.as_posix(), "required Plan directory is missing"))
-            continue
-        if not target.is_dir():
-            findings.append(DoctorFinding("error", directory.as_posix(), "Plan path is not a directory"))
-            continue
-        for path in sorted(target.glob("*.md")):
-            relative = path.relative_to(root).as_posix()
-            if path.is_symlink() or not path.is_file():
-                findings.append(DoctorFinding("error", relative, "Plan path is not a regular non-symlink file"))
-                continue
-            try:
-                text = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeError):
-                findings.append(DoctorFinding("error", relative, "Plan file could not be read as UTF-8"))
-                continue
-            metadata = _parse_frontmatter(text)
-            plan_id = metadata.get("id", "")
-            status = metadata.get("status", "").casefold()
-            if not plan_id:
-                findings.append(DoctorFinding("error", relative, "Plan frontmatter is missing id"))
-            elif plan_id in seen:
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"duplicate Plan id also used by {seen[plan_id]}",
-                    )
-                )
-            else:
-                seen[plan_id] = relative
-            if status not in allowed:
-                expected = ", ".join(sorted(allowed))
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"Plan status '{status or 'missing'}' is invalid for this directory; expected one of {expected}",
-                    )
-                )
-
-            plan_format = metadata.get("format", "")
-            compact_signature = _has_compact_plan_signature(text)
-            strict_compact = plan_format == "2"
-            if compact_signature and plan_format != "2":
-                if "format" not in metadata:
-                    detail = "compact Plan is missing required format: 2"
-                else:
-                    detail = (
-                        f"compact Plan format '{plan_format or 'empty'}' is invalid; expected 2"
-                    )
-                findings.append(DoctorFinding("error", relative, detail))
-                strict_compact = True
-            elif "format" in metadata and plan_format != "2":
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"Plan format '{plan_format or 'empty'}' is invalid; expected 2",
-                    )
-                )
-
-            if strict_compact:
-                findings.extend(
-                    _compact_plan_structure_findings(
-                        relative=relative,
-                        text=text,
-                        metadata=metadata,
-                        status=status,
-                    )
-                )
-                if plan_format == "2" and "task_graph" in metadata:
-                    task_graph_marker = metadata["task_graph"]
-                    if task_graph_marker != "1":
-                        findings.append(
-                            DoctorFinding(
-                                "error",
-                                relative,
-                                f"Plan task_graph marker '{task_graph_marker or 'empty'}' is invalid; expected 1",
-                            )
-                        )
-                    else:
-                        findings.extend(
-                            _strict_task_graph_findings(
-                                relative=relative,
-                                text=text,
-                            )
-                        )
-            elif "format" not in metadata:
-                if directory.name == "completed":
-                    detail = (
-                        "historical pre-format grandfathered expanded Plan remains readable "
-                        "without rewriting"
-                    )
-                else:
-                    detail = (
-                        "active pre-format expanded Plan remains readable; reconcile it to "
-                        "format: 2 before relying on compact-schema validation"
-                    )
-                findings.append(DoctorFinding("warning", relative, detail))
-    return findings
-
-
-STRONG_CLAUSE_SEPARATOR = re.compile(
-    r";\s*|[.!?](?:\s+|$)|\b(?:but|however|whereas|while)\b",
-    re.IGNORECASE,
-)
-WEAK_CLAUSE_SEPARATOR = re.compile(
-    r",(?:\s*(?:and|or|nor)\b)?\s*|\b(?:and|or|nor)\b",
-    re.IGNORECASE,
-)
-LOCAL_NEGATION = re.compile(
-    r"\b(?:cannot|did not|do not|does not|historical|never|no|no longer|not|obsolete|"
-    r"remove|removed|retire|retired|should not|superseded|unsupported|without)\b",
-    re.IGNORECASE,
-)
-CLAUSE_PREDICATE = re.compile(
-    r"\b(?:am|are|be|been|being|can|cannot|could|did|do|does|had|has|have|is|may|"
-    r"might|must|remain|remains|shall|should|use|uses|used|was|were|will|would)\b",
-    re.IGNORECASE,
-)
-
-
-def _strong_clause_bounds(line: str, start: int, end: int) -> tuple[int, int]:
-    clause_start = 0
-    clause_end = len(line)
-    for separator in STRONG_CLAUSE_SEPARATOR.finditer(line):
-        if separator.end() <= start:
-            clause_start = separator.end()
-        elif separator.start() >= end:
-            clause_end = separator.start()
-            break
-    return clause_start, clause_end
-
-
-def _weak_clause_spans(line: str, start: int, end: int) -> list[tuple[int, int]]:
-    spans: list[tuple[int, int]] = []
-    cursor = start
-    for separator in WEAK_CLAUSE_SEPARATOR.finditer(line, start, end):
-        spans.append((cursor, separator.start()))
-        cursor = separator.end()
-    spans.append((cursor, end))
-    return spans
-
-
-def _match_is_negated(line: str, start: int, end: int) -> bool:
-    clause_start, clause_end = _strong_clause_bounds(line, start, end)
-    spans = _weak_clause_spans(line, clause_start, clause_end)
-    match_index = next(
-        (
-            index
-            for index, (segment_start, segment_end) in enumerate(spans)
-            if segment_start <= start and end <= segment_end
-        ),
-        None,
-    )
-    if match_index is None:
-        return False
-
-    local_start, local_end = spans[match_index]
-    local = line[local_start:local_end]
-    if LOCAL_NEGATION.search(local) is not None:
-        return True
-    if CLAUSE_PREDICATE.search(local) is not None:
-        return False
-
-    for previous_start, previous_end in reversed(spans[:match_index]):
-        previous = line[previous_start:previous_end]
-        if not previous.strip():
-            continue
-        if LOCAL_NEGATION.search(previous) is not None:
-            return True
-        if CLAUSE_PREDICATE.search(previous) is not None:
-            return False
-    return False
-
-
-def _current_authority_findings(root: Path) -> list[DoctorFinding]:
-    findings: list[DoctorFinding] = []
-    for relative, required_headings in CURRENT_AUTHORITY_REQUIREMENTS.items():
-        path = root / relative
-        if symlink_component(path) is not None or not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    "current authority could not be read as UTF-8",
-                )
-            )
-            continue
-        for heading in required_headings:
-            if not re.search(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE):
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        relative,
-                        f"current authority is missing required structure: {heading}",
-                    )
-                )
-        for line in text.splitlines():
-            for pattern, detail in RETIRED_CURRENT_PATTERNS:
-                for match in pattern.finditer(line):
-                    if not _match_is_negated(line, match.start(), match.end()):
-                        findings.append(DoctorFinding("warning", relative, detail))
-    return findings
-
-
-def _looks_like_legacy_harness_config(path: Path) -> bool:
-    if path.is_symlink() or not path.is_file():
-        return False
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return False
-    return (
-        "version = 1" in text
-        and "[project]" in text
-        and "[commands]" in text
-        and "[paths]" in text
-    )
-
-
-def _legacy_surface_findings(root: Path) -> list[DoctorFinding]:
-    findings: list[DoctorFinding] = []
-    for relative in LEGACY_MANAGED_FILES:
-        path = root / relative
-        if is_managed_file(path):
-            findings.append(
-                DoctorFinding(
-                    "warning",
-                    relative,
-                    "managed legacy 0.2 surface exists and requires explicit previewed migration",
-                )
-            )
-
-    config = root / "dev/harness.toml"
-    if _looks_like_legacy_harness_config(config):
-        findings.append(
-            DoctorFinding(
-                "warning",
-                "dev/harness.toml",
-                "legacy 0.2 harness configuration exists and requires explicit previewed migration",
-            )
-        )
-
-    for relative in LEGACY_RUNTIME_PATHS:
-        path = root / relative
-        if path.exists() or path.is_symlink():
-            detail = (
-                "retained legacy run evidence exists; doctor does not read or delete its contents"
-                if relative == ".harness/runs"
-                else "legacy 0.2 runtime path exists and requires explicit previewed migration"
-            )
-            findings.append(DoctorFinding("warning", relative, detail))
-    return findings
-
-
-def _doctor_skill_findings(
-    root: Path,
-    relative: str,
-    *,
-    missing_detail: str,
-) -> list[DoctorFinding]:
-    findings: list[DoctorFinding] = []
-    path = root / relative
-    if symlink_component(path) is not None or _non_directory_parent(path) is not None:
-        return [DoctorFinding("error", relative, "Claude Skill path is unsafe")]
-    if not path.exists():
-        return [DoctorFinding("warning", relative, missing_detail)]
-    if not path.is_file():
-        return [DoctorFinding("error", relative, "Claude Skill is not a regular file")]
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return [DoctorFinding("error", relative, "Claude Skill could not be read as UTF-8")]
-
-    name = Path(relative).parent.name
-    if not text.startswith("---\n"):
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                "Skill YAML frontmatter must start on line one",
-            )
-        )
-    metadata = _parse_frontmatter(text)
-    declared_name = metadata.get("name", "")
-    if declared_name != name:
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                "Skill name must match its parent directory",
-            )
-        )
-    if (
-        not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", declared_name)
-        or len(declared_name) > 64
-    ):
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                "Skill name must use lowercase letters, digits, and single hyphens",
-            )
-        )
-    description = metadata.get("description", "")
-    if not description:
-        findings.append(
-            DoctorFinding("error", relative, "Skill description is required")
-        )
-    elif "use when" not in description.casefold():
-        findings.append(
-            DoctorFinding(
-                "error",
-                relative,
-                "Skill description must state when to use it",
-            )
-        )
-    for forbidden in ("allowed-tools", "hooks", "shell"):
-        if forbidden in metadata:
-            findings.append(
-                DoctorFinding(
-                    "error",
-                    relative,
-                    f"Skill must not declare privilege-bearing {forbidden} frontmatter",
-                )
-            )
-    return findings
-
-
-def doctor_document_first(root: Path) -> DoctorReport:
-    root = validate_root(root)
-    findings: list[DoctorFinding] = []
-    for relative in REQUIRED_DOCUMENT_FIRST_PATHS:
-        path = root / relative
-        component = symlink_component(path)
-        if component is not None:
-            findings.append(DoctorFinding("error", relative, "required path is behind a symlink"))
-        elif not path.exists():
-            findings.append(DoctorFinding("error", relative, "required document-first path is missing"))
-        elif relative in REQUIRED_DOCUMENT_FIRST_DIRECTORIES and not path.is_dir():
-            findings.append(DoctorFinding("error", relative, "required Plan path is not a directory"))
-        elif relative not in REQUIRED_DOCUMENT_FIRST_DIRECTORIES and not path.is_file():
-            findings.append(DoctorFinding("error", relative, "required path is not a regular file"))
-
-    agents_path = root / "AGENTS.md"
-    if agents_path.is_file() and not agents_path.is_symlink():
-        try:
-            agents_text = agents_path.read_text(encoding="utf-8")
-            marker_counts = (
-                agents_text.count(AGENTS_START),
-                agents_text.count(AGENTS_END),
-            )
-            if marker_counts != (1, 1):
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        "AGENTS.md",
-                        "canonical instructions must contain one complete bounded Reporivet block",
-                    )
-                )
-        except (OSError, UnicodeError):
-            findings.append(DoctorFinding("error", "AGENTS.md", "canonical instructions could not be read as UTF-8"))
-
-    if (root / "docs/RELIABILITY.md").exists():
-        findings.append(
-            DoctorFinding(
-                "warning",
-                "docs/RELIABILITY.md",
-                "existing reliability authority is preserved but must be reconciled with docs/OPERATIONS.md",
-            )
-        )
-
-    claude = root / "CLAUDE.md"
-    if symlink_component(claude) is not None or _non_directory_parent(claude) is not None:
-        findings.append(DoctorFinding("error", "CLAUDE.md", "Claude adapter path is unsafe"))
-    elif claude.exists():
-        if not claude.is_file():
-            findings.append(DoctorFinding("error", "CLAUDE.md", "Claude adapter is not a regular file"))
-        else:
-            try:
-                content = claude.read_text(encoding="utf-8")
-            except (OSError, UnicodeError):
-                findings.append(DoctorFinding("error", "CLAUDE.md", "Claude adapter could not be read as UTF-8"))
-            else:
-                if content != "@AGENTS.md\n":
-                    findings.append(
-                        DoctorFinding(
-                            "warning",
-                            "CLAUDE.md",
-                            "existing Claude instructions are project-owned; the thin adapter form is exactly @AGENTS.md",
-                        )
-                    )
-    else:
-        findings.append(DoctorFinding("info", "CLAUDE.md", "optional Claude adapter is not installed"))
-
-    for relative in CLAUDE_PROFILE_ASSETS:
-        if relative == "CLAUDE.md":
-            continue
-        findings.extend(
-            _doctor_skill_findings(
-                root,
-                relative,
-                missing_detail="optional default Claude role Skill is not installed",
-            )
-        )
-
-    settings = root / ".claude/settings.json"
-    if symlink_component(settings) is not None or _non_directory_parent(settings) is not None:
-        findings.append(DoctorFinding("error", ".claude/settings.json", "project settings path is unsafe"))
-    elif settings.exists():
-        if not settings.is_file():
-            findings.append(DoctorFinding("error", ".claude/settings.json", "project settings are not a regular file"))
-        else:
-            try:
-                parsed = json.loads(settings.read_text(encoding="utf-8"))
-            except (OSError, UnicodeError, json.JSONDecodeError):
-                findings.append(DoctorFinding("error", ".claude/settings.json", "project settings are not valid strict JSON"))
-            else:
-                expected = json.loads(
-                    read_asset("document-first/optional/claude-settings.deny-only.json.tmpl")
-                )
-                if parsed == expected:
-                    findings.append(
-                        DoctorFinding(
-                            "info",
-                            ".claude/settings.json",
-                            "reviewed Reporivet deny-only template is installed; it is defense in depth, not a sandbox",
-                        )
-                    )
-                else:
-                    findings.append(
-                        DoctorFinding(
-                            "info",
-                            ".claude/settings.json",
-                            "project-owned Claude settings are preserved and are not claimed as Reporivet policy",
-                        )
-                    )
-    else:
-        findings.append(
-            DoctorFinding(
-                "info",
-                ".claude/settings.json",
-                "live Claude settings are intentionally absent by default",
-            )
-        )
-
-    draft_path = root / DEFINITION_DRAFT_PATH
-    if symlink_component(draft_path) is not None or _non_directory_parent(draft_path) is not None:
-        findings.append(DoctorFinding("error", DEFINITION_DRAFT_PATH.as_posix(), "definition draft path is unsafe"))
-    elif draft_path.exists():
-        if not draft_path.is_file():
-            findings.append(DoctorFinding("error", DEFINITION_DRAFT_PATH.as_posix(), "definition draft is not a regular file"))
-        else:
-            try:
-                draft = parse_definition_draft(
-                    draft_path.read_text(encoding="utf-8")
-                )
-            except (OSError, UnicodeError, InitError) as exc:
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        DEFINITION_DRAFT_PATH.as_posix(),
-                        str(exc),
-                    )
-                )
-            else:
-                procedure_plan = build_procedure_skill_plan(
-                    draft.evidence["procedures"].confirmed
-                )
-                for diagnostic in procedure_plan.diagnostics:
-                    findings.append(
-                        DoctorFinding(
-                            "warning",
-                            diagnostic.path,
-                            "procedure record is not Skill-eligible "
-                            f"({diagnostic.code}): {diagnostic.detail}",
-                        )
-                    )
-                for target in procedure_plan.targets:
-                    findings.extend(
-                        _doctor_skill_findings(
-                            root,
-                            target.path,
-                            missing_detail=(
-                                "optional confirmed procedure Skill is not installed"
-                            ),
-                        )
-                    )
-
-    plan_template = root / "docs/exec-plans/_template.md"
-    if plan_template.is_file() and not plan_template.is_symlink():
-        try:
-            template_text = plan_template.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            findings.append(DoctorFinding("error", "docs/exec-plans/_template.md", "Plan template could not be read as UTF-8"))
-        else:
-            if _parse_frontmatter(template_text).get("format") != "2":
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        "docs/exec-plans/_template.md",
-                        "compact Plan template must declare format: 2",
-                    )
-                )
-            for heading in COMPACT_PLAN_HEADINGS:
-                if not re.search(rf"^{re.escape(heading)}\s*$", template_text, re.MULTILINE):
-                    findings.append(
-                        DoctorFinding(
-                            "error",
-                            "docs/exec-plans/_template.md",
-                            f"compact Plan template is missing {heading[3:]}",
-                        )
-                    )
-            if not re.search(r"^\| Task \| Owner \|", template_text, re.MULTILINE):
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        "docs/exec-plans/_template.md",
-                        "compact Plan template task table is missing the Owner column",
-                    )
-                )
-            if not re.search(r"^- \*\*Owner:\*\*", template_text, re.MULTILINE):
-                findings.append(
-                    DoctorFinding(
-                        "error",
-                        "docs/exec-plans/_template.md",
-                        "compact Plan template Task Packet is missing Owner",
-                    )
-                )
-            for retired in (
-                "verification_run:",
-                "manifest_sha256:",
-                "gate_verdict:",
-                "Gate verdict",
-                ".harness/runs",
-                "./dev/",
-            ):
-                if retired in template_text:
-                    findings.append(
-                        DoctorFinding(
-                            "error",
-                            "docs/exec-plans/_template.md",
-                            f"compact Plan template contains retired field or path: {retired}",
-                        )
-                    )
-
-    findings.extend(_plan_findings(root))
-    findings.extend(_current_authority_findings(root))
-    findings.extend(_legacy_surface_findings(root))
-
-    unique = {
-        (finding.severity, finding.path, finding.detail): finding
-        for finding in findings
-    }
-    ordered = tuple(
-        unique[key]
-        for key in sorted(unique, key=lambda value: (value[1], value[0], value[2]))
-    )
-    return DoctorReport(ordered)
-
-
-def run_document_first_doctor(root: Path) -> int:
-    report = doctor_document_first(root)
-    print(report.render(), end="")
-    return 2 if report.errors else 0

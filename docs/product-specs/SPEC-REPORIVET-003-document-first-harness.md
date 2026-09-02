@@ -1,7 +1,7 @@
 ---
 id: SPEC-REPORIVET-003
 kind: product-spec
-status: active
+status: superseded
 area: harness
 summary: Document-first host-neutral Agent harness and reversible 0.2 migration
 applies_to:

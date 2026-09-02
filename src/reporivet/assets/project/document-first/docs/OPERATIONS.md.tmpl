@@ -1,44 +1,61 @@
 # Operations
 
-This is the single current authority for running, releasing, observing, backing up, rolling back, recovering, and handling incidents. Put repeatable step-by-step procedures in `runbooks/` and link them here.
+This document is the current project-owned authority for running, releasing, observing, backing up, rolling back, recovering, and handling incidents. Exact project commands and environment-specific details belong here or in subordinate runbooks; generic guidance must not be presented as an executable operation.
 
 ## Operating model
 
 {{OPERATIONS_EVIDENCE}}
 
-## Onboarding and package lifecycle
+The target is handed off once as a bounded set of project-owned Markdown, ordinary Plans, static runbooks, Git history, optional host adapters, and project content. After handoff, package absence is expected: the project and host own command execution, CI, deployment, monitoring, secrets, Git, and incident response. No target runtime, scheduler, dispatcher, task store, command runner, Gate, evidence archive, automatic closure, or hidden state is installed or required.
 
-The default onboarding entry point is integrated `reporivet setup`. `reporivet init` remains structure-only, and the lower-level `reporivet define` flow remains available for staged definition and approved finalization. No procedure is inferred or executed by onboarding.
+No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command. The setup handoff itself does not execute project commands, dispatch Agents, create a Plan, or silently mutate project-owned paths.
 
-Only complete Confirmed structured procedure records can produce an instruction-only `.claude/skills/<slug>/SKILL.md` through resumed setup. Dynamic procedure Skills are project-owned; existing differing, stale, or arbitrary Skills are preserved and never deleted. Main—not package runtime—creates or resumes Plans in visible Markdown.
+## Static runbooks
 
-Installation is pipx-primary: `pipx install` and `pip install` use the same wheel. Uninstalling Reporivet leaves repository artifacts useful, including documents, Plans, Skills, Git history, project commands, CI, and operational tools.
+Only one complete, unique, user-confirmed strict structured procedure record in `Confirmed` qualifies for a runbook. It must contain exactly these nine fields:
 
-Reporivet installs no scheduler, dispatcher, task DB, runner, generated CI, Gate, evidence archive, deployment engine, or automatic closure.
+- `slug`
+- `title`
+- `trigger`
+- `reads`
+- `actions`
+- `stop_conditions`
+- `evidence`
+- `permissions`
+- `rollback`
 
-## Required operational knowledge
+All nine fields are required. No aliases, additional fields, values, or defaults are accepted or inferred. The deterministic output is the ordinary Markdown file `docs/runbooks/<slug>.md`. A generated runbook has no frontmatter, executor metadata, hooks, command registration, shell metadata, tool permissions, or other privilege-bearing configuration. It is descriptive documentation for a project-owned operation, not an executor.
 
-### Confirmed
+Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, and duplicate procedure records produce no runbook. Preserve an existing differing, stale, arbitrary, unsafe, symlinked, or nonregular runbook rather than overwriting it by inference.
 
-- None.
+## Operating boundaries
 
-### Proposed
+### Running and release
 
-- None.
+Record supported environments, prerequisites, project-owned commands, deployment boundaries, release approvals, signing, and rollback conditions here. Do not invent a command from a filename, package name, scanner observation, or historical artifact. Deployment and publication remain outside a generic generated target unless the project explicitly documents them.
 
-### Open
+### Observation and incident response
 
-- How is each supported environment started, configured, deployed, and stopped?
-- Which signals show health, degradation, saturation, data loss, or security impact?
-- What is backed up, where, how often, for how long, and how is restore tested?
-- What is the rollback trigger, mechanism, authority, and point of no return?
-- How is service and data recovered, and what recovery objectives apply?
-- Who responds to an incident, how is impact contained, and how are decisions recorded?
+Record what to observe, where evidence is retained, alert ownership, escalation, incident severity, containment, recovery, and post-incident follow-up. Keep credentials and sensitive values out of Markdown. A runbook may describe the action and its evidence without carrying hooks, executor metadata, command registration, or host privilege configuration.
 
-### Sources
+### Backup, rollback, and recovery
 
-- None.
+State the owner, scope, retention, restore test, rollback trigger, and evidence for each project-owned recovery path. Keep backups external to any target transition that could remove or replace files. Revalidate immediately before mutation, stop on changed preconditions, and preserve or refuse paths whose ownership is unknown or ambiguous. Rollback must restore the last known safe project state without silently deleting unrelated content.
 
-## Procedure requirements
+### External actions
 
-Every release, backup, rollback, recovery, or incident runbook should state prerequisites, authorization, exact project-owned commands, expected observations, stop conditions, rollback, evidence, and escalation. Do not invent missing operational facts.
+External systems, production deployment, publication, signing, credentials, and irreversible operations require explicit project authority and permissions. Agents stop before an unapproved external action and record the blocker in the active Plan or incident record.
+
+## Plan and verification handoff
+
+For substantive operational changes, Main searches active and completed Plan history, resumes exactly one matching active ordinary Markdown Plan or creates the lowest unused current-year Plan without overwriting an existing file. Main owns scope, acceptance, integration, evidence judgment, and manual terminal movement. Broad or multi-part roots default to `Role: Task Owner` with `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves.
+
+Each broad Owner first returns a finite child manifest. Main alone serializes accepted child rows and complete matching packets into the Plan, then resumes that Owner. Only the resumed Owner dispatches declared dependency-ready descendants through host-native Agent execution. Owner-local aggregation is distinct from Main's final repository integration. Fresh verification is candidate-specific, read-only, nonrepairing, and nondelegating.
+
+## Operational evidence
+
+Record exact commands, timestamps, environment or candidate identity, outputs, approvals, observable effects, failures, and residual risks. Explanations and implementation narration are not evidence. Keep unresolved facts in `Open` and link durable decisions, runbooks, and completed Plans rather than rewriting their history.
+
+## Change triggers
+
+Update this authority when operating environments, release procedures, observability, backup or restore guarantees, incident boundaries, external dependencies, permissions, or rollback behavior change. Review affected static runbooks for exact nine-field completeness and uniqueness before treating them as current documentation.

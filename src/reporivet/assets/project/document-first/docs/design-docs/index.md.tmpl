@@ -1,8 +1,36 @@
 # Design Documents
 
-Use design documents for durable interaction, accessibility, architecture, data, or engineering choices that are too detailed for `docs/DESIGN.md` or `ARCHITECTURE.md`.
+This directory contains durable design records subordinate to current `docs/DESIGN.md` and `ARCHITECTURE.md`. Use it for interaction, accessibility, architecture, data, engineering, and boundary decisions that should survive a completed Plan.
 
-- State context, current design, invariants, alternatives, trade-offs, and verification.
-- Link the active Plan and affected product/architecture authority.
-- Supersede old design records rather than rewriting their accepted rationale.
-- Keep inferred design direction Proposed until it is explicitly confirmed.
+## Current design boundary
+
+Current design authority is summarized in [`../DESIGN.md`](../DESIGN.md) and [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md). Design records are ordinary Markdown and remain useful without a package, target runtime, generated settings, command wrapper, task store, or hidden state. Project commands, CI, deployment, and host-native Agent execution remain project-owned.
+
+The target is intentionally thin after setup: Markdown authority, ordinary Plans, static runbooks, Git, project content, and at most the exact host adapter. No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command.
+
+## What belongs here
+
+- interaction and information architecture;
+- accessibility and error-recovery decisions;
+- system, module, data, and dependency-boundary designs;
+- security, operations, and external-system design decisions; and
+- durable alternatives and rationale that should not be repeated in current summaries.
+
+Do not use this directory as a backlog, task database, hidden journal, executor registry, or substitute for an active Plan.
+
+## Design-record lifecycle
+
+1. Start from a concrete product requirement, architecture change, accessibility need, security boundary, or operational decision.
+2. State the context, decision, alternatives, constraints, consequences, open questions, and sources.
+3. Keep scanner observations or unapproved alternatives Proposed or Open rather than presenting them as current authority.
+4. Link the governing product spec, active Plan, decision record, and relevant implementation evidence.
+5. Mark a record superseded when a later decision replaces it; preserve historical rationale and do not rewrite completed history.
+
+## Evidence states
+
+- **Confirmed** — explicit accepted fact or decision.
+- **Proposed** — candidate direction awaiting approval.
+- **Open** — unresolved question, conflict, or unavailable evidence.
+- **Sources** — provenance for the statements above.
+
+A design document may constrain an implementation, but it does not grant permission for external, irreversible, or privilege-bearing action. Those actions require a current Plan and project-owned approval.

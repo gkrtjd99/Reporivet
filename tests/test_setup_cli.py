@@ -72,8 +72,21 @@ class SetupCliTests(unittest.TestCase):
             returncode = cli_main(arguments)
         return returncode, stdout.getvalue(), stderr.getvalue()
 
-    def test_setup_parser_has_only_the_frozen_surface_and_requires_root(self) -> None:
+    def test_parser_exposes_successor_surface_and_requires_setup_root(self) -> None:
         parser = build_parser()
+        subparsers = next(
+            action
+            for action in parser._actions
+            if getattr(action, "choices", None) is not None
+        )
+        self.assertEqual(
+            set(subparsers.choices),
+            {"setup", "init", "define", "audit", "upgrade", "migrate"},
+        )
+        self.assertNotIn("doctor", subparsers.choices)
+        self.assertNotIn("doctor", parser.format_help().casefold())
+        self.assertNotIn("--with-claude-settings", parser.format_help())
+
         parsed = parser.parse_args(
             [
                 "setup",
@@ -81,7 +94,8 @@ class SetupCliTests(unittest.TestCase):
                 "/tmp/project",
                 "--answers",
                 "/tmp/answers.json",
-                "--with-claude-settings",
+                "--backup-dir",
+                "/tmp/external-backup",
                 "--dry-run",
                 "--apply",
                 "--approve-preview",
@@ -91,10 +105,18 @@ class SetupCliTests(unittest.TestCase):
         self.assertEqual(parsed.command, "setup")
         self.assertEqual(parsed.root, Path("/tmp/project"))
         self.assertEqual(parsed.answers, Path("/tmp/answers.json"))
-        self.assertTrue(parsed.with_claude_settings)
+        self.assertEqual(parsed.backup_dir, Path("/tmp/external-backup"))
         self.assertTrue(parsed.dry_run)
         self.assertTrue(parsed.apply)
         self.assertEqual(parsed.approve_preview, "preview-hash")
+
+        for arguments in (
+            ["doctor"],
+            ["setup", "--root", "/tmp/project", "--with-claude-settings"],
+        ):
+            with self.subTest(arguments=arguments):
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                    parser.parse_args(arguments)
 
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             parser.parse_args(["setup"])
@@ -108,7 +130,8 @@ class SetupCliTests(unittest.TestCase):
             "/tmp/project",
             "--answers",
             "/tmp/answers.json",
-            "--with-claude-settings",
+            "--backup-dir",
+            "/tmp/external-backup",
             "--dry-run",
         ]
         returncode, stdout, stderr, calls, envelope = self.invoke_with_fake_setup(
@@ -126,22 +149,24 @@ class SetupCliTests(unittest.TestCase):
                 {
                     "root": Path("/tmp/project"),
                     "answers": Path("/tmp/answers.json"),
-                    "with_claude_settings": True,
+                    "with_claude_settings": False,
                     "dry_run": True,
                     "apply": False,
                     "approve_preview": "",
                     "stdin_is_tty": True,
+                    "backup_dir": Path("/tmp/external-backup"),
                 }
             ],
         )
 
-    def test_apply_passes_approval_and_settings_without_answers_or_dry_run(self) -> None:
+    def test_apply_passes_approval_and_backup_without_answers_or_dry_run(self) -> None:
         returncode, stdout, stderr, calls, envelope = self.invoke_with_fake_setup(
             [
                 "setup",
                 "--root",
                 "/tmp/project",
-                "--with-claude-settings",
+                "--backup-dir",
+                "/tmp/external-backup",
                 "--apply",
                 "--approve-preview",
                 "preview-hash",
@@ -159,11 +184,12 @@ class SetupCliTests(unittest.TestCase):
                 {
                     "root": Path("/tmp/project"),
                     "answers": None,
-                    "with_claude_settings": True,
+                    "with_claude_settings": False,
                     "dry_run": False,
                     "apply": True,
                     "approve_preview": "preview-hash",
                     "stdin_is_tty": False,
+                    "backup_dir": Path("/tmp/external-backup"),
                 }
             ],
         )

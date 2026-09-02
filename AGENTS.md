@@ -10,7 +10,7 @@
 3. Read only the current authority, code, and tests named by that Plan or the local task.
 4. Use the project-owned commands documented in [`docs/QUALITY.md`](docs/QUALITY.md) and [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
-The default package onboarding is integrated `reporivet setup`. `reporivet init` is structure-only and `reporivet define` remains the lower-level resumable definition interface. Setup does not spawn or dispatch Agents, execute project commands, or create a runtime; the host and project own those actions.
+The default package onboarding is integrated `reporivet setup`. It is a bounded one-shot package-side transaction: while the user invokes setup, the installed package or an explicitly selected local source may audit, collect visible definition answers, render an exact preview, and apply the approved target changes. `reporivet init` is structure-only and `reporivet define` remains the lower-level resumable definition interface. Setup does not spawn or dispatch Agents, execute project commands, create a Plan, or install a target runtime. After approved setup, the package may be removed and ordinary target work continues from project-owned Markdown, Plans, runbooks, Git, project commands, and host-native Agents.
 
 Do not preload every document, dependency tree, cache, generated output, or historical record.
 
@@ -27,11 +27,20 @@ Do not preload every document, dependency tree, cache, generated output, or hist
 
 When current sources conflict, stop and report the conflict. Do not silently choose the easiest interpretation.
 
+## One-shot generated-target boundary
+
+A fresh target receives project-owned authority documents, Plan templates and directories, deterministic static runbooks, and at most an exact root `CLAUDE.md` adapter containing only `@AGENTS.md`. It receives no Reporivet role or procedure Skill, `.reporivet-version`, generated `.claude/settings.json`, copied module or runtime, doctor gate, registry or package-resolution instruction, command wrapper, or hidden state.
+
+Only a complete, unique, user-confirmed strict structured procedure record with exactly these nine fields—`slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`—qualifies for a static runbook. The output is ordinary Markdown at `docs/runbooks/<slug>.md`; it has no frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration. Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook. A project may add or maintain its own operational material; Reporivet does not generate a continuing target Skill.
+
+An optional external user-scoped `/reporivet-setup` wrapper is outside the target. It is instruction-only, relays the deterministic package-side preview/apply flow, never installs or resolves Reporivet, and never edits target files itself. An explicit setup rerun may classify legacy role/procedure Skills, settings, markers, or managed blocks only through exact canonical ownership evidence. Destructive cleanup is preview-bound, requires an external backup, revalidates preimages, rolls back the transaction on failure, and refuses later rollback after user changes; modified, ambiguous, unsafe, symlinked, nonregular, and project-owned paths are preserved or refused.
+
 ## Main, implementation, and verification
 
-- **Main** owns user intent, scope, non-goals, acceptance criteria, decomposition, dispatch order, integration, decisions, and final evidence judgment. Main Skill may describe host-native dispatch, but Reporivet itself does not spawn or dispatch Agents. Main alone serializes Plan edits and terminal movement.
+- **Main** owns user intent, scope, non-goals, acceptance criteria, decomposition, dispatch order, integration, decisions, and final evidence judgment. Main's host-native procedure may describe dispatch, but Reporivet itself does not spawn or dispatch Agents. Main alone serializes Plan edits and terminal movement.
+- **Task Owner** is the default role for every broad or multi-part root and has `May delegate: yes`. The Owner first returns a finite child manifest inside its approved envelope; Main serializes accepted child rows and complete matching packets into the Plan, then resumes that serialized Owner. Only the resumed Task Owner dispatches its declared dependency-ready descendants through host-native Agent execution.
 - **Implementation Sub** receives one bounded Task Packet with exact reads, allowed writes, protected paths, acceptance criteria, project-owned commands, stop conditions, and return evidence. It must not broaden scope, change acceptance, delegate again, or approve its own work.
-- **Verification Sub** starts from a fresh context, identifies the integrated candidate, treats implementation narration as unverified, runs applicable project-owned checks, and returns criterion-level results and residual risks. It does not repair the candidate unless Main assigns a separate packet.
+- **Verification Sub** starts from a fresh context, identifies the integrated candidate, treats implementation narration as unverified, runs applicable project-owned checks, and returns criterion-level results and residual risks. It is read-only, nonrepairing, and nondelegating unless Main assigns a separate implementation packet.
 
 ### Broad-milestone native-Agent dispatch
 
@@ -43,9 +52,7 @@ Main dispatches independent root Owners concurrently. Each Owner first returns a
 
 Every child row retains an explicit owner and matching bounded packet. Descendants inherit the parent's scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces and cannot broaden them. Parallel mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration; fresh verification nodes depend on the integrated candidate and are read-only, nonrepairing, and nondelegating.
 
-Reporivet installs no scheduler, dispatcher, task store, lease, lock, command runner, Gate, evidence archive, automatic closure, hidden state, or other runtime for this workflow. A complete user-confirmed structured procedure may produce an instruction-only project Skill only through resumed setup; generic or unresolved procedure notes do not.
-
-Meaningful behavior changes should separate implementation and verification contexts. Main integrates returned evidence without normally repeating the verifier's detailed command run. Project command execution, CI, deployment, publication, signing, and release remain outside Reporivet.
+Reporivet installs no scheduler, dispatcher, task store, lease, lock, command runner, Gate, evidence archive, automatic closure, hidden state, or other runtime for this workflow. It installs no Agent spawn/dispatch mechanism or project command execution engine; project commands and CI remain project/host-owned. Meaningful behavior changes should separate implementation and verification contexts. Main integrates returned evidence without normally repeating the verifier's detailed command run.
 
 ## Working boundaries
 
@@ -63,6 +70,7 @@ Meaningful behavior changes should separate implementation and verification cont
 - Python 3.11 or newer is required for package work.
 - Exact project-owned checks and operational commands live in `docs/QUALITY.md` and `docs/OPERATIONS.md`.
 - Current implementation work is coordinated through one active Markdown Plan when the change is substantive.
+- Package absence after approved setup is expected and is not an unknown, blocker, or residual risk for ordinary target work.
 
 ### Proposed
 
@@ -74,6 +82,9 @@ Meaningful behavior changes should separate implementation and verification cont
 
 ### Sources
 
+- [`docs/decisions/ADR-0002-one-shot-bootstrapper-boundary.md`](docs/decisions/ADR-0002-one-shot-bootstrapper-boundary.md)
+- [`docs/product-specs/SPEC-REPORIVET-004-one-shot-bootstrapper.md`](docs/product-specs/SPEC-REPORIVET-004-one-shot-bootstrapper.md)
+- [`docs/design-docs/DESIGN-REPORIVET-004-one-shot-setup.md`](docs/design-docs/DESIGN-REPORIVET-004-one-shot-setup.md)
 - [`docs/QUALITY.md`](docs/QUALITY.md)
 - [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 - [`docs/PLANS.md`](docs/PLANS.md)

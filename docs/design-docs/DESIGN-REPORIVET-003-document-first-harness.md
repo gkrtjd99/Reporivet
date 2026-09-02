@@ -1,7 +1,7 @@
 ---
 id: DESIGN-REPORIVET-003
 kind: design-doc
-status: active
+status: superseded
 area: harness
 summary: Ownership and routing design for the document-first Agent harness
 applies_to:

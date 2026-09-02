@@ -13,7 +13,10 @@ from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
-ASSETS = SRC / "reporivet" / "assets" / "project"
+PACKAGE_ROOT = SRC / "reporivet"
+ASSETS = PACKAGE_ROOT / "assets" / "project"
+USER_SCOPED_ASSETS = PACKAGE_ROOT / "assets" / "user-scoped"
+SETUP_SKILL = USER_SCOPED_ASSETS / "reporivet-setup" / "SKILL.md"
 sys.path.insert(0, str(SRC))
 
 from reporivet.cli import main as cli_main
@@ -24,16 +27,11 @@ EXPECTED_PACKAGE_DATA = [
     "assets/project/document-first/docs/*.tmpl",
     "assets/project/document-first/docs/*/*.tmpl",
     "assets/project/document-first/claude/*.tmpl",
-    "assets/project/document-first/claude/skills/*/*.tmpl",
-    "assets/project/document-first/optional/*.tmpl",
-    "assets/project/root/reporivet-version.tmpl",
+    "assets/user-scoped/reporivet-setup/SKILL.md",
 ]
 
 EXPECTED_ASSETS = {
     "document-first/claude/CLAUDE.md.tmpl",
-    "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl",
-    "document-first/claude/skills/reporivet-main/SKILL.md.tmpl",
-    "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl",
     "document-first/docs/DESIGN.md.tmpl",
     "document-first/docs/OPERATIONS.md.tmpl",
     "document-first/docs/PLANS.md.tmpl",
@@ -54,9 +52,17 @@ EXPECTED_ASSETS = {
     "document-first/docs/references/project-definition-protocol.md.tmpl",
     "document-first/docs/runbooks/_template.md.tmpl",
     "document-first/docs/runbooks/index.md.tmpl",
-    "document-first/optional/claude-settings.deny-only.json.tmpl",
     "document-first/root/AGENTS.md.tmpl",
     "document-first/root/ARCHITECTURE.md.tmpl",
+}
+
+EXPECTED_EXTERNAL_ASSETS = {"reporivet-setup/SKILL.md"}
+
+RETIRED_ASSET_PATHS = {
+    "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl",
+    "document-first/claude/skills/reporivet-main/SKILL.md.tmpl",
+    "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl",
+    "document-first/optional/claude-settings.deny-only.json.tmpl",
     "document-first/root/gitignore.block.tmpl",
     "root/reporivet-version.tmpl",
 }
@@ -103,11 +109,13 @@ class DistributionTests(unittest.TestCase):
         self.assertEqual(project["license-files"], ["LICENSE"])
         self.assertNotIn("License :: OSI Approved :: MIT License", project["classifiers"])
 
-    def test_static_package_data_inventory_contains_only_document_first_assets_and_marker(self) -> None:
+    def test_static_package_data_inventory_contains_only_surviving_assets_and_external_skill(self) -> None:
         metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))
-        package_data = metadata["tool"]["setuptools"]["package-data"]["reporivet"]
+        setuptools = metadata["tool"]["setuptools"]
+        package_data = setuptools["package-data"]["reporivet"]
         self.assertEqual(package_data, EXPECTED_PACKAGE_DATA)
-        self.assertNotIn("exclude-package-data", metadata["tool"]["setuptools"])
+        self.assertFalse(setuptools["include-package-data"])
+        self.assertNotIn("exclude-package-data", setuptools)
 
         actual = {
             path.relative_to(ASSETS).as_posix()
@@ -117,6 +125,31 @@ class DistributionTests(unittest.TestCase):
             and path.suffix not in {".pyc", ".pyo"}
         }
         self.assertEqual(actual, EXPECTED_ASSETS)
+        self.assertEqual(
+            {
+                path.relative_to(USER_SCOPED_ASSETS).as_posix()
+                for path in USER_SCOPED_ASSETS.rglob("*")
+                if path.is_file()
+            },
+            EXPECTED_EXTERNAL_ASSETS,
+        )
+        self.assertTrue(SETUP_SKILL.is_file())
+        self.assertNotIn(ASSETS, SETUP_SKILL.parents)
+
+        declared_files = {
+            path.relative_to(PACKAGE_ROOT).as_posix()
+            for pattern in package_data
+            for path in PACKAGE_ROOT.glob(pattern)
+            if path.is_file()
+        }
+        expected_declared_files = {
+            *(f"assets/project/{relative}" for relative in EXPECTED_ASSETS),
+            *(f"assets/user-scoped/{relative}" for relative in EXPECTED_EXTERNAL_ASSETS),
+        }
+        self.assertEqual(declared_files, expected_declared_files)
+
+        for relative in RETIRED_ASSET_PATHS:
+            self.assertFalse((ASSETS / relative).exists(), relative)
         for relative in actual:
             parts = set(Path(relative).parts)
             self.assertTrue(parts.isdisjoint(RETIRED_ASSET_PARTS), relative)
@@ -167,10 +200,13 @@ class DistributionTests(unittest.TestCase):
                 (
                     "from pathlib import Path; "
                     "root=Path('.'); "
-                    "assert (root/'AGENTS.md').read_text().count('<!-- reporivet:start -->') == 1; "
+                    "assert '<!-- reporivet:start -->' not in (root/'AGENTS.md').read_text(); "
                     "assert (root/'CLAUDE.md').read_text() == '@AGENTS.md\\n'; "
-                    "skills=sorted((root/'.claude/skills').glob('*/SKILL.md')); "
-                    "assert len(skills) == 3; "
+                    "assert not (root/'.claude').exists(); "
+                    "assert not (root/'.reporivet-version').exists(); "
+                    "assert not (root/'.gitignore').exists(); "
+                    "assert not (root/'reporivet').exists(); "
+                    "assert not list((root/'docs/exec-plans/active').glob('PLAN-*.md')); "
                     "template=(root/'docs/exec-plans/_template.md').read_text(); "
                     "assert 'format: 2' in template and '## Task Packets' in template; "
                     "target=root/'docs/exec-plans/active/PLAN-2099-0001-package-free.md'; "

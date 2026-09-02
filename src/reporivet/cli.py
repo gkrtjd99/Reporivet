@@ -10,7 +10,6 @@ from .guided import (
     definition_status,
     preview_guided_setup,
     resume_guided_definition,
-    run_document_first_doctor,
     start_guided_definition,
 )
 from .initializer import (
@@ -32,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup = sub.add_parser("setup", help="audit, define, preview, and apply repository setup")
     setup.add_argument("--root", type=Path, required=True)
     setup.add_argument("--answers", type=Path, help="JSON answers keyed by guided topic")
-    setup.add_argument("--with-claude-settings", action="store_true", help="include the optional deny-only Claude settings file")
+    setup.add_argument("--backup-dir", type=Path, help="external directory for an approved cleanup backup")
     setup.add_argument("--dry-run", action="store_true")
     setup.add_argument("--apply", action="store_true", help="apply the exact current setup preview")
     setup.add_argument("--approve-preview", default="", help="SHA-256 fingerprint emitted by setup preview")
@@ -43,7 +42,6 @@ def build_parser() -> argparse.ArgumentParser:
     define.add_argument("--answers", type=Path, help="JSON answers keyed by guided topic for deterministic resume")
     define.add_argument("--apply", action="store_true", help="apply the exact current finalize preview")
     define.add_argument("--approve-preview", default="", help="SHA-256 fingerprint emitted by finalize preview")
-    define.add_argument("--with-claude-settings", action="store_true", help="include the optional deny-only Claude settings file in the exact preview")
     define.add_argument("--dry-run", action="store_true")
 
     audit = sub.add_parser("audit", help="inventory an existing repository without executing project commands or writing files")
@@ -72,8 +70,6 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.add_argument("--approve-preview", default="")
     migrate.add_argument("--backup-dir", type=Path)
 
-    doctor = sub.add_parser("doctor", help="inspect document-first repository structure without modifying it")
-    doctor.add_argument("--root", type=Path, default=Path.cwd())
     return parser
 
 
@@ -96,22 +92,23 @@ def main(argv: list[str] | None = None) -> int:
                 envelope = coordinate_setup(
                     root=args.root,
                     answers=args.answers,
-                    with_claude_settings=args.with_claude_settings,
+                    with_claude_settings=False,
                     dry_run=args.dry_run,
                     apply=args.apply,
                     approve_preview=args.approve_preview,
                     stdin_is_tty=sys.stdin.isatty(),
+                    backup_dir=args.backup_dir,
                 )
             print(envelope.render(), end="")
             return 0
         if args.command == "define":
             if args.action == "start":
-                if args.answers or args.apply or args.approve_preview or args.with_claude_settings:
+                if args.answers or args.apply or args.approve_preview:
                     raise InitError("define start accepts only --root and --dry-run")
                 start_guided_definition(root=args.root, dry_run=args.dry_run)
                 return 0
             if args.action == "resume":
-                if args.apply or args.approve_preview or args.with_claude_settings:
+                if args.apply or args.approve_preview:
                     raise InitError("define resume accepts --answers and --dry-run, not finalize options")
                 resume_guided_definition(
                     root=args.root,
@@ -120,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 return 0
             if args.action == "status":
-                if args.answers or args.apply or args.approve_preview or args.with_claude_settings or args.dry_run:
+                if args.answers or args.apply or args.approve_preview or args.dry_run:
                     raise InitError("define status accepts only --root and is always read-only")
                 print(definition_status(root=args.root), end="")
                 return 0
@@ -132,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
                 apply_guided_setup(
                     root=args.root,
                     approve_preview=args.approve_preview,
-                    with_claude_settings=args.with_claude_settings,
+                    with_claude_settings=False,
                 )
                 return 0
             if args.approve_preview:
@@ -140,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 preview_guided_setup(
                     root=args.root,
-                    with_claude_settings=args.with_claude_settings,
+                    with_claude_settings=False,
                 ).render(),
                 end="",
             )
@@ -202,8 +199,6 @@ def main(argv: list[str] | None = None) -> int:
                 end="",
             )
             return 0
-        if args.command == "doctor":
-            return run_document_first_doctor(args.root)
     except InitError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

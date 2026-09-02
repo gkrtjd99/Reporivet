@@ -1,7 +1,36 @@
 # Decisions
 
-Use this directory for durable product, architecture, security, operations, or process decisions whose rationale and consequences must survive the current Plan.
+This directory contains durable Architecture Decision Records and related project decisions. Decisions preserve rationale and consequences; current authority remains in `AGENTS.md`, `ARCHITECTURE.md`, `docs/DESIGN.md`, `docs/PRODUCT.md`, `docs/QUALITY.md`, `docs/OPERATIONS.md`, `docs/SECURITY.md`, and `docs/PLANS.md` as applicable.
 
-- Use `_template.md` for a new ADR.
-- Record the chosen boundary, rejected alternatives, consequences, verification, and retirement trigger.
-- Mark replaced decisions superseded and link both directions; do not rewrite historical rationale.
+## Decision boundary
+
+Decisions are ordinary Markdown records owned by the project. They remain useful after setup without a package, target runtime, generated settings, command wrapper, task store, or hidden state. No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command.
+
+A decision may establish a boundary or constrain implementation, but it does not itself execute commands, dispatch Agents, grant permissions, or close a Plan. External, irreversible, and privilege-bearing actions require explicit project authority.
+
+## What belongs here
+
+- a choice among meaningful alternatives;
+- the context and constraints that made the choice relevant;
+- consequences, trade-offs, rejected alternatives, and follow-up triggers;
+- links to the governing product spec, design, Plan, quality result, or incident; and
+- supersession or reversal information for later decisions.
+
+Do not use this directory as a backlog, task database, hidden journal, executor registry, or substitute for an active Plan. Keep product requirements in `product-specs/`, detailed designs in `design-docs/`, and implementation state in `exec-plans/`.
+
+## Decision lifecycle
+
+1. Start from a confirmed problem, requirement, boundary, or materially consequential choice.
+2. Record the decision, status, context, alternatives, consequences, owner, and sources using `_template.md` when creating a new record.
+3. Keep candidate directions Proposed and unresolved questions Open until an authorized owner accepts them.
+4. Link implementation and verification evidence without copying mutable task state into the decision record.
+5. Mark a record superseded or reversed when a later decision changes it; preserve the historical rationale and do not rewrite completed records.
+
+## Evidence states
+
+- **Confirmed** — accepted decision or fact with an accountable owner.
+- **Proposed** — candidate decision awaiting approval.
+- **Open** — unresolved question, conflict, or missing source.
+- **Sources** — paths and references supporting the record.
+
+A decision summary or Agent narration is not independent evidence. Main owns the active Plan, integration, and final evidence judgment for work that implements a decision.

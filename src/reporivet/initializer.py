@@ -10,10 +10,8 @@ from typing import Sequence
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 ASSETS = PACKAGE_ROOT / "assets" / "project"
-AGENTS_START = "<!-- reporivet:start -->"
-AGENTS_END = "<!-- reporivet:end -->"
-GITIGNORE_START = "# reporivet:start"
-GITIGNORE_END = "# reporivet:end"
+# Retained solely for the public legacy migration parser.  Current setup does
+# not generate or inventory a managed marker.
 MANAGED_MARKER = re.compile(r"# reporivet:managed version=[^\s]+")
 AUDIT_STATUSES = frozenset({"confirmed", "inferred", "unknown", "conflict", "skipped"})
 AUDIT_COMMAND_GROUPS = ("bootstrap", "run", "check", "verify", "smoke", "architecture")
@@ -74,7 +72,6 @@ AUDIT_RUNTIME_CONFIG_NAMES = frozenset(
     {
         ".node-version",
         ".python-version",
-        ".reporivet-version",
         ".tool-versions",
         "dev/harness.toml",
     }
@@ -215,84 +212,6 @@ def ensure_safe_write_path(path: Path) -> None:
     component = symlink_component(path)
     if component is not None:
         raise InitError(f"refusing to write through symlink path: {path} (via {component})")
-
-
-def is_managed_file(path: Path) -> bool:
-    if symlink_component(path) is not None or not path.is_file():
-        return False
-    try:
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()[:3]
-    except OSError:
-        return False
-    return any(MANAGED_MARKER.fullmatch(line) is not None for line in lines)
-
-
-def marker_line_spans(text: str, marker: str) -> list[tuple[int, int]]:
-    spans: list[tuple[int, int]] = []
-    markdown_marker = marker.startswith("<!--")
-    fence_character = ""
-    fence_length = 0
-    offset = 0
-    for line in text.splitlines(keepends=True):
-        content = line[:-1] if line.endswith("\n") else line
-        probe = content[:-1] if content.endswith("\r") else content
-        stripped = probe.lstrip(" \t")
-        indentation = len(probe) - len(stripped)
-        consider_marker = True
-        if markdown_marker and fence_character:
-            closing = re.match(
-                rf"{re.escape(fence_character)}{{{fence_length},}}",
-                stripped,
-            )
-            if closing is not None and not stripped[closing.end() :].strip():
-                fence_character = ""
-                fence_length = 0
-            consider_marker = False
-        elif markdown_marker and indentation <= 3:
-            opening = re.match(r"`{3,}|~{3,}", stripped)
-            if opening is not None:
-                fence_character = opening.group(0)[0]
-                fence_length = len(opening.group(0))
-                consider_marker = False
-        if (
-            consider_marker
-            and probe.strip(" \t") == marker
-            and (not markdown_marker or indentation <= 3)
-        ):
-            spans.append((offset, offset + len(content)))
-        offset += len(line)
-    return spans
-
-
-def managed_block_span(text: str, start: str, end: str) -> tuple[int, int] | None:
-    starts = marker_line_spans(text, start)
-    ends = marker_line_spans(text, end)
-    if not starts and not ends:
-        return None
-    if len(starts) != 1 or len(ends) != 1 or ends[0][0] < starts[0][1]:
-        raise InitError(f"existing file has malformed managed markers: {start} / {end}")
-    return starts[0][0], ends[0][1]
-
-
-def extract_block(text: str, start: str, end: str) -> str:
-    try:
-        span = managed_block_span(text, start, end)
-    except InitError as exc:
-        raise InitError(f"template has malformed managed markers: {start} / {end}") from exc
-    if span is None:
-        raise InitError(f"template is missing managed markers: {start} / {end}")
-    return text[span[0] : span[1]]
-
-
-def upsert_block_text_preserving(original: str, block: str, start: str, end: str) -> str:
-    span = managed_block_span(original, start, end)
-    replacement = block.rstrip()
-    if span is not None:
-        return original[: span[0]] + replacement + original[span[1] :]
-    if not original:
-        return replacement + "\n"
-    separator = "" if original.endswith("\n\n") else ("\n" if original.endswith("\n") else "\n\n")
-    return original + separator + replacement + "\n"
 
 
 def load_package_scripts(root: Path) -> tuple[str, dict[str, str]]:

@@ -36,16 +36,15 @@ class ClaudeAssetTests(unittest.TestCase):
         returncode, stdout, stderr = self.run_cli("define", "start", "--root", str(root))
         self.assertEqual(returncode, 0, stdout + stderr)
 
-    def preview(self, root: Path, *, settings: bool = False) -> dict[str, object]:
-        args = ["define", "finalize", "--root", str(root)]
-        if settings:
-            args.append("--with-claude-settings")
-        returncode, stdout, stderr = self.run_cli(*args)
+    def preview(self, root: Path) -> dict[str, object]:
+        returncode, stdout, stderr = self.run_cli(
+            "define", "finalize", "--root", str(root)
+        )
         self.assertEqual(returncode, 0, stdout + stderr)
         return json.loads(stdout)
 
-    def apply(self, root: Path, preview: dict[str, object], *, settings: bool = False) -> tuple[int, str, str]:
-        args = [
+    def apply(self, root: Path, preview: dict[str, object]) -> tuple[int, str, str]:
+        return self.run_cli(
             "define",
             "finalize",
             "--root",
@@ -53,10 +52,7 @@ class ClaudeAssetTests(unittest.TestCase):
             "--apply",
             "--approve-preview",
             str(preview["fingerprint"]),
-        ]
-        if settings:
-            args.append("--with-claude-settings")
-        return self.run_cli(*args)
+        )
 
     def settings_action(self, preview: dict[str, object]) -> dict[str, str]:
         return next(
@@ -69,10 +65,9 @@ class ClaudeAssetTests(unittest.TestCase):
         self,
         root: Path,
         *,
-        settings_opt_in: bool = False,
         secret_marker: str = "",
     ) -> None:
-        preview = self.preview(root, settings=settings_opt_in)
+        preview = self.preview(root)
         action = self.settings_action(preview)
         self.assertEqual(action["action"], "conflict")
         self.assertEqual(action["content"], "")
@@ -81,17 +76,13 @@ class ClaudeAssetTests(unittest.TestCase):
         if secret_marker:
             self.assertNotIn(secret_marker, json.dumps(preview))
 
-        returncode, stdout, stderr = self.apply(
-            root,
-            preview,
-            settings=settings_opt_in,
-        )
+        returncode, stdout, stderr = self.apply(root, preview)
         self.assertEqual(returncode, 2, stdout + stderr)
         self.assertIn("unsafe target conflicts", stderr)
         self.assertFalse((root / "AGENTS.md").exists())
         self.assertFalse((root / ".reporivet-version").exists())
 
-    def test_default_profile_is_thin_portable_and_has_no_live_settings(self) -> None:
+    def test_default_profile_is_thin_portable_and_has_only_project_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             self.start(root)
@@ -102,237 +93,138 @@ class ClaudeAssetTests(unittest.TestCase):
             self.assertEqual(returncode, 0, stdout + stderr)
 
             self.assertEqual((root / "CLAUDE.md").read_bytes(), b"@AGENTS.md\n")
-            self.assertFalse((root / ".claude/settings.json").exists())
-            expected = {
-                "reporivet-main",
-                "reporivet-implementation",
-                "reporivet-verification",
-            }
-            actual = {path.parent.name for path in (root / ".claude/skills").glob("*/SKILL.md")}
-            self.assertEqual(actual, expected)
-            for name in expected:
-                path = root / ".claude/skills" / name / "SKILL.md"
-                text = path.read_text(encoding="utf-8")
-                self.assertTrue(text.startswith("---\n"))
-                frontmatter = text.split("---\n", 2)[1]
-                self.assertRegex(frontmatter, rf"(?m)^name: {re.escape(name)}$")
-                description = re.search(r"(?m)^description: (.+)$", frontmatter)
-                self.assertIsNotNone(description)
-                self.assertIn("Use when", description.group(1))
-                self.assertNotRegex(frontmatter, r"(?m)^(allowed-tools|hooks|shell):")
-
-            returncode, doctor_stdout, doctor_stderr = self.run_cli(
-                "doctor",
-                "--root",
-                str(root),
-            )
-            self.assertEqual(returncode, 0, doctor_stdout + doctor_stderr)
-            findings = json.loads(doctor_stdout)["findings"]
+            self.assertFalse((root / ".claude").exists())
+            for retired in (
+                ".reporivet-version",
+                ".gitignore",
+                ".harness",
+                ".claude/settings.json",
+                ".claude/skills",
+            ):
+                self.assertFalse((root / retired).exists(), retired)
             self.assertEqual(
-                [finding for finding in findings if finding["severity"] in {"error", "warning"}],
-                [],
+                list((root / "docs/exec-plans/active").glob("*.md")), []
             )
-            self.assertTrue(
-                any(
-                    finding["path"] == ".claude/settings.json"
-                    and "absent by default" in finding["detail"]
-                    for finding in findings
-                )
+            self.assertEqual(
+                list((root / "docs/exec-plans/completed").glob("*.md")), []
             )
+            self.assertTrue((root / "docs/runbooks/index.md").is_file())
 
-    def test_role_skills_encode_native_hierarchical_dispatch_contract(self) -> None:
-        main = read_asset(
-            "document-first/claude/skills/reporivet-main/SKILL.md.tmpl"
-        )
-        implementation = read_asset(
-            "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl"
-        )
-        verification = read_asset(
-            "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl"
-        )
-
+    def test_project_documents_encode_native_hierarchical_dispatch_contract(self) -> None:
+        agents = read_asset("document-first/root/AGENTS.md.tmpl")
+        plans = read_asset("document-first/docs/PLANS.md.tmpl")
+        inventory = read_asset("document-first/docs/README.md.tmpl")
         formula = (
-            "`T<n> (broad milestone) -> T<n>-A/B/C/... (owned child packets, "
-            "all ready leaves dispatched concurrently) -> T<n>-I (integration) -> "
+            "`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, "
+            "all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> "
             "T<n>-V1/V2/... (parallel fresh verification)`"
         )
-        for skill in (main, implementation, verification):
-            self.assertIn(formula, skill)
-            self.assertIn("common installed-project rule", skill)
-            self.assertIn("every milestone classified as broad", skill)
-            self.assertIn(
-                "does not apply to inherently single or serial milestones",
-                skill,
-            )
-            self.assertIn("If a child is itself broad", skill)
-            self.assertIn("`T<n>-A-1`", skill)
-            self.assertIn("ordinary leaf Agents do not delegate", skill)
+        for text in (agents, plans):
+            self.assertIn(formula, text)
+            self.assertIn("broad or multi-part", text)
+            self.assertIn("Role: Task Owner", text)
+            self.assertIn("May delegate: yes", text)
+            self.assertIn("Ordinary leaf Agents", text)
+            self.assertIn("never delegate", text)
+            self.assertIn("integrated candidate", text)
+        self.assertIn(formula, inventory)
+        self.assertIn("Role: Task Owner", inventory)
+        self.assertIn("May delegate: yes", inventory)
+        self.assertIn("nondelegating", inventory)
+        self.assertIn("integrated candidate", inventory)
 
         for phrase in (
-            "complete dependency-ready leaf set concurrently",
-            "Main owns the overall task tree",
+            "finite child manifest",
             "Main alone serializes Plan edits",
-            "only the host's native Agent execution",
-            "no scheduler, task store, lease, lock, or automatic dispatcher",
+            "host-native Agent execution",
+            "no scheduler",
+            "dispatcher",
+            "Owner-local aggregation",
+            "separate exact-baseline worktrees",
         ):
-            self.assertIn(phrase, main)
+            self.assertIn(phrase, agents)
         for phrase in (
-            "`Role: Task Owner` and `May delegate: yes`",
-            "predeclared bounded descendant packets",
-            "inherit parent scope, protected paths, and acceptance",
-            "cannot broaden",
-            "disjoint allowed-write sets",
-            "frozen shared interfaces",
-            "separate worktrees",
+            "Setup handoff creates no Plan",
+            "project commands and CI remain project/host-owned",
+            "Reporivet installs no scheduler",
         ):
-            self.assertIn(phrase, implementation)
-        for phrase in (
-            "Read-only verification leaves may run concurrently",
-            "depends on the integrated candidate",
-            "Default verification leaves do not delegate",
-            "candidate changes",
-        ):
-            self.assertIn(phrase, verification)
+            self.assertIn(phrase, plans)
+        self.assertIn("static runbooks", inventory)
+        self.assertIn("No generated target requires a package", agents)
 
-    def test_packaged_hierarchy_assets_encode_frozen_native_dispatch_contract(self) -> None:
+    def test_packaged_project_assets_encode_frozen_native_dispatch_contract(self) -> None:
         asset_paths = {
             "agents": "document-first/root/AGENTS.md.tmpl",
             "plans": "document-first/docs/PLANS.md.tmpl",
             "claude": "document-first/claude/CLAUDE.md.tmpl",
-            "main": "document-first/claude/skills/reporivet-main/SKILL.md.tmpl",
-            "implementation": "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl",
-            "verification": "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl",
+            "inventory": "document-first/docs/README.md.tmpl",
+            "runbooks": "document-first/docs/runbooks/index.md.tmpl",
         }
         assets = {name: read_asset(path) for name, path in asset_paths.items()}
-        inventory = read_asset("document-first/docs/README.md.tmpl")
-        expected_asset_paths = {
-            *asset_paths.values(),
-            "document-first/docs/README.md.tmpl",
-        }
-
-        for path in asset_paths.values():
-            self.assertIn(path, expected_asset_paths)
-        self.assertIn("document-first/docs/README.md.tmpl", expected_asset_paths)
         self.assertEqual(assets["claude"], "@AGENTS.md\n")
 
-        for name in ("agents", "plans", "main", "implementation", "verification"):
+        formula = (
+            "`T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, "
+            "all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> "
+            "T<n>-V1/V2/... (parallel fresh verification)`"
+        )
+        for name in ("agents", "plans"):
             text = assets[name]
-            self.assertIn("For every milestone classified as broad", text)
-            self.assertIn("ordinary leaf Agents do not delegate", text)
+            self.assertIn(formula, text)
+            self.assertIn("Role: Task Owner", text)
+            self.assertIn("May delegate: yes", text)
+            self.assertIn("Ordinary leaf Agents", text)
+            self.assertIn("never delegate", text)
+            self.assertIn("integrated candidate", text)
+        self.assertIn(formula, assets["inventory"])
+        self.assertIn("Role: Task Owner", assets["inventory"])
+        self.assertIn("May delegate: yes", assets["inventory"])
+        self.assertIn("nondelegating", assets["inventory"])
+        self.assertIn("integrated candidate", assets["inventory"])
 
-        main = assets["main"]
+        agents = assets["agents"]
         for phrase in (
-            "broad",
-            "multi-part",
-            "root",
-            "Role: Task Owner",
-            "May delegate: yes",
-            "finite",
-            "accepted",
-            "manifest",
-            "checkpoint",
-            "serializes",
-            "dispatch",
-            "declared",
-            "host's native Agent execution",
-            "final repository integration",
-        ):
-            self.assertIn(phrase, main)
-        self.assertRegex(
-            main,
-            r"(?is)(?:broad|multi-part).{0,160}roots?.{0,160}Role: Task Owner.{0,100}May delegate: yes",
-        )
-        self.assertRegex(
-            main,
-            r"(?is)serializ\w*.{0,120}\bfinite\b.{0,80}\baccepted\b.{0,80}\bmanifest\b.{0,180}resum\w*",
-        )
-        self.assertRegex(main, r"(?is)\bmanifest\b.{0,160}\bresum\w*\b")
-        self.assertRegex(main, r"(?is)\bindependent\b.{0,100}\broot\b.{0,120}\b(?:Task )?Owners?\b")
-        self.assertRegex(main, r"(?is)\broot\b.{0,160}\bOwner\w*\b.{0,160}\bconcurr")
-        self.assertRegex(
-            main,
-            r"(?is)\bonly\b.{0,140}\bresum\w*\b.{0,100}\bOwner\b.{0,180}\bdispatch\w*\b.{0,120}\bdeclared\b.{0,120}\bdependency-ready\b.{0,180}\bdescendant",
-        )
-        self.assertRegex(main, r"(?is)\bMain\b.{0,120}\bfinal integration\b")
-        self.assertRegex(main, r"(?is)\b(?:narrow|inherently (?:single or )?serial)\b")
-        self.assertRegex(
-            main,
-            r"(?is)(?:direct(?:ly)?\s+non[- ]delegating\s+leaves?|ordinary\s+leaf\s+Agents?\s+do\s+not\s+delegate)",
-        )
-        self.assertRegex(
-            main,
-            r"(?is)(?:\bnarrow\b|\binherently (?:single or )?serial\b).{0,220}\broot\b.{0,180}(?:direct(?:ly)?\s+non[- ]delegating|ordinary\s+leaf)",
-        )
-
-        implementation = assets["implementation"]
-        for phrase in (
-            "Role: Task Owner",
-            "May delegate: yes",
-            "predeclared bounded descendant packets",
-            "inherit parent scope",
-            "protected paths",
-            "acceptance",
-            "cannot broaden",
+            "finite child manifest",
+            "Main alone serializes Plan edits",
+            "host-native Agent execution",
             "disjoint allowed-write sets",
-            "frozen shared interfaces",
-            "separate worktrees",
-            "exact baseline",
-        ):
-            self.assertIn(phrase, implementation)
-        implementation_lower = implementation.casefold()
-        self.assertTrue(
-            any(
-                phrase in implementation_lower
-                for phrase in (
-                    "child budget",
-                    "child-budget",
-                    "descendant budget",
-                    "descendant-budget",
-                    "budget for child",
-                    "budget for descendant",
-                )
-            )
-        )
-        self.assertIn("local aggregat", implementation_lower)
-
-        verification = assets["verification"]
-        for phrase in (
-            "fresh context",
-            "Read-only verification leaves may run concurrently",
-            "depends on the integrated candidate",
-            "Default verification leaves do not delegate",
-        ):
-            self.assertIn(phrase, verification)
-        self.assertRegex(
-            verification,
-            r"(?is)(?:non[- ]repairing|Do not change the candidate)",
-        )
-
-        hierarchy_assets = "\n".join(
-            assets[name] for name in ("agents", "plans", "main", "implementation", "verification")
-        )
-        no_runtime_assets = hierarchy_assets + "\n" + inventory
-        for phrase in (
+            "separate exact-baseline worktrees",
+            "Owner-local aggregation",
             "no scheduler",
-            "no dispatcher",
-            "task DB",
-            "runner",
-            "automatic closure",
+            "dispatcher",
         ):
-            self.assertIn(phrase, no_runtime_assets)
+            self.assertIn(phrase, agents)
+        plans = assets["plans"]
+        for phrase in (
+            "Setup handoff creates no Plan",
+            "searches active and completed history",
+            "Reporivet installs no scheduler",
+            "direct serial Plans remain supported",
+        ):
+            self.assertIn(phrase, plans)
 
-        inventory_paths = (
+        inventory = assets["inventory"]
+        for path in (
             "AGENTS.md",
             "CLAUDE.md",
             "docs/PLANS.md",
+            "docs/runbooks/index.md",
+            "docs/runbooks/_template.md",
+        ):
+            self.assertIn(f"`{path}`", inventory)
+        for retired in (
             ".claude/skills/reporivet-main/SKILL.md",
             ".claude/skills/reporivet-implementation/SKILL.md",
             ".claude/skills/reporivet-verification/SKILL.md",
-        )
-        for path in inventory_paths:
-            self.assertIn(f"`{path}`", inventory)
+        ):
+            self.assertNotIn(f"`{retired}`", inventory)
 
-    def test_future_assets_define_integrated_setup_and_dynamic_procedure_skill_boundary(self) -> None:
+        runbooks = assets["runbooks"]
+        self.assertIn("ordinary Markdown", runbooks)
+        self.assertIn("no frontmatter", runbooks)
+        self.assertIn("not an executor", runbooks)
+
+    def test_project_assets_define_integrated_setup_and_static_runbook_boundary(self) -> None:
         asset_paths = (
             "document-first/root/AGENTS.md.tmpl",
             "document-first/docs/README.md.tmpl",
@@ -340,49 +232,39 @@ class ClaudeAssetTests(unittest.TestCase):
             "document-first/docs/PLANS.md.tmpl",
             "document-first/docs/references/project-definition-protocol.md.tmpl",
             "document-first/docs/runbooks/index.md.tmpl",
-            "document-first/claude/skills/reporivet-main/SKILL.md.tmpl",
-            "document-first/claude/skills/reporivet-implementation/SKILL.md.tmpl",
-            "document-first/claude/skills/reporivet-verification/SKILL.md.tmpl",
         )
         assets = {path: read_asset(path) for path in asset_paths}
         combined = "\\n".join(assets.values())
         for phrase in (
-            "reporivet setup",
-            "reporivet init",
-            "structure-only",
-            "lower-level `reporivet define`",
-            "Only complete Confirmed structured procedure records can produce",
-            ".claude/skills/<slug>/SKILL.md",
-            "through resumed",
+            "one-shot",
+            "package-side only",
+            "Setup handoff does not create a Plan",
+            "complete, unique, user-confirmed strict",
+            "docs/runbooks/<slug>.md",
+            "during resumed setup",
             "no procedure is inferred or executed",
-            "differing, stale, or arbitrary Skill",
-            "Main—not package runtime",
-            "visible Markdown",
-            "pipx-primary",
-            "same wheel",
-            "Uninstalling Reporivet leaves repository artifacts useful",
+            "differing, stale, arbitrary",
+            "ordinary Markdown",
+            "Package absence after setup is expected",
             "no scheduler",
             "dispatcher",
-            "task DB",
-            "runner",
-            "generated CI",
+            "task database",
+            "command runner",
             "Gate",
             "evidence archive",
-            "deployment engine",
             "automatic closure",
         ):
             self.assertIn(phrase, combined)
+        self.assertNotIn(".claude/skills/<slug>/SKILL.md", combined)
+        self.assertNotIn("allowed-tools:", combined)
+        self.assertNotIn("hooks:", combined)
+        self.assertNotIn("executor:", combined)
+        protocol = assets["document-first/docs/references/project-definition-protocol.md.tmpl"]
+        self.assertIn("exactly these nine fields", protocol)
+        self.assertIn("no additional fields or aliases are accepted", protocol)
+        self.assertIn("does not execute project commands", protocol)
+        self.assertIn("dispatch Agents, create a Plan", protocol)
 
-        for path in asset_paths[-3:]:
-            text = assets[path]
-            frontmatter = text.split("---\n", 2)[1]
-            self.assertEqual(
-                set(re.findall(r"(?m)^([A-Za-z][A-Za-z0-9_-]*):", frontmatter)),
-                {"name", "description"},
-            )
-            self.assertIn("instruction-only", text)
-            self.assertIn("least privilege", text)
-            self.assertIn("Do not pre-generate a project-specific Skill", text)
 
     def test_default_preview_reports_existing_settings_without_content_leakage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -405,7 +287,7 @@ class ClaudeAssetTests(unittest.TestCase):
             self.assertEqual(action["action"], "preserve")
             self.assertEqual(action["content"], "")
             self.assertEqual(action["current_sha256"], hashlib.sha256(original).hexdigest())
-            self.assertIn("never merges or rewrites", action["reason"])
+            self.assertIn("preserve project-owned bytes", action["reason"])
             self.assertNotIn(secret_marker, json.dumps(preview))
 
             returncode, stdout, stderr = self.apply(root, preview)
@@ -420,17 +302,15 @@ class ClaudeAssetTests(unittest.TestCase):
             settings.write_bytes(b"")
             self.start(root)
 
-            for settings_opt_in in (False, True):
-                with self.subTest(settings_opt_in=settings_opt_in):
-                    preview = self.preview(root, settings=settings_opt_in)
-                    action = self.settings_action(preview)
-                    self.assertEqual(action["action"], "preserve")
-                    self.assertEqual(action["content"], "")
-                    self.assertEqual(
-                        action["current_sha256"],
-                        hashlib.sha256(b"").hexdigest(),
-                    )
-                    self.assertIn("never merges or rewrites", action["reason"])
+            preview = self.preview(root)
+            action = self.settings_action(preview)
+            self.assertEqual(action["action"], "preserve")
+            self.assertEqual(action["content"], "")
+            self.assertEqual(
+                action["current_sha256"],
+                hashlib.sha256(b"").hexdigest(),
+            )
+            self.assertIn("preserve project-owned bytes", action["reason"])
 
             preview = self.preview(root)
             returncode, stdout, stderr = self.apply(root, preview)
@@ -457,12 +337,10 @@ class ClaudeAssetTests(unittest.TestCase):
                     "_read_regular_file_bytes",
                     wraps=original_reader,
                 ) as reader:
-                    for settings_opt_in in (False, True):
-                        self.assert_settings_conflict(
-                            root,
-                            settings_opt_in=settings_opt_in,
-                            secret_marker=secret_marker,
-                        )
+                    self.assert_settings_conflict(
+                        root,
+                        secret_marker=secret_marker,
+                    )
                 self.assertFalse(
                     any(call.args and call.args[0] == settings for call in reader.call_args_list)
                 )
@@ -488,12 +366,10 @@ class ClaudeAssetTests(unittest.TestCase):
                 "_read_regular_file_bytes",
                 wraps=original_reader,
             ) as reader:
-                for settings_opt_in in (False, True):
-                    self.assert_settings_conflict(
-                        root,
-                        settings_opt_in=settings_opt_in,
-                        secret_marker=secret_marker,
-                    )
+                self.assert_settings_conflict(
+                    root,
+                    secret_marker=secret_marker,
+                )
             self.assertFalse(
                 any(call.args and call.args[0] == settings for call in reader.call_args_list)
             )
@@ -562,7 +438,7 @@ class ClaudeAssetTests(unittest.TestCase):
                 "open",
                 side_effect=track_open,
             ):
-                preview = self.preview(root, settings=True)
+                preview = self.preview(root)
 
             action = self.settings_action(preview)
             self.assertEqual(action["action"], "conflict")
@@ -589,8 +465,7 @@ class ClaudeAssetTests(unittest.TestCase):
                 "_read_regular_file_bytes",
                 wraps=original_reader,
             ) as reader:
-                for settings_opt_in in (False, True):
-                    self.assert_settings_conflict(root, settings_opt_in=settings_opt_in)
+                self.assert_settings_conflict(root)
             self.assertFalse(
                 any(call.args and call.args[0] == settings for call in reader.call_args_list)
             )
@@ -610,8 +485,7 @@ class ClaudeAssetTests(unittest.TestCase):
                 "_read_regular_file_bytes",
                 wraps=original_reader,
             ) as reader:
-                for settings_opt_in in (False, True):
-                    self.assert_settings_conflict(root, settings_opt_in=settings_opt_in)
+                self.assert_settings_conflict(root)
             self.assertFalse(
                 any(call.args and call.args[0] == settings for call in reader.call_args_list)
             )
@@ -639,43 +513,25 @@ class ClaudeAssetTests(unittest.TestCase):
                 "_read_regular_file_bytes",
                 side_effect=fail_settings_read,
             ):
-                for settings_opt_in in (False, True):
-                    self.assert_settings_conflict(
-                        root,
-                        settings_opt_in=settings_opt_in,
-                        secret_marker=secret_marker,
-                    )
+                self.assert_settings_conflict(
+                    root,
+                    secret_marker=secret_marker,
+                )
             self.assertEqual(settings.read_bytes(), original)
 
-    def test_optional_settings_require_matching_preview_and_add_only_denials(self) -> None:
+    def test_fresh_setup_never_generates_optional_settings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             self.start(root)
-            preview = self.preview(root, settings=True)
-            actions = {str(action["path"]): action for action in preview["actions"]}
-            settings_action = actions[".claude/settings.json"]
-            self.assertEqual(settings_action["action"], "create")
-            proposed = json.loads(str(settings_action["content"]))
-            self.assertEqual(
-                proposed["$schema"],
-                "https://json.schemastore.org/claude-code-settings.json",
-            )
-            self.assertEqual(set(proposed["permissions"]), {"deny"})
-            self.assertTrue(proposed["permissions"]["deny"])
-            self.assertNotIn("allow", proposed["permissions"])
-            self.assertNotIn("ask", proposed["permissions"])
-            self.assertNotIn("hooks", proposed)
-            self.assertNotIn("mcpServers", proposed)
+            preview = self.preview(root)
+            paths = {str(action["path"]) for action in preview["actions"]}
+            self.assertNotIn(".claude/settings.json", paths)
+            self.assertNotIn(".claude/settings.json", json.dumps(preview))
 
-            returncode, _, stderr = self.apply(root, preview, settings=False)
-            self.assertEqual(returncode, 2)
-            self.assertIn("does not match", stderr)
-            self.assertFalse((root / ".claude/settings.json").exists())
-
-            returncode, stdout, stderr = self.apply(root, preview, settings=True)
+            returncode, stdout, stderr = self.apply(root, preview)
             self.assertEqual(returncode, 0, stdout + stderr)
-            installed = json.loads((root / ".claude/settings.json").read_text(encoding="utf-8"))
-            self.assertEqual(installed, proposed)
+            self.assertFalse((root / ".claude").exists())
+            self.assertFalse((root / ".claude/settings.json").exists())
 
     def test_apply_rejects_raced_claude_parent_without_external_mutation_or_rollback_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
@@ -697,11 +553,11 @@ class ClaudeAssetTests(unittest.TestCase):
                 if path.is_dir()
             }
             self.start(root)
-            preview = self.preview(root, settings=True)
+            preview = self.preview(root)
 
-            local_claude = root / ".claude"
-            parked_claude = root / ".claude-before-race"
-            race_target = local_claude / "skills/reporivet-implementation/SKILL.md"
+            local_documents = root / "docs"
+            parked_documents = root / "docs-before-race"
+            race_target = local_documents / "QUALITY.md"
             original_safe_write = guided.ensure_safe_write_path
             raced = False
 
@@ -710,8 +566,8 @@ class ClaudeAssetTests(unittest.TestCase):
                 original_safe_write(path)
                 if path == race_target and not raced:
                     raced = True
-                    local_claude.rename(parked_claude)
-                    local_claude.symlink_to(external_root, target_is_directory=True)
+                    local_documents.rename(parked_documents)
+                    local_documents.symlink_to(external_root, target_is_directory=True)
 
             with mock.patch.object(
                 guided,
@@ -721,7 +577,6 @@ class ClaudeAssetTests(unittest.TestCase):
                 returncode, stdout, stderr = self.apply(
                     root,
                     preview,
-                    settings=True,
                 )
 
             self.assertTrue(raced)
@@ -754,19 +609,19 @@ class ClaudeAssetTests(unittest.TestCase):
             skill.write_bytes(original_skill)
             self.start(root)
 
-            preview = self.preview(root, settings=True)
+            preview = self.preview(root)
             actions = {str(action["path"]): action for action in preview["actions"]}
             self.assertEqual(actions[".claude/settings.json"]["action"], "preserve")
             self.assertEqual(actions[".claude/skills/reporivet-main/SKILL.md"]["action"], "preserve")
-            self.assertIn("never merges or rewrites", actions[".claude/settings.json"]["reason"])
-            returncode, stdout, stderr = self.apply(root, preview, settings=True)
+            self.assertIn("preserve project-owned bytes", actions[".claude/settings.json"]["reason"])
+            returncode, stdout, stderr = self.apply(root, preview)
             self.assertEqual(returncode, 0, stdout + stderr)
             self.assertEqual(settings.read_bytes(), original)
             self.assertEqual(skill.read_bytes(), original_skill)
 
-            second = self.preview(root, settings=True)
+            second = self.preview(root)
             settings.write_bytes(b'{"changed":true}\n')
-            returncode, _, stderr = self.apply(root, second, settings=True)
+            returncode, _, stderr = self.apply(root, second)
             self.assertEqual(returncode, 2)
             self.assertIn("does not match", stderr)
             self.assertEqual(settings.read_bytes(), b'{"changed":true}\n')

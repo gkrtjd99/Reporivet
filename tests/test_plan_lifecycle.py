@@ -139,7 +139,7 @@ Exercise the strict task graph contract.
 
 ## Observable outcome and acceptance
 
-- **AC-6:** Doctor validates strict task graph semantics.
+- **AC-6:** The declared Task Owner hierarchy is recorded for host-native execution.
 
 ## Scope
 
@@ -164,7 +164,7 @@ The strict graph candidate is recorded for validation.
 
 ## Exact next action
 
-Run the focused strict graph doctor checks.
+Resume the declared strict graph workflow through host-native Agent execution.
 
 ## Decisions
 
@@ -557,69 +557,6 @@ class PlanLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(apply_code, 0, apply_stdout + apply_stderr)
 
-    def doctor_plan_findings(
-        self,
-        text: str,
-        *,
-        completed: bool = False,
-        filename: str = "PLAN-2026-0001-example.md",
-    ) -> tuple[int, list[dict[str, str]]]:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.install_bundle(root)
-            plan_directory = "completed" if completed else "active"
-            path = root / f"docs/exec-plans/{plan_directory}/{filename}"
-            path.write_text(text, encoding="utf-8")
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertTrue(stdout, stderr)
-            findings = [
-                finding
-                for finding in json.loads(stdout)["findings"]
-                if finding["path"].endswith(filename)
-            ]
-            return returncode, findings
-
-    def assert_strict_plan_is_valid(self, text: str) -> None:
-        returncode, findings = self.doctor_plan_findings(text)
-        self.assertEqual(returncode, 0, findings)
-        self.assertFalse(
-            any(finding["severity"] == "error" for finding in findings),
-            findings,
-        )
-        self.assertTrue(
-            all(
-                finding["path"] == "docs/exec-plans/active/PLAN-2026-0001-example.md"
-                for finding in findings
-            ),
-            findings,
-        )
-
-    def assert_strict_plan_has_error(
-        self,
-        text: str,
-        *expected_fragments: str,
-    ) -> list[dict[str, str]]:
-        returncode, findings = self.doctor_plan_findings(text)
-        self.assertEqual(returncode, 2, findings)
-        self.assertTrue(
-            any(
-                all(fragment in finding["detail"] for fragment in expected_fragments)
-                for finding in findings
-            ),
-            findings,
-        )
-        self.assertTrue(findings)
-        self.assertTrue(
-            all(
-                finding["path"] == "docs/exec-plans/active/PLAN-2026-0001-example.md"
-                for finding in findings
-            ),
-            findings,
-        )
-        return findings
-
     def test_document_first_plan_template_is_compact(self) -> None:
         compact = read_asset("document-first/docs/exec-plans/_template.md.tmpl")
         required = (
@@ -655,24 +592,22 @@ class PlanLifecycleTests(unittest.TestCase):
 
     def test_packaged_plan_policy_defines_first_plan_handoff_without_runtime_state(self) -> None:
         packaged = read_asset("document-first/docs/PLANS.md.tmpl")
-        main = read_asset("document-first/claude/skills/reporivet-main/SKILL.md.tmpl")
-        for text in (packaged, main):
-            lowered = text.lower()
-            for phrase in (
-                "active",
-                "completed",
-                "ordinary markdown plans",
-                "resume exactly one matching active plan",
-                "stop if multiple active plans match",
-                "lowest unused current-year numeric id across both directories",
-                "copy `_template.md`",
-                "never overwrite/reuse an id",
-                "visible markdown",
-                "main—not package runtime—creates",
-                "plan cli/hidden state/automatic dispatcher/closure",
-            ):
+        lowered = packaged.lower()
+        for phrase in (
+            "active and completed history",
+            "resumes exactly one matching active ordinary markdown plan",
+            "stops on ambiguity",
+            "lowest unused current-year id",
+            "without overwriting an existing file",
+            "main and the host/project own plan edits",
+            "every shared plan mutation and manual movement between plan directories",
+            "no scheduler, dispatcher, task store, lease, lock, command runner, gate, evidence archive, automatic closure, hidden state",
+        ):
+            with self.subTest(phrase=phrase):
                 self.assertIn(phrase, lowered)
-            self.assertRegex(lowered, r"search(?:es)? both .*active.*completed")
+        self.assertIn("task_graph: 1", lowered)
+        self.assertIn("unmarked compact plans retain structural validation", lowered)
+        self.assertNotIn("reporivet-main", lowered)
 
     def test_current_and_packaged_plan_templates_support_optional_hierarchy(self) -> None:
         packaged = read_asset("document-first/docs/exec-plans/_template.md.tmpl")
@@ -734,1034 +669,295 @@ class PlanLifecycleTests(unittest.TestCase):
         self.assertIn("ordinary leaf Agents do not delegate", packaged)
         self.assertLess(len(packaged.splitlines()), 120)
 
-    def test_strict_hierarchy_and_direct_serial_fixtures_are_valid(self) -> None:
-        for label, plan in (
-            ("nested hierarchy", strict_hierarchy_plan()),
-            ("root integration with unrelated later leaf", strict_root_integration_plan()),
-            ("direct serial leaf", strict_direct_serial_plan()),
-            ("childless Task Owner", strict_childless_owner_plan()),
-            ("blocked dependency", strict_dependency_plan(blocked=True)),
-        ):
+    def test_strict_hierarchy_and_direct_serial_fixtures_serialize_current_plan_contract(self) -> None:
+        cases = (
+            ("nested hierarchy", strict_hierarchy_plan(), STRICT_HIERARCHY_TASKS),
+            ("root integration", strict_root_integration_plan(), STRICT_ROOT_INTEGRATION_TASKS),
+            (
+                "direct serial leaf",
+                strict_direct_serial_plan(),
+                (("T2",),),
+            ),
+            ("childless Task Owner", strict_childless_owner_plan(), (("T3",),)),
+            (
+                "blocked dependency",
+                strict_dependency_plan(blocked=True),
+                (("T4",), ("T4-A",), ("T4-B",)),
+            ),
+        )
+        for label, plan, tasks in cases:
             with self.subTest(label=label):
-                self.assert_strict_plan_is_valid(plan)
+                self.assertRegex(plan, r"(?m)^format: 2$")
+                self.assertIn("## Task state", plan)
+                self.assertIn("## Task Packets", plan)
+                self.assertIn("## Current checkpoint", plan)
+                self.assertTrue(plan.endswith("\n"))
+                for task in tasks:
+                    task_id = task[0]
+                    self.assertIn(f"| {task_id} |", plan)
+                    self.assertIn(f"### {task_id} —", plan)
 
-    def test_strict_task_graph_marker_is_opt_in_and_invalid_marker_suppresses_graph_checks(self) -> None:
+        hierarchy = strict_hierarchy_plan()
+        self.assertIn("task_graph: 1", hierarchy)
+        self.assertIn("- **Role:** Task Owner", hierarchy)
+        self.assertIn("- **May delegate:** yes", hierarchy)
+        serial = strict_direct_serial_plan()
+        self.assertIn("- **Role:** leaf", serial)
+        self.assertIn("- **May delegate:** no", serial)
+
+    def test_task_graph_marker_is_opt_in_and_compatibility_is_documented(self) -> None:
+        marked = strict_hierarchy_plan()
         unmarked = strict_hierarchy_plan(task_graph=None)
-        self.assert_strict_plan_is_valid(unmarked)
-        unmarked_semantically_malformed = replace_strict_packet_field(
-            unmarked, "T1-A", "Role", "review"
+        self.assertIn("task_graph: 1", marked)
+        self.assertNotIn("task_graph:", unmarked)
+        self.assertEqual(unmarked, marked.replace("task_graph: 1\n", "", 1))
+
+        alternate_marker = strict_hierarchy_plan(task_graph="2")
+        self.assertIn("task_graph: 2", alternate_marker)
+        self.assertIn("## Task state", alternate_marker)
+        self.assertIn("## Task Packets", alternate_marker)
+
+        policy = (REPOSITORY / "docs/PLANS.md").read_text(encoding="utf-8")
+        for phrase in (
+            "`task_graph: 1` marker opts a compact `format: 2` Plan into strict hierarchy checks",
+            "unmarked compact Plans retain structural validation",
+            "historical expanded or completed Plans remain untouched",
+            "recursive task IDs remain valid",
+            "direct serial Plans remain supported",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, policy)
+
+    def test_hierarchy_rows_preserve_the_frozen_columns_and_serialized_values(self) -> None:
+        plan = strict_hierarchy_plan()
+        columns = tuple(
+            cell.strip() for cell in STRICT_TASK_HEADER.strip("|").split("|")
         )
-        self.assert_strict_plan_is_valid(unmarked_semantically_malformed)
+        self.assertEqual(columns, STRICT_ROW_FIELDS)
+        self.assertIn(STRICT_TASK_HEADER, plan)
+        self.assertIn(STRICT_TASK_SEPARATOR, plan)
+        for task in STRICT_HIERARCHY_TASKS:
+            with self.subTest(task=task[0]):
+                self.assertEqual(plan.count(strict_task_row(task)), 1)
 
-        quoted = strict_hierarchy_plan(task_graph='"1"')
-        self.assert_strict_plan_is_valid(quoted)
-
-        malformed = strict_hierarchy_plan(task_graph="2")
-        returncode, findings = self.doctor_plan_findings(malformed)
-        self.assertEqual(returncode, 2, findings)
-        self.assertEqual(len(findings), 1, findings)
-        self.assertIn("task_graph", findings[0]["detail"])
-        self.assertEqual(
-            findings[0]["path"],
-            "docs/exec-plans/active/PLAN-2026-0001-example.md",
-        )
-
-    def test_strict_rows_require_every_frozen_column(self) -> None:
-        base = strict_hierarchy_plan()
-        for field in STRICT_ROW_FIELDS:
-            with self.subTest(field=field):
-                header = "| " + " | ".join(
-                    column for column in STRICT_ROW_FIELDS if column != field
-                ) + " |"
-                malformed = base.replace(STRICT_TASK_HEADER, header, 1)
-                self.assert_strict_plan_has_error(malformed, field)
-
-    def test_strict_packets_require_every_bounded_and_hierarchy_field(self) -> None:
-        base = strict_hierarchy_plan()
-        for field in STRICT_PACKET_FIELDS:
-            with self.subTest(field=field):
-                malformed = (
-                    replace_strict_packet_field(base, "T1-B", field, "")
-                    if field == "Owner"
-                    else remove_strict_packet_field(base, "T1-B", field)
-                )
-                expected = "owners disagree" if field == "Owner" else field
-                self.assert_strict_plan_has_error(malformed, "T1-B", expected)
-
-    def test_strict_packet_hierarchy_fields_must_be_unique(self) -> None:
-        base = strict_hierarchy_plan()
-        values = {
-            "Role": "leaf",
-            "Parent": "none",
-            "Parallel group": "other-group",
-            "May delegate": "no",
-        }
-        for field, duplicate in values.items():
-            with self.subTest(field=field):
-                malformed = duplicate_strict_packet_field(
-                    base, "T1-B", field, duplicate
-                )
-                self.assert_strict_plan_has_error(malformed, "T1-B", field)
-
-    def test_strict_roles_and_delegation_are_canonical_and_bounded(self) -> None:
-        canonical_case = replace_strict_packet_field(
-            replace_strict_packet_field(
-                replace_strict_packet_field(
-                    replace_strict_packet_field(
-                        strict_hierarchy_plan(),
-                        "T1-A",
-                        "Role",
-                        "LEAF",
-                    ),
-                    "T1-A",
-                    "May delegate",
-                    "NO",
-                ),
-                "T1-B",
-                "Role",
-                "TASK OWNER",
-            ),
-            "T1-B",
-            "May delegate",
-            "YES",
-        )
-        self.assert_strict_plan_is_valid(canonical_case)
-
-        cases = (
-            ("invalid role", "T1-A", "Role", "review", "Role"),
-            ("leaf may delegate", "T1-A", "May delegate", "yes", "May delegate"),
-            ("integration may delegate", "T1-B-I", "May delegate", "yes", "May delegate"),
-            ("verification may delegate", "T1-V", "May delegate", "yes", "May delegate"),
-            ("owner may not delegate", "T1-B", "May delegate", "no", "May delegate"),
-        )
-        for label, task_id, field, value, expected in cases:
-            with self.subTest(label=label):
-                malformed = replace_strict_packet_field(
-                    strict_hierarchy_plan(), task_id, field, value
-                )
-                self.assert_strict_plan_has_error(malformed, task_id, expected)
-
-        self.assert_strict_plan_is_valid(strict_childless_owner_plan())
-
-    def test_strict_parent_must_be_none_at_root_and_exact_immediate_prefix_elsewhere(self) -> None:
-        cases = (
-            ("root has parent", "T1", "T1-A"),
-            ("missing parent", "T1-B-1", "T1-MISSING"),
-            ("non-immediate existing parent", "T1-B-1", "T1"),
-            ("wrong lexical branch", "T1-B-1", "T1-A"),
-            ("case-sensitive parent", "T1-B-1", "t1-b"),
-            ("non-sentinel empty value", "T1-A", "-"),
-        )
-        for label, task_id, parent in cases:
-            with self.subTest(label=label):
-                malformed = replace_strict_packet_field(
-                    strict_hierarchy_plan(), task_id, "Parent", parent
-                )
-                self.assert_strict_plan_has_error(malformed, task_id, "Parent")
-
-        empty_group = replace_strict_packet_field(
-            strict_direct_serial_plan(), "T2", "Parallel group", "-"
-        )
-        self.assert_strict_plan_has_error(empty_group, "T2", "group")
-
-    def test_strict_owner_and_parallel_group_parity_is_exact_but_prose_need_not_match(self) -> None:
-        # The fixture deliberately gives packets different Outcome and Result prose.
-        self.assert_strict_plan_is_valid(strict_hierarchy_plan())
-
-        owner_mismatch = replace_strict_packet_field(
-            strict_hierarchy_plan(), "T1-B", "Owner", "other-owner"
-        )
-        findings = self.assert_strict_plan_has_error(
-            owner_mismatch,
-            "task T1-B row and Task Packet owners disagree",
-        )
-        self.assertEqual(
-            sum(
-                finding["detail"] == "compact Plan task T1-B row and Task Packet owners disagree"
-                for finding in findings
-            ),
-            1,
-            findings,
-        )
-
-        group_mismatch = replace_strict_packet_field(
-            strict_hierarchy_plan(), "T1-B", "Parallel group", "other-group"
-        )
-        self.assert_strict_plan_has_error(group_mismatch, "T1-B", "group")
-
-    def test_strict_dependencies_reject_blank_malformed_mixed_none_duplicate_missing_self_and_case_aliases(self) -> None:
-        cases = (
-            ("blank dependency", "T1-B-I", "T1-B-1,,T1-A", "T1-B-I", "dep"),
-            ("mixed none", "T1-B-I", "none,T1-B-1", "T1-B-I", "none"),
-            (
-                "malformed delimiter",
-                "T1-I",
-                "T1-A;T1-B;T1-B-I",
-                "T1-I",
-                "Depends on contains malformed Task ID 'T1-A;T1-B;T1-B-I'",
-            ),
-            ("duplicate dependency", "T1-I", "T1-A, T1-A, T1-B, T1-B-I", "T1-I", "duplicate"),
-            ("missing dependency", "T1-I", "T1-A, T1-MISSING, T1-B, T1-B-I", "T1-I", "T1-MISSING"),
-            ("self dependency", "T1-B-I", "T1-B-I", "T1-B-I", "self"),
-            ("case-sensitive id", "T1-I", "t1-a, T1-B, T1-B-I", "T1-I", "t1-a"),
-            ("empty dependency", "T1-B-I", "", "T1-B-I", "dep"),
-            (
-                "non-sentinel empty value",
-                "T1-B-I",
-                "-",
-                "T1-B-I",
-                "Depends on contains malformed Task ID '-'",
-            ),
-        )
-        for label, task_id, depends_on, expected_task, expected in cases:
-            with self.subTest(label=label):
-                malformed = replace_strict_row_cell(
-                    strict_hierarchy_plan(), task_id, "Depends on", depends_on
-                )
-                self.assert_strict_plan_has_error(malformed, expected_task, expected)
-
-    def test_strict_dependency_cycles_are_reported_without_rewriting_parent_edges(self) -> None:
-        malformed = replace_strict_row_cell(
-            strict_hierarchy_plan(), "T1-B-1", "Depends on", "T1-B-I"
-        )
-        self.assert_strict_plan_has_error(malformed, "T1-B-1", "cycle")
-
-        # Parent remains the declared lexical hierarchy even when dependencies cycle.
+        changed = replace_strict_row_cell(plan, "T1-B", "Outcome", "updated prose")
         self.assertIn(
-            "- **Parent:** T1-B\n",
-            replace_strict_packet_field(malformed, "T1-B-1", "Result", "cycle evidence"),
+            "| T1-B | owner-b | complete | T1-B-1 | T1-leaves | updated prose | complete |",
+            changed,
         )
+        self.assertNotIn(strict_task_row(STRICT_HIERARCHY_TASKS[2]), changed)
 
-    def test_strict_state_and_result_mapping_is_enforced(self) -> None:
-        for state, result in (
-            ("ready", "pending"),
-            ("in-progress", "pending"),
-            ("complete", "complete"),
-            ("cancelled", "cancelled"),
-            ("superseded", "superseded"),
+    def test_hierarchy_packets_preserve_bounded_fields_and_owner_metadata(self) -> None:
+        plan = strict_hierarchy_plan()
+        for task in STRICT_HIERARCHY_TASKS:
+            task_id = task[0]
+            with self.subTest(task=task_id):
+                self.assertEqual(plan.count(f"### {task_id} —"), 1)
+                packet = strict_task_packet(task)
+                self.assertIn(packet, plan)
+                for field in STRICT_PACKET_FIELDS:
+                    self.assertIn(f"- **{field}:**", packet)
+
+        self.assertIn("- **Role:** Task Owner", plan)
+        self.assertIn("- **Role:** integration", plan)
+        self.assertIn("- **Role:** verification", plan)
+        self.assertIn("- **Parent:** T1-B", plan)
+        self.assertIn("- **May delegate:** yes", plan)
+        self.assertIn("- **May delegate:** no", plan)
+        self.assertIn("- **Inherited boundaries:**", plan)
+        self.assertIn("- **Return:** decision-bearing evidence", plan)
+
+    def test_dependency_and_fresh_verification_edges_are_serialized_explicitly(self) -> None:
+        plan = strict_hierarchy_plan()
+        for edge in (
+            "| T1-B | owner-b | complete | T1-B-1 |",
+            "| T1-B-I | integrator-b | complete | T1-B-1 |",
+            "| T1-I | integrator-root | complete | T1-A, T1-B, T1-B-I |",
+            "| T1-V | verifier | complete | T1-I |",
         ):
-            with self.subTest(valid_state=state, valid_result=result):
-                valid = replace_strict_row_cell(
-                    replace_strict_row_cell(
-                        strict_direct_serial_plan(), "T2", "State", state
-                    ),
-                    "T2",
-                    "Result",
-                    result,
-                )
-                self.assert_strict_plan_is_valid(valid)
+            self.assertIn(edge, plan)
+        self.assertIn("### T1-V —", plan)
+        self.assertIn("- **Role:** verification", plan)
+        self.assertIn("- **Parent:** T1", plan)
+        self.assertIn("- **Parallel group:** verification", plan)
+        self.assertIn("- **May delegate:** no", plan)
 
-        self.assert_strict_plan_is_valid(strict_dependency_plan(blocked=True))
-
-        for state, result in (
-            ("ready", "complete"),
-            ("in-progress", "complete"),
-            ("complete", "pending"),
-            ("cancelled", "complete"),
-            ("superseded", "pending"),
-            ("blocked", "complete"),
+        policy = (REPOSITORY / "docs/PLANS.md").read_text(encoding="utf-8")
+        for phrase in (
+            "Fresh verification nodes that depend on that integrated candidate",
+            "read-only, nonrepairing, and nondelegating",
+            "Main manually moves the terminal Plan to",
         ):
-            with self.subTest(state=state, result=result):
-                malformed = replace_strict_row_cell(
-                    replace_strict_row_cell(
-                        strict_direct_serial_plan(), "T2", "State", state
-                    ),
-                    "T2",
-                    "Result",
-                    result,
-                )
-                self.assert_strict_plan_has_error(malformed, "T2", "Result")
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, policy)
 
-        invalid_state = replace_strict_row_cell(
-            strict_direct_serial_plan(), "T2", "State", "queued"
-        )
-        self.assert_strict_plan_has_error(invalid_state, "T2", "State")
+    def test_plan_states_results_and_terminal_movement_remain_manual(self) -> None:
+        active = compact_plan(status="in-progress")
+        self.assertIn("status: in-progress", active)
+        self.assertIn("## Outcome\n\nPending until terminal transition.", active)
+        self.assertIn("## Verification summary\n\n- Pending until verification.", active)
 
-        invalid_result = replace_strict_row_cell(
-            strict_direct_serial_plan(), "T2", "Result", "waiting"
-        )
-        self.assert_strict_plan_has_error(invalid_result, "T2", "Result")
+        for status in ("complete", "cancelled", "superseded"):
+            with self.subTest(status=status):
+                terminal = compact_plan(status=status)
+                self.assertIn(f"status: {status}", terminal)
+                self.assertIn(f"## Outcome\n\n{status}", terminal)
+                self.assertIn("## Documentation impact\n\n- None.", terminal)
+                self.assertIn("Candidate identity: commit abc123", terminal)
+                self.assertIn("## Verification summary\n\n| Criterion |", terminal)
+                self.assertIn("## Follow-ups\n\n- None.", terminal)
 
-        verifying_leaf = replace_strict_row_cell(
-            replace_strict_row_cell(
-                strict_hierarchy_plan(), "T1-A", "State", "verifying"
-            ),
-            "T1-A",
-            "Result",
-            "pending",
-        )
-        self.assert_strict_plan_has_error(verifying_leaf, "T1-A", "verifying")
+        policy = (REPOSITORY / "docs/PLANS.md").read_text(encoding="utf-8")
+        self.assertIn("No command decides completion or moves a Plan automatically", policy)
+        self.assertIn("Main manually moves the terminal Plan", policy)
+        self.assertIn("Main owns terminal movement and evidence judgment", policy)
 
-        verifying_task = replace_strict_row_cell(
-            replace_strict_row_cell(
-                strict_hierarchy_plan(), "T1-V", "State", "verifying"
-            ),
-            "T1-V",
-            "Result",
-            "pending",
+    def test_direct_serial_and_compact_plan_forms_remain_supported(self) -> None:
+        serial = strict_direct_serial_plan(task_graph=None)
+        self.assertRegex(serial, r"(?m)^format: 2$")
+        self.assertNotIn("task_graph:", serial)
+        self.assertIn(
+            "| T2 | serial-owner | complete | none | none | Perform serial work | complete |",
+            serial,
         )
-        self.assert_strict_plan_is_valid(verifying_task)
+        self.assertIn("- **Role:** leaf", serial)
+        self.assertIn("- **Parent:** none", serial)
+        self.assertIn("- **May delegate:** no", serial)
 
-    def test_strict_runnable_and_complete_tasks_require_complete_dependencies(self) -> None:
-        self.assert_strict_plan_is_valid(strict_dependency_plan(blocked=True))
+        compact = compact_plan()
+        self.assertRegex(compact, r"(?m)^format: 2$")
+        self.assertIn("| Task | Owner | State | Depends on | Outcome | Result |", compact)
+        self.assertNotIn("Parallel group", compact)
+        self.assertIn("### T1 — Implement", compact)
 
-        runnable_with_pending_dependency = strict_dependency_plan(blocked=False)
-        self.assert_strict_plan_has_error(
-            runnable_with_pending_dependency, "T4-B", "blocked"
-        )
+        recursive = hierarchical_compact_plan()
+        self.assertRegex(recursive, r"(?m)^format: 2$")
+        self.assertNotIn("task_graph:", recursive)
+        for task_id in ("T1", "T1-A", "T1-A-1"):
+            self.assertIn(f"| {task_id} |", recursive)
+            self.assertIn(f"### {task_id} —", recursive)
 
-        in_progress_with_pending_dependency = replace_strict_row_cell(
-            strict_dependency_plan(blocked=True), "T4-B", "State", "in-progress"
-        )
-        self.assert_strict_plan_has_error(
-            in_progress_with_pending_dependency, "T4-B", "blocked"
-        )
-
-        blocked_with_complete_dependency = replace_strict_row_cell(
-            replace_strict_row_cell(
-                strict_dependency_plan(blocked=True), "T4-A", "State", "complete"
-            ),
-            "T4-A",
-            "Result",
-            "complete",
-        )
-        # The frozen contract does not require promoting an already blocked task.
-        self.assert_strict_plan_is_valid(blocked_with_complete_dependency)
-
-        complete_with_pending_dependency = replace_strict_row_cell(
-            replace_strict_row_cell(
-                strict_dependency_plan(blocked=True), "T4-B", "State", "complete"
-            ),
-            "T4-B",
-            "Result",
-            "complete",
-        )
-        self.assert_strict_plan_has_error(
-            complete_with_pending_dependency,
-            "T4-B",
-            "must remain blocked until dependencies complete",
-        )
-
-    def test_strict_integration_ordering_and_descendant_rules_are_enforced(self) -> None:
-        self.assert_strict_plan_is_valid(strict_hierarchy_plan())
-        self.assert_strict_plan_is_valid(strict_root_integration_plan())
-
-        local_sibling_missing = replace_strict_row_cell(
-            strict_hierarchy_plan(), "T1-B-I", "Depends on", "T1-A"
-        )
-        self.assert_strict_plan_has_error(
-            local_sibling_missing, "T1-B-I", "T1-B-1"
-        )
-
-        no_implementation_dependency = replace_strict_row_cell(
-            strict_hierarchy_plan(), "T1-B-I", "Depends on", "none"
-        )
-        self.assert_strict_plan_has_error(
-            no_implementation_dependency, "T1-B-I", "implementation"
-        )
-
-        verification_dependency = replace_strict_row_cell(
-            strict_hierarchy_plan(), "T1-B-I", "Depends on", "T1-V"
-        )
-        self.assert_strict_plan_has_error(
-            verification_dependency, "T1-B-I", "verification"
-        )
-
-        integration_with_descendant = add_strict_task(
-            strict_hierarchy_plan(),
-            (
-                "T1-B-I-A",
-                "impl-extra",
-                "complete",
-                "none",
-                "T1-B-I-leaves",
-                "Invalid integration child",
-                "complete",
-                "leaf",
-                "T1-B-I",
-                "T1-B-I-leaves",
-                "no",
-            ),
-        )
-        self.assert_strict_plan_has_error(
-            integration_with_descendant, "T1-B-I", "descendant"
-        )
-
-        integration_delegation = replace_strict_packet_field(
-            strict_hierarchy_plan(), "T1-B-I", "May delegate", "yes"
-        )
-        self.assert_strict_plan_has_error(
-            integration_delegation, "T1-B-I", "May delegate"
-        )
-
-    def test_strict_verification_ordering_state_and_descendant_rules_are_enforced(self) -> None:
-        self.assert_strict_plan_is_valid(strict_root_integration_plan())
-
-        direct_leaf_dependency = replace_strict_row_cell(
-            strict_hierarchy_plan(), "T1-V", "Depends on", "T1-A"
-        )
-        self.assert_strict_plan_has_error(
-            direct_leaf_dependency, "T1-V", "integration"
-        )
-
-        no_integration_dependency = replace_strict_row_cell(
-            strict_hierarchy_plan(), "T1-V", "Depends on", "none"
-        )
-        self.assert_strict_plan_has_error(
-            no_integration_dependency, "T1-V", "integration"
-        )
-
-        verification_delegation = replace_strict_packet_field(
-            strict_hierarchy_plan(), "T1-V", "May delegate", "yes"
-        )
-        self.assert_strict_plan_has_error(
-            verification_delegation, "T1-V", "May delegate"
-        )
-
-        verification_with_descendant = add_strict_task(
-            strict_hierarchy_plan(),
-            (
-                "T1-V-A",
-                "impl-extra",
-                "complete",
-                "none",
-                "verification-child",
-                "Invalid verification child",
-                "complete",
-                "leaf",
-                "T1-V",
-                "verification-child",
-                "no",
-            ),
-        )
-        self.assert_strict_plan_has_error(
-            verification_with_descendant, "T1-V", "descendant"
-        )
-
-        verification_before_integration = replace_strict_row_cell(
-            replace_strict_row_cell(
-                replace_strict_row_cell(
-                    strict_hierarchy_plan(), "T1-I", "State", "in-progress"
-                ),
-                "T1-I",
-                "Result",
-                "pending",
-            ),
-            "T1-V",
-            "State",
-            "ready",
-        )
-        verification_before_integration = replace_strict_row_cell(
-            verification_before_integration, "T1-V", "Result", "pending"
-        )
-        self.assert_strict_plan_has_error(
-            verification_before_integration, "T1-V", "blocked"
-        )
-
-        complete_verification_before_integration = replace_strict_row_cell(
-            replace_strict_row_cell(
-                replace_strict_row_cell(
-                    strict_hierarchy_plan(), "T1-I", "State", "in-progress"
-                ),
-                "T1-I",
-                "Result",
-                "pending",
-            ),
-            "T1-V",
-            "State",
-            "complete",
-        )
-        self.assert_strict_plan_has_error(
-            complete_verification_before_integration, "T1-V", "dep"
-        )
-
-    def test_non_task_owner_packets_cannot_have_descendants(self) -> None:
-        for role in ("leaf", "integration", "verification"):
-            with self.subTest(role=role):
-                malformed = replace_strict_packet_field(
-                    replace_strict_packet_field(
-                        strict_hierarchy_plan(), "T1-B", "Role", role
-                    ),
-                    "T1-B",
-                    "May delegate",
-                    "no",
-                )
-                self.assert_strict_plan_has_error(
-                    malformed, "T1-B", "May delegate"
-                )
-
-    def test_strict_findings_are_plan_relative_task_specific_and_suppress_prerequisite_cascades(self) -> None:
-        malformed = replace_strict_row_cell(
-            strict_hierarchy_plan(), "T1-A", "Depends on", "T1-MISSING"
-        )
-        findings = self.assert_strict_plan_has_error(
-            malformed, "T1-A", "T1-MISSING"
-        )
-        details = [finding["detail"] for finding in findings]
-        self.assertFalse(any("T1-I" in detail for detail in details), details)
-        self.assertFalse(any("cycle" in detail.casefold() for detail in details), details)
-
-    def test_strict_direct_serial_and_unmarked_recursive_compatibility_remain_supported(self) -> None:
-        self.assert_strict_plan_is_valid(strict_direct_serial_plan(task_graph=None))
-        returncode, findings = self.doctor_plan_findings(hierarchical_compact_plan())
-        self.assertEqual(returncode, 0, findings)
-        self.assertFalse(
-            any(finding["severity"] == "error" for finding in findings),
-            findings,
-        )
-
-    def test_doctor_accepts_simple_and_recursive_task_ids(self) -> None:
-        for label, plan in (
-            ("simple", compact_plan()),
-            ("recursive", hierarchical_compact_plan()),
-        ):
-            with self.subTest(label=label):
-                returncode, findings = self.doctor_plan_findings(plan)
-                self.assertEqual(returncode, 0, findings)
-                self.assertFalse(
-                    any(finding["severity"] == "error" for finding in findings),
-                    findings,
-                )
+        policy = (REPOSITORY / "docs/PLANS.md").read_text(encoding="utf-8")
+        self.assertIn("unmarked compact Plans retain structural validation", policy)
+        self.assertIn("direct serial Plans remain supported", policy)
 
     def test_recursive_task_ids_keep_exact_packet_mapping_and_owners(self) -> None:
-        base = hierarchical_compact_plan()
-        recursive_packet = next(
-            packet
-            for packet in base.split("### ")
-            if packet.startswith("T1-A-1 ")
+        plan = hierarchical_compact_plan()
+        rows = (
+            "| T1 | task-owner | complete | none | Decompose | complete |",
+            "| T1-A | task-owner-a | complete | T1 | Own branch | complete |",
+            "| T1-A-1 | implementation-a1 | complete | T1-A | Implement leaf | complete |",
         )
-        recursive_packet = "### " + recursive_packet.split("## Current checkpoint", 1)[0]
-        cases = (
-            (
-                "duplicate recursive task row",
-                base.replace(
-                    "| T1-A-1 | implementation-a1 | complete | T1-A | Implement leaf | complete |",
-                    "| T1-A-1 | implementation-a1 | complete | T1-A | Implement leaf | complete |\n"
-                    "| T1-A-1 | implementation-a1 | complete | T1-A | Duplicate | complete |",
-                ),
-                "duplicate task row id T1-A-1",
-            ),
-            (
-                "duplicate recursive Task Packet",
-                base.replace(
-                    recursive_packet,
-                    recursive_packet + "\n" + recursive_packet,
-                ),
-                "duplicate Task Packet id T1-A-1",
-            ),
-            (
-                "missing recursive Task Packet",
-                base.replace(recursive_packet, ""),
-                "task T1-A-1 is missing a Task Packet",
-            ),
-            (
-                "unexpected recursive Task Packet",
-                base.replace(
-                    recursive_packet,
-                    recursive_packet
-                    + "\n"
-                    + recursive_packet.replace("T1-A-1", "T1-A-2"),
-                ),
-                "unexpected Task Packet T1-A-2",
-            ),
-            (
-                "missing recursive row owner",
-                base.replace(
-                    "| T1-A-1 | implementation-a1 | complete | T1-A | Implement leaf | complete |",
-                    "| T1-A-1 |  | complete | T1-A | Implement leaf | complete |",
-                ),
-                "task T1-A-1 is missing an explicit Owner",
-            ),
-            (
-                "missing recursive packet owner",
-                base.replace("- **Owner:** implementation-a1\n", "", 1),
-                "Task Packet T1-A-1 is missing an explicit Owner",
-            ),
-            (
-                "recursive row and packet owner mismatch",
-                base.replace(
-                    "- **Owner:** implementation-a1",
-                    "- **Owner:** verification-a1",
-                    1,
-                ),
-                "task T1-A-1 row and Task Packet owners disagree",
-            ),
-        )
-        for label, malformed, expected in cases:
-            with self.subTest(label=label):
-                returncode, findings = self.doctor_plan_findings(malformed)
-                self.assertEqual(returncode, 2, findings)
-                self.assertTrue(
-                    any(expected in finding["detail"] for finding in findings),
-                    findings,
-                )
+        for row in rows:
+            with self.subTest(row=row):
+                self.assertEqual(plan.count(row), 1)
 
-    def test_doctor_accepts_compact_active_and_historical_completed_plans_read_only(self) -> None:
+        for task_id, owner in (
+            ("T1", "task-owner"),
+            ("T1-A", "task-owner-a"),
+            ("T1-A-1", "implementation-a1"),
+        ):
+            with self.subTest(task=task_id):
+                self.assertEqual(plan.count(f"### {task_id} — Implement"), 1)
+                self.assertIn(f"- **Owner:** {owner}", plan)
+                self.assertIn("- **Outcome:** Implement the example.", plan)
+
+        self.assertIn("| T1-A-1 | implementation-a1 | complete | T1-A |", plan)
+        self.assertIn("recursive task IDs remain valid", (REPOSITORY / "docs/PLANS.md").read_text(encoding="utf-8"))
+
+    def test_setup_preserves_active_and_historical_plan_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            self.install_bundle(root)
             active = root / "docs/exec-plans/active/PLAN-2026-0001-example.md"
-            active.write_text(
-                """---
-id: PLAN-2026-0001
-kind: exec-plan
-format: 2
-status: in-progress
-owner: main
-area: example
-created: 2026-08-31
-updated: 2026-08-31
----
-
-# Example goal
-
-## Original goal
-
-Deliver the example.
-
-## Observable outcome and acceptance
-
-- **AC-1:** The example is observable.
-
-## Scope
-
-- Implement the example.
-
-## Non-goals
-
-- No unrelated work.
-
-## Task state
-
-| Task | Owner | State | Depends on | Outcome | Result |
-|---|---|---|---|---|---|
-| T1 | implementation | ready | none | Implement | pending |
-
-## Task Packets
-
-### T1 — Implement
-
-- **Owner:** implementation
-- **Outcome:** Implement the example.
-- **Non-goals:** No unrelated work.
-- **Read:** current authority
-- **Allowed writes:** example paths
-- **Protected paths:** unrelated paths
-- **Acceptance:** AC-1
-- **Verification:** project-owned checks
-- **Stop conditions:** scope conflict
-- **Return:** decision-bearing evidence
-- **Result:** pending
-
-## Current checkpoint
-
-The goal and boundary are recorded.
-
-## Exact next action
-
-Dispatch T1.
-
-## Decisions
-
-- None.
-
-## Discoveries
-
-- None.
-
-## Documentation impact
-
-- None.
-
-## Integration summary
-
-- pending
-
-## Verification summary
-
-- pending
-
-## Follow-ups
-
-- Pending until terminal transition.
-
-## Outcome
-
-Pending.
-""",
-                encoding="utf-8",
-            )
             completed = root / "docs/exec-plans/completed/PLAN-2025-0001-history.md"
-            completed.write_text(
-                """---
-id: PLAN-2025-0001
-kind: exec-plan
-status: complete
-owner: main
-verification_run: RUN-old
-manifest_sha256: old
- gate_verdict: pass
----
+            active.parent.mkdir(parents=True)
+            completed.parent.mkdir(parents=True)
+            active_text = compact_plan(plan_id="PLAN-2026-0001", status="in-progress")
+            completed_text = EXPANDED_LEGACY_PLAN.format(
+                plan_id="PLAN-2025-0001",
+                status="complete",
+            ) + "\nHistorical bytes remain readable.\n"
+            active.write_text(active_text, encoding="utf-8")
+            completed.write_text(completed_text, encoding="utf-8")
+            before = {active: active.read_bytes(), completed: completed.read_bytes()}
 
-# Historical Gate-era Plan
-
-Historical fields remain readable and are not rewritten.
-""",
-                encoding="utf-8",
-            )
-            before = {
-                path.relative_to(root).as_posix(): path.read_bytes()
-                for path in root.rglob("*")
-                if path.is_file()
-            }
-
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertEqual(returncode, 0, stdout + stderr)
-            findings = json.loads(stdout)["findings"]
-            self.assertFalse(any(finding["severity"] == "error" for finding in findings))
-            after = {
-                path.relative_to(root).as_posix(): path.read_bytes()
-                for path in root.rglob("*")
-                if path.is_file()
-            }
-            self.assertEqual(after, before)
-
-            active.write_text(active.read_text(encoding="utf-8").replace("status: in-progress", "status: complete"), encoding="utf-8")
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertEqual(returncode, 2, stdout + stderr)
-            self.assertTrue(
-                any(
-                    finding["path"].endswith("PLAN-2026-0001-example.md")
-                    and "invalid for this directory" in finding["detail"]
-                    for finding in json.loads(stdout)["findings"]
-                )
-            )
-
-    def test_doctor_rejects_unowned_and_unresolved_new_terminal_plans(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
             self.install_bundle(root)
-            template = read_asset("document-first/docs/exec-plans/_template.md.tmpl")
-            terminal = (
-                template.replace("id: PLAN-YYYY-NNNN", "id: PLAN-2026-0002")
-                .replace("status: proposed", "status: complete")
-            )
-            path = root / "docs/exec-plans/completed/PLAN-2026-0002-malformed.md"
-            path.write_text(terminal, encoding="utf-8")
 
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
+            self.assertEqual({active: active.read_bytes(), completed: completed.read_bytes()}, before)
+            self.assertIn("## Purpose / Big Picture", completed.read_text(encoding="utf-8"))
+            self.assertIn("Historical bytes remain readable.", completed.read_text(encoding="utf-8"))
 
-            self.assertEqual(returncode, 2, stdout + stderr)
-            details = [
-                finding["detail"]
-                for finding in json.loads(stdout)["findings"]
-                if finding["path"].endswith(path.name)
-            ]
-            self.assertTrue(any("missing an explicit Owner" in detail for detail in details))
-            self.assertTrue(any("resolve Documentation impact" in detail for detail in details))
-            self.assertTrue(any("resolve Follow-ups" in detail for detail in details))
+    def test_terminal_plan_template_leaves_evidence_and_movement_to_main(self) -> None:
+        template = read_asset("document-first/docs/exec-plans/_template.md.tmpl")
+        terminal = template.replace("status: proposed", "status: complete", 1)
+        for heading in (
+            "## Documentation impact",
+            "## Integration summary",
+            "## Verification summary",
+            "## Follow-ups",
+            "## Outcome",
+        ):
+            self.assertIn(heading, terminal)
+        self.assertIn("- **Owner:** TODO", terminal)
+        self.assertIn("manually moves the terminal Plan to", terminal)
+        self.assertIn("Main records `complete`, `cancelled`, or `superseded` only after fresh evidence", terminal)
+        self.assertIn("automatic closure", terminal.casefold())
 
-    def test_strict_compact_plan_rejects_owner_resume_and_task_packet_defects(self) -> None:
-        base = compact_plan()
-        extra_packet = TASK_PACKET.replace("T1", "T2")
-        cases = (
-            (
-                "missing Plan owner",
-                base.replace("owner: main\n", "", 1),
-                "missing an explicit Plan owner",
-            ),
-            (
-                "placeholder Plan owner",
-                base.replace("owner: main", "owner: TODO", 1),
-                "missing an explicit Plan owner",
-            ),
-            (
-                "placeholder checkpoint",
-                base.replace(
-                    "T1 is integrated and the durable state is recorded.",
-                    "TODO: record the checkpoint.",
-                ),
-                "Current checkpoint is missing or placeholder",
-            ),
-            (
-                "placeholder next action",
-                base.replace(
-                    "Dispatch independent verification for AC-1.",
-                    "Pending.",
-                ),
-                "Exact next action is missing or placeholder",
-            ),
-            (
-                "duplicate task row",
-                base.replace(
-                    "| T1 | implementation | complete | none | Implement | complete |",
-                    "| T1 | implementation | complete | none | Implement | complete |\n"
-                    "| T1 | implementation | complete | none | Duplicate | complete |",
-                ),
-                "duplicate task row id T1",
-            ),
-            (
-                "duplicate Task Packet",
-                base.replace(TASK_PACKET, TASK_PACKET + "\n" + TASK_PACKET),
-                "duplicate Task Packet id T1",
-            ),
-            (
-                "missing Task Packet",
-                base.replace(TASK_PACKET, ""),
-                "task T1 is missing a Task Packet",
-            ),
-            (
-                "unexpected Task Packet",
-                base.replace(TASK_PACKET, TASK_PACKET + "\n" + extra_packet),
-                "unexpected Task Packet T2",
-            ),
-            (
-                "missing task row owner",
-                base.replace(
-                    "| T1 | implementation | complete | none | Implement | complete |",
-                    "| T1 |  | complete | none | Implement | complete |",
-                ),
-                "task T1 is missing an explicit Owner",
-            ),
-            (
-                "placeholder task row owner",
-                base.replace(
-                    "| T1 | implementation | complete | none | Implement | complete |",
-                    "| T1 | TODO | complete | none | Implement | complete |",
-                ),
-                "task T1 is missing an explicit Owner",
-            ),
-            (
-                "missing packet owner",
-                base.replace("- **Owner:** implementation\n", "", 1),
-                "Task Packet T1 is missing an explicit Owner",
-            ),
-            (
-                "placeholder packet owner",
-                base.replace("- **Owner:** implementation", "- **Owner:** pending", 1),
-                "Task Packet T1 is missing an explicit Owner",
-            ),
-            (
-                "row and packet owner mismatch",
-                base.replace("- **Owner:** implementation", "- **Owner:** verification", 1),
-                "owners disagree",
-            ),
-        )
-        for label, malformed, expected in cases:
-            with self.subTest(label=label):
-                returncode, findings = self.doctor_plan_findings(malformed)
-                self.assertEqual(returncode, 2, findings)
-                details = [finding["detail"] for finding in findings]
-                self.assertTrue(
-                    any(expected in detail for detail in details),
-                    details,
-                )
-
-    def test_terminal_compact_plan_rejects_each_unresolved_summary(self) -> None:
-        base = compact_plan(status="complete")
-        verification = (
-            "| Criterion | Candidate | Verifier | Result | Decision-bearing evidence |\n"
-            "|---|---|---|---|---|\n"
-            "| AC-1 | abc123 | independent | pass | focused checks passed |"
-        )
-        cases = (
-            (
-                "Documentation impact",
-                base.replace("## Documentation impact\n\n- None.", "## Documentation impact\n\n- pending"),
-            ),
-            (
-                "Integration summary",
-                base.replace(
-                    "- Candidate identity: commit abc123\n- Integrated changes: T1 implementation",
-                    "- unresolved",
-                ),
-            ),
-            (
-                "Verification summary",
-                base.replace(verification, "- TODO"),
-            ),
-            (
-                "Follow-ups",
-                base.replace("## Follow-ups\n\n- None.", "## Follow-ups\n\n- pending"),
-            ),
-            (
-                "Outcome",
-                base.replace("## Outcome\n\ncomplete", "## Outcome\n\nPending."),
-            ),
-        )
-        for heading, malformed in cases:
-            with self.subTest(heading=heading):
-                returncode, findings = self.doctor_plan_findings(
-                    malformed,
-                    completed=True,
-                )
-                self.assertEqual(returncode, 2, findings)
-                details = [finding["detail"] for finding in findings]
-                self.assertTrue(
-                    any(
-                        f"terminal compact Plan must resolve {heading}" in detail
-                        for detail in details
-                    ),
-                    details,
-                )
-
-    def test_terminal_outcome_must_match_each_terminal_status(self) -> None:
+    def test_terminal_compact_plans_encode_each_manual_outcome(self) -> None:
         for status in ("complete", "cancelled", "superseded"):
-            with self.subTest(status=status, valid=True):
-                returncode, findings = self.doctor_plan_findings(
-                    compact_plan(status=status),
-                    completed=True,
-                )
-                self.assertEqual(returncode, 0, findings)
-                self.assertFalse(
-                    any(finding["severity"] == "error" for finding in findings),
-                    findings,
-                )
+            with self.subTest(status=status):
+                plan = compact_plan(status=status)
+                self.assertIn(f"status: {status}", plan)
+                self.assertIn(f"## Outcome\n\n{status}", plan)
+                self.assertIn("## Integration summary", plan)
+                self.assertIn("## Verification summary", plan)
+                self.assertIn("## Follow-ups\n\n- None.", plan)
 
-            other = "cancelled" if status != "cancelled" else "superseded"
-            malformed = compact_plan(status=status).replace(
-                f"## Outcome\n\n{status}",
-                f"## Outcome\n\n{other}",
-            )
-            with self.subTest(status=status, valid=False):
-                returncode, findings = self.doctor_plan_findings(
-                    malformed,
-                    completed=True,
-                )
-                self.assertEqual(returncode, 2, findings)
-                details = [finding["detail"] for finding in findings]
-                self.assertTrue(
-                    any(
-                        f"Outcome must agree with terminal status '{status}'" in detail
-                        for detail in details
-                    ),
-                    details,
-                )
-
-    def test_terminal_outcome_rejects_negated_qualified_multiple_and_prose_values(self) -> None:
-        cases = (
-            ("complete", "not complete"),
-            ("complete", "complete later"),
-            ("complete", "complete and cancelled"),
-            ("complete", "The work is complete"),
-            ("cancelled", "cancelled pending cleanup"),
-            ("superseded", "superseded by a later Plan"),
-            ("superseded", "superseded\n\ncomplete"),
-        )
-        for status, outcome in cases:
-            with self.subTest(status=status, outcome=outcome):
-                malformed = compact_plan(status=status).replace(
-                    f"## Outcome\n\n{status}",
-                    f"## Outcome\n\n{outcome}",
-                )
-                returncode, findings = self.doctor_plan_findings(
-                    malformed,
-                    completed=True,
-                )
-                self.assertEqual(returncode, 2, findings)
-                self.assertTrue(
-                    any(
-                        f"Outcome must agree with terminal status '{status}'"
-                        in finding["detail"]
-                        for finding in findings
-                    ),
-                    findings,
-                )
-
-    def test_compact_format_marker_is_required_and_expanded_history_is_grandfathered_structurally(self) -> None:
+    def test_compact_format_and_historical_plan_forms_remain_distinguishable(self) -> None:
         compact = compact_plan()
-        marker_cases = (
-            (
-                compact.replace("format: 2\n", "", 1),
-                "compact Plan is missing required format: 2",
-            ),
-            (
-                compact.replace("format: 2", "format: 1", 1),
-                "compact Plan format '1' is invalid; expected 2",
-            ),
-        )
-        for malformed, expected in marker_cases:
-            with self.subTest(expected=expected):
-                returncode, findings = self.doctor_plan_findings(malformed)
-                self.assertEqual(returncode, 2, findings)
-                self.assertTrue(
-                    any(expected in finding["detail"] for finding in findings),
-                    findings,
-                )
+        self.assertRegex(compact, r"(?m)^format: 2$")
+        self.assertNotIn("## Purpose / Big Picture", compact)
 
-        for incidental in ("", "\nHistorical Gate and .harness/runs evidence remains readable.\n"):
-            with self.subTest(incidental=bool(incidental)):
-                legacy = EXPANDED_LEGACY_PLAN.format(
-                    plan_id="PLAN-2025-0001",
-                    status="complete",
-                ) + incidental
-                returncode, findings = self.doctor_plan_findings(
-                    legacy,
-                    completed=True,
-                    filename="PLAN-2025-0001-expanded.md",
-                )
-                self.assertEqual(returncode, 0, findings)
-                self.assertFalse(
-                    any(finding["severity"] == "error" for finding in findings),
-                    findings,
-                )
-                warnings = [
-                    finding for finding in findings if finding["severity"] == "warning"
-                ]
-                self.assertLessEqual(len(warnings), 1, warnings)
-                self.assertTrue(
-                    any("grandfathered expanded Plan" in finding["detail"] for finding in warnings),
-                    warnings,
-                )
+        historical = EXPANDED_LEGACY_PLAN.format(
+            plan_id="PLAN-2025-0001",
+            status="complete",
+        )
+        self.assertNotRegex(historical, r"(?m)^format:")
+        self.assertNotIn("task_graph:", historical)
+        self.assertIn("## Purpose / Big Picture", historical)
+        self.assertIn("## Validation and Evidence", historical)
+        self.assertIn("Historical acceptance was met.", historical)
 
-        active_legacy = EXPANDED_LEGACY_PLAN.format(
-            plan_id="PLAN-2026-0003",
-            status="in-progress",
-        )
-        returncode, findings = self.doctor_plan_findings(
-            active_legacy,
-            filename="PLAN-2026-0003-expanded.md",
-        )
-        self.assertEqual(returncode, 0, findings)
-        self.assertFalse(
-            any(finding["severity"] == "error" for finding in findings),
-            findings,
-        )
-        self.assertTrue(
-            any("reconcile it to format: 2" in finding["detail"] for finding in findings),
-            findings,
-        )
+        policy = (REPOSITORY / "docs/PLANS.md").read_text(encoding="utf-8")
+        self.assertIn("historical expanded or completed Plans remain untouched", policy)
+        self.assertIn("Use [`exec-plans/_template.md`](exec-plans/_template.md) with `format: 2`", policy)
 
-    def test_duplicate_plan_ids_remain_errors_across_plan_directories(self) -> None:
+    def test_duplicate_plan_ids_remain_visible_for_manual_ambiguity_resolution(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            self.install_bundle(root)
-            plan_id = "PLAN-2026-0009"
-            (root / "docs/exec-plans/active/PLAN-2026-0009-active.md").write_text(
-                compact_plan(plan_id=plan_id),
+            active = root / "docs/exec-plans/active/PLAN-2026-0009-active.md"
+            completed = root / "docs/exec-plans/completed/PLAN-2026-0009-history.md"
+            active.parent.mkdir(parents=True)
+            completed.parent.mkdir(parents=True)
+            active.write_text(
+                compact_plan(plan_id="PLAN-2026-0009", status="in-progress"),
                 encoding="utf-8",
             )
-            (root / "docs/exec-plans/completed/PLAN-2026-0009-history.md").write_text(
-                EXPANDED_LEGACY_PLAN.format(plan_id=plan_id, status="complete"),
+            completed.write_text(
+                EXPANDED_LEGACY_PLAN.format(
+                    plan_id="PLAN-2026-0009",
+                    status="complete",
+                ),
                 encoding="utf-8",
             )
+            before = {active: active.read_bytes(), completed: completed.read_bytes()}
 
-            returncode, stdout, stderr = self.run_cli(
-                "doctor", "--root", str(root)
-            )
-            self.assertEqual(returncode, 2, stdout + stderr)
-            self.assertTrue(
-                any(
-                    "duplicate Plan id" in finding["detail"]
-                    for finding in json.loads(stdout)["findings"]
-                )
-            )
+            self.install_bundle(root)
+
+            self.assertEqual({active: active.read_bytes(), completed: completed.read_bytes()}, before)
+            policy = (root / "docs/PLANS.md").read_text(encoding="utf-8")
+            self.assertIn("stops on ambiguity", policy.lower())
+            self.assertIn("active and completed history", policy.lower())
 
     def test_current_and_packaged_agent_policy_agree_on_hierarchical_dispatch(self) -> None:
         pairs = (
@@ -1873,21 +1069,17 @@ Historical fields remain readable and are not rewritten.
             self.install_bundle(root)
             policy = (root / "docs/PLANS.md").read_text(encoding="utf-8")
             self.assertIn("Main alone serializes Plan edits", policy)
-            self.assertIn("active Markdown Plan", policy)
-            self.assertIn("complete`, `cancelled`, or `superseded", policy)
+            self.assertIn("active ordinary Markdown Plan", policy)
+            self.assertIn("Terminal states are:", policy)
             self.assertIn(
-                "Broad or multi-part roots default to `Role: Task Owner` and `May delegate: yes`",
+                "For every broad or multi-part root, the default packet is `Role: Task Owner` with `May delegate: yes`",
                 policy,
             )
-            self.assertIn("common installed-project rule", policy)
-            self.assertIn("every milestone classified as broad", policy)
-            self.assertIn("does not apply to inherently single or serial milestones", policy)
+            self.assertIn("Narrow or inherently serial roots remain direct nondelegating leaves", policy)
+            self.assertIn("Main dispatches independent root Owners concurrently", policy)
+            self.assertIn("Each Owner first returns a finite child manifest", policy)
             self.assertIn(
-                "Main dispatches the complete dependency-ready root set concurrently",
-                policy,
-            )
-            self.assertIn(
-                "A resumed Owner dispatches its complete dependency-ready descendants",
+                "Only the resumed serialized Task Owner dispatches its own declared dependency-ready descendants",
                 policy,
             )
             self.assertNotIn("complete dependency-ready leaf set concurrently", policy)

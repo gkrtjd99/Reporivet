@@ -1,28 +1,100 @@
 # Product
 
-This is the current product overview. Durable feature requirements and acceptance criteria belong in `product-specs/`; implementation sequencing belongs in an active Plan.
+This is the current product overview for the repository. Durable feature requirements and acceptance criteria belong in `product-specs/`; implementation sequencing belongs in one current ordinary Markdown Plan.
 
 ## Product, users, problem, and success
 
 {{PRODUCT_EVIDENCE}}
 
+The durable product is an inspectable, project-owned operating contract expressed through Markdown authority, ordinary Plans, static runbooks, Git, project-owned commands, and host-native Agents. The setup handoff is bounded and one-shot; after handoff, the package may be absent without reducing ordinary project work.
+
+## One-shot independence boundary
+
+The target project owns commands, tests, CI, deployment, secrets, operations, Git, and acceptance evidence. No target package, runtime, role or procedure Skill, marker, generated settings, command wrapper, scheduler, dispatcher, task database, Gate, evidence archive, automatic closure, or hidden state is required after setup. No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command.
+
+A requested host adapter, when present, contains exactly `@AGENTS.md` and one trailing newline. Canonical documents do not depend on the adapter.
+
+## Static procedure runbooks
+
+A procedure produces output only when its `Confirmed` section contains one complete, unique, user-confirmed strict structured record with exactly these nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. All fields are required; no aliases, extra fields, values, or defaults are inferred. The result is ordinary Markdown at `docs/runbooks/<slug>.md`, with no frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration. Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook. A runbook is descriptive project documentation, not an executor.
+
+## Users and needs
+
+- **Repository maintainers** need an inspectable operating contract that survives package removal.
+- **Main agents** need canonical routing, one durable work record, bounded delegation, and explicit evidence ownership.
+- **Implementation agents** need narrow Task Packets with exact reads, allowed writes, protected paths, acceptance criteria, project-owned checks, and stop conditions.
+- **Verification agents and reviewers** need fresh-context, criterion-level evidence tied to an identifiable integrated candidate.
+
 ## Current scope
 
-### Confirmed
+The project-owned target contains:
 
-- None.
+- a host-neutral `AGENTS.md` entry point;
+- current product, architecture, design, quality, operations, security, and Plan authority;
+- versioned specifications, designs, decisions, Plans, references, and optional static runbooks;
+- an optional exact `CLAUDE.md` host adapter; and
+- project-owned source, tests, commands, CI, deployment, secrets, Git, operations, and evidence.
 
-### Proposed
+The setup handoff may establish these documents and eligible static runbooks, but it does not create a Plan, execute project commands, dispatch Agents, or leave a continuing target runtime. Existing project-owned or differing content remains preserved rather than guessed-owned.
 
-- None.
+## Core workflow
 
-### Open
+1. Start at `AGENTS.md` and route through `docs/README.md`.
+2. For substantive work, Main searches active and completed history, resumes exactly one matching active ordinary Markdown Plan, or creates the lowest unused current-year Plan from `docs/exec-plans/_template.md`.
+3. Read only the current authority, code, and tests named by that Plan or task.
+4. Define or update project facts in visible Markdown, keeping Confirmed, Proposed, Open, and Sources separate.
+5. Preview and review exact project-owned changes before any authorized mutation.
+6. Work through bounded Task Packets, static runbooks, and project-owned commands; the host/project performs Agent dispatch and command execution.
+7. Verify the integrated candidate from a fresh context and record criterion-level evidence in the Plan.
+8. Keep the package absent when desired; generated Markdown, Plans, runbooks, Git, and project commands remain useful.
 
-- Define the smallest current scope, explicit non-goals, and observable success signals.
+## Bounded task ownership
 
-### Sources
+Broad or multi-part roots default to `Role: Task Owner` with `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves. Main dispatches independent root Owners concurrently. Each Owner first returns a finite child manifest within its approved envelope, after which Main alone serializes the accepted child rows and complete matching packets into the Plan and resumes that Owner. Only the resumed serialized Task Owner dispatches its own declared dependency-ready descendants through host-native Agent execution; ordinary leaves never delegate.
 
-- None.
+Descendants inherit the parent's scope, acceptance, non-goals, protected paths, child budget, and frozen interfaces and cannot broaden them. Mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration. Fresh verification is read-only, nonrepairing, nondelegating, and candidate-specific. This is a host/project operating contract, not a generated workflow runtime.
+
+## Requirements
+
+### Rich content
+
+- Current authority explains product intent, system boundaries, quality, security, operations, and Plan lifecycle without package internals.
+- Durable records preserve decisions, historical execution, and unresolved follow-ups.
+- Confirmed facts, proposals, open questions, and sources remain visibly distinct.
+- Historical and superseded records do not become accidental current authority.
+
+### One-shot independence
+
+- Package-side setup may establish the target once, but generated authority remains useful after package removal.
+- Project-owned commands and CI are authoritative for execution; setup does not execute them.
+- Fresh targets do not receive target Skills, markers, generated settings, runtime, command wrappers, or hidden state.
+- No generated instruction locates, installs, resolves, imports, invokes, or verifies Reporivet or a diagnosis command.
+
+### Safety
+
+- Existing project-owned or ambiguous files are preserved unless an explicitly approved, fingerprinted transition proves ownership.
+- No generated runbook carries frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration.
+- Agents stop for explicit authority before external or irreversible actions.
+
+## Success criteria
+
+- A maintainer can identify current authority from `AGENTS.md` and `docs/README.md`.
+- A substantive change can be coordinated using one compact Markdown Plan and its Task Packets.
+- A verifier can tie results to an integrated candidate and each acceptance criterion.
+- Removing the setup package leaves generated Markdown, ordinary Plans, static runbooks, Git, and project commands useful.
+- Complete unique Confirmed procedures alone produce deterministic plain-Markdown runbooks.
+- The generated surface stays bounded to current documents, Plan directories/templates, static runbooks, the optional exact adapter, and project-owned content.
+
+## Non-goals
+
+The target does not introduce:
+
+- a general workflow engine, scheduler, queue, lock manager, policy server, runtime, or evidence database;
+- hidden agent memory or autonomous Plan mutation;
+- project-independent build, deployment, or incident procedures;
+- a target Skill, package marker, generated settings, copied executor, or package-resolution requirement after setup;
+- a compatibility layer that silently preserves retired behavior; or
+- automatic Agent dispatch, project-command execution, or Plan closure.
 
 ## Requirement changes
 

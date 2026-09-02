@@ -27,7 +27,7 @@ Record the user's goal without replacing it with an implementation detail.
 - TODO: bounded scope.
 ## Non-goals
 - TODO: explicit exclusions.
-- Reporivet provides no scheduler, dispatcher, task store, command runner, hidden state, automatic closure, or workflow runtime.
+- Reporivet provides no scheduler, dispatcher, task store, command runner, hidden state, automatic closure, or workflow runtime. Setup handoff creates no Plan, Plan runtime, scheduler, or hidden state; package absence after handoff is expected.
 
 ## Task state
 | Task | Owner | State | Depends on | Parallel group | Outcome | Result |
@@ -85,16 +85,14 @@ Every row has one matching bounded packet. Broad roots use the Task Owner packet
 For T1-A, T1-B, T1-I, T1-V1, and T1-V2, copy every packet field above with each row's exact Owner, Role, Parent, Parallel group, delegation, and inherited boundaries; child rows and packets must remain paired.
 
 ## Broad-milestone decomposition
-For every milestone classified as broad, use this common installed-project rule:
+For every broad or multi-part root, the default packet is `Role: Task Owner` with `May delegate: yes`. Narrow or inherently serial roots remain direct nondelegating leaves. This is a host/project operating rule, not a Reporivet runtime:
 `T<n> (broad root Owner) -> T<n>-A/B/C/... (declared child packets, all ready leaves dispatched concurrently) -> T<n>-I (Owner-local aggregation) -> T<n>-V1/V2/... (parallel fresh verification)`
-Broad or multi-part roots default to `Role: Task Owner` and `May delegate: yes`; narrow or inherently serial roots remain direct nondelegating leaves. Main dispatches independent root Owners concurrently using only the host's native Agent execution. This rule does not apply to inherently single or serial milestones.
-Each Owner first returns a finite child manifest inside its approved envelope. Main alone serializes accepted child rows and complete matching packets into this Plan, then resumes the serialized Owner. Only that resumed Owner dispatches its complete dependency-ready descendants through host-native Agent execution; ordinary leaf Agents do not delegate.
+Main dispatches independent root Owners concurrently using only the host's native Agent execution. Each Owner first returns a finite child manifest inside its approved envelope. Main alone serializes Plan edits, accepted child rows, and complete matching packets into this Plan, then resumes the serialized Owner. Only that resumed Owner dispatches its complete dependency-ready descendants through host-native Agent execution; ordinary leaf Agents do not delegate. This rule does not apply to inherently single or serial milestones.
 Descendants inherit parent scope, acceptance, non-goals, protected paths, child budget, exact baseline, disjoint writes, and frozen interfaces and cannot broaden them. Mutable siblings require disjoint allowed-write sets and separate exact-baseline worktrees. Owner-local aggregation is distinct from Main's final repository integration.
-If a child is itself broad, only a packet marked `Role: Task Owner` and `May delegate: yes` may dispatch predeclared descendants such as `T<n>-A-1`; ordinary leaf Agents do not delegate.
-Fresh verification is candidate-specific, read-only, nonrepairing, and nondelegating and depends on the integrated candidate. Main alone mutates this Plan, performs final repository integration, and makes final evidence judgment. Reporivet installs no scheduler, dispatcher, task store, command runner, hidden state, automatic closure, or workflow runtime.
+If a child is itself broad, only a packet marked `Role: Task Owner` and `May delegate: yes` may dispatch predeclared descendants such as `T<n>-A-1`; ordinary leaf Agents do not delegate. Fresh verification is candidate-specific, read-only, nonrepairing, and nondelegating and depends on the integrated candidate. Main alone mutates this Plan, performs final repository integration, and makes final evidence judgment. Reporivet installs no scheduler, dispatcher, task store, command runner, hidden state, automatic closure, or workflow runtime. The `task_graph: 1` marker opts this compact `format: 2` Plan into strict hierarchy checks; unmarked compact Plans retain structural validation, historical expanded or completed Plans remain untouched, recursive task IDs remain valid, and direct serial Plans remain supported.
 
 ## Current checkpoint
-TODO: record durable state after the latest integrated result, including candidate identity and child aggregation.
+TODO: record durable state after the latest integrated result, including candidate identity and child aggregation. For substantive work, Main searches active and completed history, resumes exactly one matching active ordinary Markdown Plan, stops on ambiguity, or creates the lowest unused current-year ID without overwriting an existing file; setup handoff itself never creates a Plan.
 ## Exact next action
 TODO: Main reviews this checkpoint, then performs the next declared dispatch or integration without reconstructing chat history.
 ## Decisions
