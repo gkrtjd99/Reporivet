@@ -1,0 +1,68 @@
+# Frontend
+
+This optional, project-owned document is created only when the visible definition draft records exactly `yes` in the `web_ui` topic's **Confirmed** evidence. It is ordinary Markdown with no frontmatter or execution metadata. A missing, `no`, Proposed, Open, Sources-only, inferred, or otherwise unverified capability answer does not create this file.
+
+## Purpose and scope
+
+`FRONTEND.md` records the confirmed ownership and implementation contract for a web UI. Keep the scope to:
+
+- frontend source locations, maintainers, and ownership boundaries;
+- framework, routing, navigation, and component boundaries;
+- client state, server or cache state, and data-fetching contracts;
+- forms, validation, submission, styling, theming, and responsive behavior;
+- frontend accessibility expectations and performance budgets; and
+- client-side loading, empty, error, cancellation, offline, timeout, and retry behavior.
+
+This is frontend implementation and client-side reliability guidance. It is not service or deployed-runtime reliability guidance. Service failure modes, SLI/SLO, observability, deployment, rollback, recovery, and incident boundaries belong in `RELIABILITY.md` only when `deployed_runtime` is explicitly Confirmed `yes`, and remain subordinate to `OPERATIONS.md`. `DESIGN.md` remains the universal authority for visual language, interaction, and accessibility principles.
+
+## Ownership and authority route
+
+The project-owned frontend maintainers own the source, implementation decisions, and updates to this document. Route authority through `AGENTS.md` and `docs/README.md`, then use `PRODUCT.md` for product intent, `DESIGN.md` for universal visual and interaction direction, `QUALITY.md` for checks and evidence, and this document for confirmed frontend implementation details. Project source, tests, CI, deployment, and operational systems remain project-owned.
+
+This document does not replace the current authority documents above, and it does not grant permission to change code, data, external systems, or user-facing behavior. Record a consequential choice in the applicable specification, design, decision, or Plan rather than treating this file as a second task record.
+
+## Capability evidence and provenance
+
+The evidence below records why this optional artifact is applicable. Keep implementation facts in the same four states:
+
+{{FRONTEND_EVIDENCE}}
+
+Only explicit owner input or an attributable, accepted repository fact belongs in **Confirmed**. Scanner signals and source paths remain **Proposed** or **Sources** until an authorized owner accepts them; missing, conflicting, or unverified values remain **Open**. Setup selection, audit observation, and Plan state are separate vocabularies: none of them promotes an observation into confirmation by itself.
+
+## Frontend implementation contract
+
+### Source ownership
+
+Name the frontend source roots, maintainers, review route, generated-source boundaries, and ownership handoff. Cite the repository paths or decisions that establish each confirmed statement.
+
+### Framework, routing, and components
+
+Record the confirmed framework and version, entry points, routing and navigation model, component boundaries, composition rules, and any browser or platform support constraints. Keep candidates and unverified versions Proposed or Open.
+
+### State and data fetching
+
+Record client state, server or cache state, data-fetching boundaries, loading and cancellation semantics, freshness or invalidation rules, and the owner of each interface. Link the source contract or design decision; do not infer behavior from a filename or dependency alone.
+
+### Forms and styling
+
+Record form ownership, validation and submission behavior, error presentation, styling or theming approach, responsive constraints, and any design-system relationship. Route visual and interaction principles back to `DESIGN.md`.
+
+### Accessibility and performance
+
+Record confirmed keyboard, focus, semantics, assistive-technology, reduced-motion, localization, browser-support, performance-budget, and measurement expectations. Name the project-owned checks or review evidence that establish them.
+
+### Client-side loading, errors, and retries
+
+Describe the user-visible loading, empty, error, timeout, offline, cancellation, and retry states. State retry limits, idempotency assumptions, recovery affordances, and escalation to the owning interface only when those facts are confirmed. Do not use this section to claim service availability or operational recovery.
+
+## Project-owned verification boundary
+
+`QUALITY.md` is the current authority for project-owned checks. For frontend changes, record the exact applicable lint, type, unit, integration, browser, accessibility, visual, and performance checks, their candidate identity, result, and supporting artifact in the active Plan. A fresh Verification Sub checks the integrated candidate read-only and reports criterion-level evidence; this document does not execute checks or establish a passing result merely by naming one.
+
+## Constraints and non-goals
+
+- Do not infer framework, routes, components, state behavior, form rules, accessibility support, or performance results from scanner output, provenance, filenames, or dependencies.
+- Keep service and deployed-runtime reliability in the subordinate `RELIABILITY.md`/`OPERATIONS.md` route rather than expanding this document into an operations authority.
+- Keep product intent in `PRODUCT.md`, universal visual and interaction principles in `DESIGN.md`, and implementation work state in a project-owned Plan.
+- Do not place credentials, tokens, private data, or unsupported claims here.
+- This document is descriptive project guidance; it is not an executor, permission grant, health guarantee, or substitute for project-owned verification.

@@ -47,7 +47,11 @@ docs/
     index.md                     static runbook catalog
     _template.md                 manual runbook template
     <slug>.md                    ordinary Markdown for eligible procedures
+  FRONTEND.md                    conditional: explicit Confirmed `web_ui=yes`
+  RELIABILITY.md                 conditional: explicit Confirmed `deployed_runtime=yes`; supplemental to OPERATIONS.md
 ```
+
+`FRONTEND.md` and `RELIABILITY.md` are conditional project-owned artifacts, not part of every fresh target. The former covers frontend implementation and client-side behavior; the latter covers service/runtime reliability and remains subordinate to `OPERATIONS.md`. Missing, `no`, Proposed, Open, Sources-only, inferred, or unverified capability evidence creates neither file. `DESIGN.md` remains universal and visual/interaction/accessibility focused.
 
 Only complete, unique, user-confirmed strict nine-field procedure records qualify for static runbooks. The exact fields are `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. The rendered `docs/runbooks/<slug>.md` is ordinary Markdown with no frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration. Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook.
 

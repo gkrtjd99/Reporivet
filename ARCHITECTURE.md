@@ -75,7 +75,11 @@ docs/
     index.md                     static runbook catalog
     _template.md                 manual runbook template
     <slug>.md                    ordinary Markdown for eligible procedures
+  FRONTEND.md                    conditional: explicit Confirmed `web_ui=yes`
+  RELIABILITY.md                 conditional: explicit Confirmed `deployed_runtime=yes`; supplemental to OPERATIONS.md
 ```
+
+`FRONTEND.md` and `RELIABILITY.md` are conditional project-owned artifacts, not part of every fresh target. The former covers frontend implementation and client-side behavior; the latter covers service/runtime reliability and remains subordinate to `OPERATIONS.md`. Missing, `no`, Proposed, Open, Sources-only, inferred, or unverified capability evidence creates neither file. `DESIGN.md` remains universal and visual/interaction/accessibility focused.
 
 A fresh target contains no Reporivet role or procedure Skill, `.reporivet-version`, generated `.claude/settings.json`, copied module/runtime, doctor gate, registry or package-resolution instruction, command wrapper, or hidden state. When selected, `CLAUDE.md` is exactly `@AGENTS.md\n`. Existing legacy paths are transition candidates only during an explicit setup rerun and only after exact canonical ownership evidence; names, markers, frontmatter, or locations alone never authorize deletion.
 

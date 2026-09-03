@@ -59,6 +59,7 @@ RETIRED_FRESH_PATHS = {
     ".github",
     ".harness",
     "dev",
+    "docs/FRONTEND.md",
     "docs/RELIABILITY.md",
     "docs/generated",
     "docs/module-contracts",

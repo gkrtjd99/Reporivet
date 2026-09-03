@@ -77,8 +77,21 @@ DEFINITION_TOPICS = (
         "Repeatable procedures",
         "Which repeated procedures deserve a static runbook, including their trigger, stop conditions, evidence, permissions, and rollback?",
     ),
+    DefinitionTopic(
+        "web_ui",
+        "Web UI capability",
+        "Will this project include a web UI? Answer exactly `yes` or `no`.",
+    ),
+    DefinitionTopic(
+        "deployed_runtime",
+        "Deployed runtime capability",
+        "Will this project deploy or operate a service or runtime? Answer exactly `yes` or `no`.",
+    ),
 )
 TOPIC_BY_KEY = {topic.key: topic for topic in DEFINITION_TOPICS}
+LEGACY_DEFINITION_TOPICS = DEFINITION_TOPICS[:-2]
+CAPABILITY_TOPIC_KEYS = frozenset({"web_ui", "deployed_runtime"})
+CAPABILITY_ANSWERS = frozenset({"yes", "no"})
 
 
 @dataclass
@@ -95,6 +108,14 @@ class TopicEvidence:
 @dataclass
 class DefinitionDraft:
     evidence: dict[str, TopicEvidence]
+
+    def __post_init__(self) -> None:
+        # Older visible drafts contain only the original seven topics.  Keep
+        # those bytes readable while giving newly added topics an explicit Open
+        # placeholder instead of deriving capability from repository state.
+        for topic in DEFINITION_TOPICS:
+            if topic.key in CAPABILITY_TOPIC_KEYS:
+                self.evidence.setdefault(topic.key, TopicEvidence(open=[topic.question]))
 
     @property
     def confirmed_count(self) -> int:
@@ -301,6 +322,17 @@ DOCUMENT_FIRST_DOCUMENTS: dict[str, str] = {
     "docs/runbooks/_template.md": "document-first/docs/runbooks/_template.md.tmpl",
 }
 
+OPTIONAL_DOCUMENT_FIRST_DOCUMENTS: dict[str, tuple[str, str]] = {
+    "web_ui": (
+        "docs/FRONTEND.md",
+        "document-first/docs/FRONTEND.md.tmpl",
+    ),
+    "deployed_runtime": (
+        "docs/RELIABILITY.md",
+        "document-first/docs/RELIABILITY.md.tmpl",
+    ),
+}
+
 CLAUDE_ADAPTER_ASSET = "document-first/claude/CLAUDE.md.tmpl"
 
 
@@ -334,6 +366,16 @@ def _normalized_lines(values: object, *, field_name: str) -> list[str]:
             f"definition answers field '{field_name}' must use one Markdown bullet per string; use an array for multiple entries"
         )
     return normalized
+
+
+def _validate_capability_confirmed(topic_key: str, values: Sequence[str]) -> None:
+    if topic_key not in CAPABILITY_TOPIC_KEYS or not values:
+        return
+    if len(values) != 1 or values[0] not in CAPABILITY_ANSWERS:
+        topic = TOPIC_BY_KEY[topic_key]
+        raise InitError(
+            f"definition topic '{topic.title}' Confirmed evidence must contain exactly one canonical value: yes or no"
+        )
 
 
 def _initial_definition(root: Path, report: AuditReport | None) -> DefinitionDraft:
@@ -482,19 +524,30 @@ def _parse_evidence_block(block: str, *, topic: DefinitionTopic) -> TopicEvidenc
                 f"definition topic '{topic.title}' mixes the None sentinel with {match.group(1)} evidence"
             )
         parsed[match.group(1).casefold()] = values
-    return TopicEvidence(**parsed)
+    evidence = TopicEvidence(**parsed)
+    _validate_capability_confirmed(topic.key, evidence.confirmed)
+    return evidence
 
 
 def parse_definition_draft(text: str) -> DefinitionDraft:
     matches = list(re.finditer(r"^## ([0-9]+)\. (.+?)\s*$", text, re.MULTILINE))
     expected = [(str(index), topic.title) for index, topic in enumerate(DEFINITION_TOPICS, start=1)]
+    legacy_expected = [
+        (str(index), topic.title)
+        for index, topic in enumerate(LEGACY_DEFINITION_TOPICS, start=1)
+    ]
     actual = [(match.group(1), match.group(2)) for match in matches]
-    if actual != expected:
+    if actual == expected:
+        topics = DEFINITION_TOPICS
+    elif actual == legacy_expected:
+        topics = LEGACY_DEFINITION_TOPICS
+    else:
         raise InitError("definition draft topics are missing, duplicated, renamed, or out of order")
+
     evidence: dict[str, TopicEvidence] = {}
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        topic = DEFINITION_TOPICS[index]
+        topic = topics[index]
         evidence[topic.key] = _parse_evidence_block(text[match.end() : end], topic=topic)
     return DefinitionDraft(evidence)
 
@@ -591,6 +644,7 @@ def _apply_answer_payload(draft: DefinitionDraft, payload: Mapping[str, object])
             setattr(topic_evidence, field_name, normalized)
         if "confirmed" in data and not explicit_open:
             topic_evidence.open = []
+        _validate_capability_confirmed(key, topic_evidence.confirmed)
 
 
 def _load_definition_answers(answers: Path) -> Mapping[str, object]:
@@ -711,7 +765,14 @@ def _bundle_values(root: Path, draft: DefinitionDraft) -> dict[str, str]:
         "AGENT_EVIDENCE": _evidence_markdown(draft.evidence["agents"]),
         "PROCEDURE_EVIDENCE": _evidence_markdown(draft.evidence["procedures"]),
         "ARCHITECTURE_EVIDENCE": _evidence_markdown(_architecture_evidence(root)),
+        "FRONTEND_EVIDENCE": _evidence_markdown(draft.evidence["web_ui"]),
+        "RELIABILITY_EVIDENCE": _evidence_markdown(draft.evidence["deployed_runtime"]),
     }
+
+
+def _capability_is_confirmed(draft: DefinitionDraft, topic_key: str) -> bool:
+    evidence = draft.evidence.get(topic_key)
+    return evidence is not None and evidence.confirmed == ["yes"]
 
 
 def _target_asset_contents(
@@ -730,6 +791,9 @@ def _target_asset_contents(
     }
     for destination, asset in DOCUMENT_FIRST_DOCUMENTS.items():
         contents[destination] = _read_guided_asset(asset, values)
+    for topic_key, (destination, asset) in OPTIONAL_DOCUMENT_FIRST_DOCUMENTS.items():
+        if _capability_is_confirmed(draft, topic_key):
+            contents[destination] = _read_guided_asset(asset, values)
     # Lifecycle directories remain available without creating an active Plan.
     contents["docs/exec-plans/active/.gitkeep"] = ""
     contents["docs/exec-plans/completed/.gitkeep"] = ""

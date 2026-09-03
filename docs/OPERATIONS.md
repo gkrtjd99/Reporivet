@@ -14,6 +14,14 @@ Project-owned quality checks live in [`QUALITY.md`](QUALITY.md). Security bounda
 
 Setup is a bounded one-shot transaction. After approved handoff, the target owns its documents, Plans, runbooks, commands, tests, CI, deployment, operations, secrets, Git, and evidence. Removing the package is expected and does not reduce ordinary project work. Reporivet does not provide a continuing target runtime, diagnosis command, command runner, or project-command execution service.
 
+## Conditional reliability guidance
+
+`RELIABILITY.md` appears only when the visible definition draft contains exactly `deployed_runtime=yes` in **Confirmed**. It is a project-owned, ordinary Markdown supplement for service/runtime failure modes, SLI/SLO, observability, deployment/rollback, recovery, and incident boundaries. It is subordinate to this document: `OPERATIONS.md` remains the universal authority for running, releasing, observing, backup, rollback, recovery, and incidents, and its procedures and approvals cannot be replaced by the supplement.
+
+`FRONTEND.md`, when `web_ui=yes` is explicitly Confirmed, covers frontend implementation and client-side loading/error/retry behavior only; it is not service reliability authority. Missing, `no`, Proposed, Open, Sources-only, inferred, or unverified capability values create no optional file. Audit observations and provenance do not establish confirmation, and setup selection is not Plan state or operational evidence.
+
+Reliability statements require an accountable project owner, an attributable source, the applicable environment and candidate or time range, and direct project-owned evidence. Keep unavailable or uncertain topology, SLI/SLO, telemetry, deployment, recovery, and incident facts Open or Proposed rather than inventing them. `QUALITY.md` remains the route for project checks; record exact operational observations and results in the active Plan or applicable runbook.
+
 ## Procedure requirements
 
 Every project-owned executable procedure must name its owner, prerequisites, exact command, expected evidence, stop conditions, sensitive-data boundary, and rollback or recovery path. Keep unavailable facts Open, use project-owned tools, and require explicit authority before any external or irreversible action.

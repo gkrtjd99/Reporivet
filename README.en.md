@@ -34,9 +34,11 @@ ARCHITECTURE.md
 docs/
   README.md
   PRODUCT.md
-  DESIGN.md
+  DESIGN.md                                      universal design document for every project
+  FRONTEND.md                                    created only when `web_ui=yes` is Confirmed
   QUALITY.md
   OPERATIONS.md
+  RELIABILITY.md                                 created only when `deployed_runtime=yes` is Confirmed
   SECURITY.md
   PLANS.md
   product-specs/
@@ -67,6 +69,12 @@ CLAUDE.md                                      optional exact adapter: @AGENTS.m
 ```
 
 The draft appears only while guided definition needs resuming. Setup creates the empty Plan directories when needed but never creates an active Plan file. The Main host/project procedure searches active and completed history, resumes one matching active Plan, or creates the first ordinary Markdown Plan with the lowest unused current-year ID.
+
+## Conditional capability documents
+
+`reporivet setup` adds two capability questions to the visible definition. An exact **Confirmed** `yes` for `web_ui` creates `docs/FRONTEND.md`; an exact **Confirmed** `yes` for `deployed_runtime` creates `docs/RELIABILITY.md`. The questions are independent, so both documents may be selected. `no`, Proposed, Open, Sources-only, inferred values, and audit observations alone never create an optional document.
+
+`DESIGN.md` is the universal authority for visual language, interaction, and accessibility. `FRONTEND.md` covers frontend implementation and client-side loading/error/retry behavior; it does not own service reliability. `RELIABILITY.md` is a supplemental document for service/runtime failure modes, SLI/SLO, observability, deployment/rollback, recovery, and incident boundaries. It never replaces or outranks the universal operational authority in `OPERATIONS.md`. Both documents require project ownership, sources and provenance, applicable candidate/environment, and project-owned checks; they must not invent unconfirmed topology, telemetry, SLO, or recovery claims.
 
 Fresh targets contain no Reporivet role or procedure Skill, `.reporivet-version`, generated `.claude/settings.json`, copied module/runtime, doctor gate, registry or package-resolution instruction, command wrapper, scheduler, dispatcher, task store, Gate, evidence archive, or hidden state. Existing legacy paths may be examined only during an explicit setup rerun with exact canonical ownership evidence; names, markers, frontmatter, or locations alone never authorize deletion.
 

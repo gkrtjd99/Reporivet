@@ -17,8 +17,8 @@ SRC = REPOSITORY / "src"
 sys.path.insert(0, str(SRC))
 
 from reporivet.cli import main as cli_main
-from reporivet.guided import LEGACY_RUNTIME_PATHS, parse_definition_draft
-from reporivet.initializer import read_asset
+from reporivet.guided import DEFINITION_TOPICS, LEGACY_RUNTIME_PATHS, parse_definition_draft
+from reporivet.initializer import InitError, read_asset
 from reporivet.procedures import ProcedureSpec
 
 
@@ -139,6 +139,199 @@ class GuidedSetupTests(unittest.TestCase):
             self.assertEqual(status["confirmed_topics"], 0)
             self.assertEqual(status["next"], "product")
 
+    def test_empty_capability_answer_payload_is_a_noop_and_does_not_activate_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.assertEqual(self.define(root, "start")[0], 0)
+            answers = root / "empty.json"
+            answers.write_text("{}\n", encoding="utf-8")
+
+            returncode, stdout, stderr = self.define(
+                root,
+                "resume",
+                "--answers",
+                str(answers),
+            )
+            self.assertEqual(returncode, 0, stdout + stderr)
+            draft = parse_definition_draft(
+                (root / "docs/product-specs/project-definition.draft.md").read_text(
+                    encoding="utf-8"
+                )
+            )
+            for key in ("web_ui", "deployed_runtime"):
+                self.assertEqual(draft.evidence[key].confirmed, [])
+            actions = {str(action["path"]): action for action in self.preview(root)["actions"]}
+            self.assertNotIn("docs/FRONTEND.md", actions)
+            self.assertNotIn("docs/RELIABILITY.md", actions)
+
+    def test_capability_confirmed_values_require_one_exact_canonical_answer(self) -> None:
+        invalid_values = (
+            ("empty", []),
+            ("multiple", ["yes", "no"]),
+            ("uppercase_yes", "Yes"),
+            ("uppercase_no", "NO"),
+            ("multiline", "yes\nno"),
+            ("arbitrary", "maybe"),
+        )
+        for topic_key in ("web_ui", "deployed_runtime"):
+            for label, value in invalid_values:
+                with self.subTest(topic=topic_key, value=label), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory).resolve()
+                    self.assertEqual(self.define(root, "start")[0], 0)
+                    answers = root / "answers.json"
+                    answers.write_text(
+                        json.dumps({topic_key: {"confirmed": value}}),
+                        encoding="utf-8",
+                    )
+                    returncode, stdout, stderr = self.define(
+                        root,
+                        "resume",
+                        "--answers",
+                        str(answers),
+                    )
+                    self.assertEqual(returncode, 2, stdout + stderr)
+                    if label == "empty":
+                        self.assertIn("must contain a non-empty value", stderr)
+                    elif label == "multiline":
+                        self.assertIn("one Markdown bullet per string", stderr)
+                    else:
+                        self.assertIn(
+                            "Confirmed evidence must contain exactly one canonical value",
+                            stderr,
+                        )
+                    self.assertNotIn("docs/FRONTEND.md", stderr)
+                    self.assertNotIn("docs/RELIABILITY.md", stderr)
+
+    def test_legacy_seven_topic_draft_defaults_new_capabilities_to_open(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.assertEqual(self.define(root, "start")[0], 0)
+            draft_path = root / "docs/product-specs/project-definition.draft.md"
+            complete = draft_path.read_text(encoding="utf-8")
+            legacy = complete.split("\n## 8. Web UI capability", 1)[0].rstrip() + "\n"
+            draft_path.write_text(legacy, encoding="utf-8")
+
+            draft = parse_definition_draft(legacy)
+            for key in ("web_ui", "deployed_runtime"):
+                self.assertEqual(draft.evidence[key].confirmed, [])
+                self.assertEqual(
+                    draft.evidence[key].open,
+                    [next(topic.question for topic in DEFINITION_TOPICS if topic.key == key)],
+                )
+            status_code, status_stdout, status_stderr = self.define(root, "status")
+            self.assertEqual(status_code, 0, status_stdout + status_stderr)
+            status = json.loads(status_stdout)
+            self.assertEqual(status["total_topics"], 9)
+            self.assertIn("web_ui", status["unresolved"])
+            self.assertIn("deployed_runtime", status["unresolved"])
+
+            actions = {str(action["path"]): action for action in self.preview(root)["actions"]}
+            self.assertNotIn("docs/FRONTEND.md", actions)
+            self.assertNotIn("docs/RELIABILITY.md", actions)
+
+    def test_capability_evidence_states_control_optional_documents_exactly(self) -> None:
+        cases = (
+            ("web_confirmed", {"web_ui": "yes"}, {"docs/FRONTEND.md"}),
+            ("runtime_confirmed", {"deployed_runtime": "yes"}, {"docs/RELIABILITY.md"}),
+            (
+                "both_confirmed",
+                {"web_ui": "yes", "deployed_runtime": "yes"},
+                {"docs/FRONTEND.md", "docs/RELIABILITY.md"},
+            ),
+            ("explicit_no", {"web_ui": "no", "deployed_runtime": "no"}, set()),
+            (
+                "proposed_only",
+                {
+                    "web_ui": {"proposed": "yes"},
+                    "deployed_runtime": {"proposed": "yes"},
+                },
+                set(),
+            ),
+            (
+                "open_only",
+                {
+                    "web_ui": {"open": "yes"},
+                    "deployed_runtime": {"open": "yes"},
+                },
+                set(),
+            ),
+            (
+                "sources_only",
+                {
+                    "web_ui": {"sources": "owner notes"},
+                    "deployed_runtime": {"sources": "owner notes"},
+                },
+                set(),
+            ),
+            (
+                "inferred_observations",
+                {
+                    "web_ui": {"proposed": "inferred from frontend source path"},
+                    "deployed_runtime": {"sources": "inferred from service filename"},
+                },
+                set(),
+            ),
+            ("missing", {}, set()),
+        )
+        for label, payload, expected in cases:
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                self.assertEqual(self.define(root, "start")[0], 0)
+                if payload:
+                    answers = root / "answers.json"
+                    answers.write_text(json.dumps(payload), encoding="utf-8")
+                    returncode, stdout, stderr = self.define(
+                        root,
+                        "resume",
+                        "--answers",
+                        str(answers),
+                    )
+                    self.assertEqual(returncode, 0, stdout + stderr)
+                actions = {str(action["path"]): action for action in self.preview(root)["actions"]}
+                optional = {path for path in actions if path in {"docs/FRONTEND.md", "docs/RELIABILITY.md"}}
+                self.assertEqual(optional, expected)
+                for path in expected:
+                    self.assertEqual(actions[path]["action"], "create")
+                    content = str(actions[path]["content"])
+                    self.assertFalse(content.startswith("---\n"))
+                    self.assertNotRegex(content, r"(?m)^(?:allowed-tools|hooks|executor):")
+
+    def test_repository_observations_never_promote_capabilities_or_generate_optional_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "frontend-app").mkdir()
+            (root / "service-runtime").mkdir()
+            (root / "frontend-app/main.tsx").write_text("export {}\n", encoding="utf-8")
+            (root / "service-runtime/server.py").write_text("print('server')\n", encoding="utf-8")
+            (root / "scripts/build-web.sh").parent.mkdir(parents=True)
+            (root / "scripts/build-web.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+            (root / "package.json").write_text(
+                json.dumps({"scripts": {"build:web": "vite", "start:service": "python server.py"}}),
+                encoding="utf-8",
+            )
+            (root / "pyproject.toml").write_text("[project]\nname = 'fixture'\n", encoding="utf-8")
+            workflow = root / ".github/workflows/deploy.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text("name: deploy\n", encoding="utf-8")
+
+            audit_code, audit_stdout, audit_stderr = self.run_cli("audit", "--root", str(root))
+            self.assertEqual(audit_code, 0, audit_stdout + audit_stderr)
+            self.assertIn("manifest", audit_stdout)
+            self.assertIn("source-path", audit_stdout)
+            self.assertIn("ci", audit_stdout)
+
+            self.assertEqual(self.define(root, "start")[0], 0)
+            draft = parse_definition_draft(
+                (root / "docs/product-specs/project-definition.draft.md").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(draft.evidence["web_ui"].confirmed, [])
+            self.assertEqual(draft.evidence["deployed_runtime"].confirmed, [])
+            actions = {str(action["path"]): action for action in self.preview(root)["actions"]}
+            self.assertNotIn("docs/FRONTEND.md", actions)
+            self.assertNotIn("docs/RELIABILITY.md", actions)
+
     def test_resume_uses_only_the_visible_draft_and_preserves_evidence_states(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -176,7 +369,7 @@ class GuidedSetupTests(unittest.TestCase):
             self.assertEqual(draft.evidence["design"].proposed, ["Review reduced-motion behavior."])
             self.assertEqual(draft.evidence["design"].open, ["Which locales are supported?"])
             self.assertEqual(draft.evidence["design"].sources, ["Owner interview on 2026-08-31."])
-            self.assertIn('progress: "2/7"', text)
+            self.assertIn('progress: "2/9"', text)
             self.assertIn('next: "3. Quality and project commands"', text)
             preview = self.preview(root)
             product_action = next(

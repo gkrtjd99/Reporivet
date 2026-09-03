@@ -27,16 +27,27 @@ Completed Plans, superseded documents, and accepted decisions are durable record
 | `docs/design-docs/core-beliefs.md` | Reusable engineering defaults; project authority may narrow them. |
 | `docs/design-docs/_template.md` | Create-if-missing template for durable interaction or technical design. |
 | `docs/QUALITY.md` | Project-owned test, lint, type, build, distribution, and smoke commands plus expected evidence. |
-| `docs/OPERATIONS.md` | Current authority for run, release, observation, backup, rollback, recovery, and incidents. |
+| `docs/OPERATIONS.md` | Current authority for run, release, observation, backup, rollback, recovery, and incidents. It is universal even when no deployed runtime exists. |
 | `docs/runbooks/index.md`, `docs/runbooks/_template.md` | Static runbook catalog and manual procedure template. |
 | `docs/SECURITY.md` | Authentication, authorization, sensitive data, secrets, permissions, exposure, retention, and disclosure boundaries. |
 | `docs/PLANS.md` | Main-owned Plan policy and lifecycle. |
+| `docs/FRONTEND.md` | Conditional frontend implementation and client-side loading/error/retry guidance; created only for explicit Confirmed `web_ui=yes`. |
+| `docs/RELIABILITY.md` | Conditional service/runtime reliability supplement; created only for explicit Confirmed `deployed_runtime=yes` and subordinate to `docs/OPERATIONS.md`. |
 | `docs/exec-plans/_template.md` | Compact `format: 2` Plan template. |
 | `docs/exec-plans/active/.gitkeep`, `docs/exec-plans/completed/.gitkeep` | Keep both Plan lifecycle directories visible until they contain Plans. |
 | `docs/exec-plans/tech-debt-tracker.md` | Durable follow-ups that survive a terminal Plan when no external tracker is declared. |
 | `docs/decisions/README.md`, `docs/decisions/_template.md` | Decision purpose, lifecycle, and create-if-missing template. |
 | `docs/references/README.md` | Boundary and provenance rules for curated references. |
 | `docs/references/project-definition-protocol.md` | Evidence-state, guided-topic, and procedure-definition rules. |
+
+## Conditional capability artifacts
+
+`docs/OPERATIONS.md` is universal. The optional artifacts below are created only when the visible definition evidence contains the exact capability answer in **Confirmed**:
+
+- `docs/FRONTEND.md` covers frontend source ownership, framework/routing/components, state and data fetching, forms, styling, accessibility, performance, and client-side loading/error/retry behavior. It does not become service or deployed-runtime reliability guidance.
+- `docs/RELIABILITY.md` covers service/runtime failure modes, SLI/SLO, observability, deployment/rollback, recovery, and incident boundaries. It supplements and remains subordinate to `docs/OPERATIONS.md`.
+
+A missing, `no`, Proposed, Open, Sources-only, inferred, or otherwise unverified `web_ui` or `deployed_runtime` value creates no optional artifact. Audit output and source provenance are observations, not confirmation. Setup performs only the bounded selection/preview/apply transaction; it does not create a Plan or execute project commands. Plan state remains the host/project work record and is not capability evidence. Each optional document must cite its owner and sources, keep unsupported facts Open or Proposed, and rely on project-owned checks named by `docs/QUALITY.md` and operational procedures named by `docs/OPERATIONS.md`.
 
 ## Durable document families
 

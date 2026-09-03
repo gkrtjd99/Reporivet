@@ -8,6 +8,12 @@ Decisions are ordinary Markdown records owned by the project. They remain useful
 
 A decision may establish a boundary or constrain implementation, but it does not itself execute commands, dispatch Agents, grant permissions, or close a Plan. External, irreversible, and privilege-bearing actions require explicit project authority.
 
+## Capability-artifact relationship
+
+A decision may support `docs/FRONTEND.md` for frontend implementation and client-side behavior only after `web_ui=yes` is explicitly Confirmed, or support `docs/RELIABILITY.md` for service/runtime reliability only after `deployed_runtime=yes` is explicitly Confirmed. The reliability document supplements and remains subordinate to `docs/OPERATIONS.md`; `docs/DESIGN.md` remains universal and visual/interaction/accessibility focused.
+
+Keep decision evidence and artifact capability evidence separate. Scanner or audit observations and provenance remain Proposed or Sources until accepted; unknown or unverified values remain Open. Record the owner, source, constraints, non-goals, and project-owned verification evidence for each decision, and link implementation work to the applicable Plan.
+
 ## What belongs here
 
 - a choice among meaningful alternatives;

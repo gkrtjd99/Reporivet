@@ -16,6 +16,12 @@ Setup never executes project commands, spawns or dispatches Agents, or creates a
 
 The target project remains responsible for credentials, dependency policy, CI security, deployment controls, production access, logs, backups, incident handling, and project-command execution. Package removal after setup is expected and is not a security or operational blocker for ordinary target work.
 
+## Conditional capability artifacts
+
+`docs/FRONTEND.md` is project-owned frontend implementation and client-side behavior guidance only when `web_ui=yes` is explicitly Confirmed. `docs/RELIABILITY.md` is project-owned service/runtime reliability guidance only when `deployed_runtime=yes` is explicitly Confirmed, and it remains supplemental and subordinate to `docs/OPERATIONS.md`. Neither artifact grants permissions, changes the security boundary, or replaces this document.
+
+Keep capability answers and artifact claims in separate **Confirmed**, **Proposed**, **Open**, and **Sources** states. Missing, conflicting, inferred, or unverified values remain Open or Proposed; scanner signals and provenance do not establish confirmation. Cite the owner, source, environment, and candidate or time range for security-relevant statements, and use project-owned checks and operational procedures for verification. Setup selection, audit output, and Plan state are distinct and are not security evidence by themselves.
+
 ## Threat model
 
 Relevant threats include:

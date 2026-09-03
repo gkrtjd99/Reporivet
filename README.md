@@ -34,9 +34,11 @@ ARCHITECTURE.md
 docs/
   README.md
   PRODUCT.md
-  DESIGN.md
+  DESIGN.md                                      모든 프로젝트에 생성되는 universal 설계 문서
+  FRONTEND.md                                    `web_ui=yes`가 Confirmed일 때만 생성
   QUALITY.md
   OPERATIONS.md
+  RELIABILITY.md                                 `deployed_runtime=yes`가 Confirmed일 때만 생성
   SECURITY.md
   PLANS.md
   product-specs/
@@ -67,6 +69,12 @@ CLAUDE.md                                      선택 가능한 정확한 adapte
 ```
 
 초안은 안내형 정의를 재개해야 하는 동안에만 나타납니다. Setup은 필요할 때 빈 Plan 디렉터리를 만들 수 있지만 활성 Plan 파일은 절대 만들지 않습니다. 호스트/프로젝트의 Main 절차가 활성 및 완료 이력을 검색하고, 일치하는 활성 Plan 하나를 재개하거나, 없을 때 사용하지 않은 현재 연도의 가장 낮은 ID로 첫 번째 일반 Markdown Plan을 만듭니다.
+
+## Capability별 문서
+
+`reporivet setup`은 두 capability 질문을 visible definition에 추가합니다. `web_ui`가 정확히 **Confirmed** 상태의 `yes`이면 `docs/FRONTEND.md`를 만들고, `deployed_runtime`이 정확히 **Confirmed** 상태의 `yes`이면 `docs/RELIABILITY.md`를 만듭니다. 두 질문은 서로 독립적이므로 둘 다 확인될 수 있습니다. `no`, Proposed, Open, Sources-only, 추론값, 감사 관찰만으로는 선택 문서가 생성되지 않습니다.
+
+`DESIGN.md`는 모든 프로젝트의 시각·상호작용·접근성 권위 문서입니다. `FRONTEND.md`는 frontend 구현과 client-side loading/error/retry 상태를 다루며 service reliability를 소유하지 않습니다. `RELIABILITY.md`는 service/runtime failure mode, SLI/SLO, observability, deployment/rollback, recovery, incident 경계를 다루는 보조 문서이고, universal 운영 권위인 `OPERATIONS.md`를 대체하거나 상위에 두지 않습니다. 두 문서 모두 프로젝트 소유자, 출처와 provenance, 적용 candidate/environment, 프로젝트 소유 검사를 기록하며 확인되지 않은 topology·telemetry·SLO·recovery 주장을 만들어내지 않습니다.
 
 새 대상에는 Reporivet 역할 또는 절차 Skill, `.reporivet-version`, 생성된 `.claude/settings.json`, 복사된 모듈/런타임, doctor gate, registry 또는 package-resolution 지침, 명령 래퍼, scheduler, dispatcher, task store, Gate, 증거 보관소, 숨겨진 상태가 포함되지 않습니다. 기존 레거시 경로는 정확한 정식 소유권 증거가 있는 명시적인 setup 재실행 중에만 검토할 수 있으며, 이름·마커·frontmatter·위치만으로 삭제를 승인하지 않습니다.
 

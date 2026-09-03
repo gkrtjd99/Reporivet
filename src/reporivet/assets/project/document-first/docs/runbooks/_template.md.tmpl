@@ -11,9 +11,13 @@ supersedes: []
 
 # TODO runbook title
 
+## Purpose, ownership, and authority
+
+Use this scaffold for one bounded, project-owned procedure subordinate to `docs/OPERATIONS.md`. Replace every TODO with confirmed project-specific content before treating the runbook as current documentation. If the procedure concerns frontend client behavior, keep it within `docs/FRONTEND.md`; if it concerns service/runtime reliability, keep it within `docs/RELIABILITY.md` only when `deployed_runtime=yes` is explicitly Confirmed. `docs/DESIGN.md` remains universal and visual/interaction/accessibility focused.
+
 ## Trigger and scope
 
-TODO
+TODO: state the owner, trigger, scope, constraints, and non-goals.
 
 ## Preconditions and safety checks
 
@@ -25,7 +29,11 @@ TODO
 
 ## Expected evidence
 
-- TODO
+- TODO: record exact project-owned evidence, source/provenance, environment, candidate or time, and residual risk.
+
+## Evidence states
+
+Keep **Confirmed**, **Proposed**, **Open**, and **Sources** separate. Scanner or audit observations do not establish confirmation; missing or unverified facts remain Open or Proposed. The runbook itself is not proof that the procedure ran successfully.
 
 ## Rollback or recovery
 

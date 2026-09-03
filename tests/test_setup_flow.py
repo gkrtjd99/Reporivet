@@ -381,6 +381,132 @@ class SetupFlowTests(unittest.TestCase):
             )
             self.assertTrue((backup / "manifest.json").is_file())
 
+    def test_capability_artifacts_are_conditionally_previewed_applied_and_approval_bound(self) -> None:
+        cases = (
+            ("web_ui", "docs/FRONTEND.md", "docs/RELIABILITY.md"),
+            ("deployed_runtime", "docs/RELIABILITY.md", "docs/FRONTEND.md"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            for topic_key, expected_path, excluded_path in cases:
+                with self.subTest(topic=topic_key):
+                    root = base / topic_key
+                    root.mkdir()
+                    answers = base / f"{topic_key}.json"
+                    answers.write_text(
+                        json.dumps({topic_key: "yes"}),
+                        encoding="utf-8",
+                    )
+                    envelope = self.coordinate(root, answers=answers)
+                    payload = envelope.as_dict()
+                    preview = payload["preview"]
+                    self.assertIsInstance(preview, dict)
+                    assert isinstance(preview, dict)
+                    actions = {action["path"]: action for action in preview["actions"]}
+                    self.assertEqual(actions[expected_path]["action"], "create")
+                    self.assertNotIn(excluded_path, actions)
+                    content = str(actions[expected_path]["content"])
+                    self.assertTrue(content.startswith("# "))
+                    self.assertFalse(content.startswith("---\n"))
+                    self.assertNotRegex(content, r"(?m)^(?:allowed-tools|hooks|executor):")
+                    fingerprint = str(preview["fingerprint"])
+
+                    applied = self.coordinate(
+                        root,
+                        apply=True,
+                        approve_preview=fingerprint,
+                    )
+                    self.assertEqual(applied.as_dict()["state"], "applied")
+                    self.assertTrue((root / expected_path).is_file())
+                    self.assertFalse((root / excluded_path).exists())
+                    self.assertFalse((root / expected_path).read_text(encoding="utf-8").startswith("---\n"))
+
+            root = base / "approval-binding"
+            root.mkdir()
+            answers = base / "approval-binding.json"
+            answers.write_text(json.dumps({"web_ui": "yes"}), encoding="utf-8")
+            first = self.coordinate(root, answers=answers)
+            first_preview = first.as_dict()["preview"]
+            self.assertIsInstance(first_preview, dict)
+            assert isinstance(first_preview, dict)
+            first_fingerprint = str(first_preview["fingerprint"])
+
+            answers.write_text(json.dumps({"web_ui": "no"}), encoding="utf-8")
+            changed = self.coordinate(root, answers=answers)
+            changed_preview = changed.as_dict()["preview"]
+            self.assertIsInstance(changed_preview, dict)
+            assert isinstance(changed_preview, dict)
+            self.assertNotEqual(first_fingerprint, str(changed_preview["fingerprint"]))
+            with self.assertRaisesRegex(InitError, "approval does not match"):
+                self.coordinate(
+                    root,
+                    apply=True,
+                    approve_preview=first_fingerprint,
+                )
+            self.coordinate(
+                root,
+                apply=True,
+                approve_preview=str(changed_preview["fingerprint"]),
+            )
+            self.assertFalse((root / "docs/FRONTEND.md").exists())
+            self.assertFalse((root / "docs/RELIABILITY.md").exists())
+
+    def test_optional_capability_paths_preserve_project_files_and_refuse_unsafe_targets(self) -> None:
+        cases = (
+            ("web_ui", "docs/FRONTEND.md"),
+            ("deployed_runtime", "docs/RELIABILITY.md"),
+        )
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
+            base = Path(directory).resolve()
+            external_base = Path(external_directory).resolve()
+            for topic_key, target_relative in cases:
+                with self.subTest(case=(topic_key, "preserve")):
+                    root = base / f"preserve-{topic_key}"
+                    target = root / target_relative
+                    target.parent.mkdir(parents=True)
+                    original = b"project-owned optional guidance\n"
+                    target.write_bytes(original)
+                    answers = base / f"preserve-{topic_key}.json"
+                    answers.write_text(json.dumps({topic_key: "yes"}), encoding="utf-8")
+                    preview = self.coordinate(root, answers=answers)
+                    payload = preview.as_dict()
+                    actions = {action["path"]: action for action in payload["preview"]["actions"]}  # type: ignore[index]
+                    self.assertEqual(actions[target_relative]["action"], "preserve")
+                    self.assertTrue(payload["eligible_for_apply"])
+                    self.coordinate(
+                        root,
+                        apply=True,
+                        approve_preview=str(payload["preview"]["fingerprint"]),  # type: ignore[index]
+                    )
+                    self.assertEqual(target.read_bytes(), original)
+
+                for unsafe_kind in ("symlink", "directory"):
+                    with self.subTest(case=(topic_key, unsafe_kind)):
+                        root = base / f"unsafe-{topic_key}-{unsafe_kind}"
+                        target = root / target_relative
+                        target.parent.mkdir(parents=True)
+                        external = external_base / f"{topic_key}-{unsafe_kind}.txt"
+                        external.write_bytes(b"external bytes must remain unchanged\n")
+                        if unsafe_kind == "symlink":
+                            target.symlink_to(external)
+                        else:
+                            target.mkdir()
+                        answers = base / f"unsafe-{topic_key}-{unsafe_kind}.json"
+                        answers.write_text(json.dumps({topic_key: "yes"}), encoding="utf-8")
+                        envelope = self.coordinate(root, answers=answers)
+                        payload = envelope.as_dict()
+                        actions = {action["path"]: action for action in payload["preview"]["actions"]}  # type: ignore[index]
+                        self.assertEqual(actions[target_relative]["action"], "conflict")
+                        self.assertFalse(payload["eligible_for_apply"])
+                        with self.assertRaisesRegex(InitError, "unsafe target conflicts"):
+                            self.coordinate(
+                                root,
+                                apply=True,
+                                approve_preview=str(payload["preview"]["fingerprint"]),  # type: ignore[index]
+                            )
+                        if unsafe_kind == "symlink":
+                            self.assertEqual(external.read_bytes(), b"external bytes must remain unchanged\n")
+
     def test_conflict_is_ineligible_and_apply_preserves_external_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
             root = Path(directory).resolve()
@@ -541,6 +667,37 @@ class SetupFlowTests(unittest.TestCase):
                     )
                 self.assertTrue(target.is_symlink())
                 self.assertEqual(external.read_bytes(), external_content)
+
+    def test_optional_artifact_failure_rolls_back_new_optional_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as answer_directory:
+            root = Path(directory).resolve()
+            answers = Path(answer_directory).resolve() / "answers.json"
+            answers.write_text(json.dumps({"web_ui": "yes"}), encoding="utf-8")
+            preview = self.coordinate(root, answers=answers)
+            payload = preview.as_dict()
+            fingerprint = str(payload["preview"]["fingerprint"])  # type: ignore[index]
+            actions = {action["path"]: action for action in payload["preview"]["actions"]}  # type: ignore[index]
+            self.assertEqual(actions["docs/FRONTEND.md"]["action"], "create")
+            before = self.snapshot(root)
+            original_create = migration._apply_setup_create
+
+            def fail_after_frontend_create(*args: object, **kwargs: object) -> object:
+                result = original_create(*args, **kwargs)
+                action = args[1]
+                if getattr(action, "path", "") == "docs/FRONTEND.md":
+                    raise OSError("injected optional setup failure")
+                return result
+
+            with mock.patch.object(migration, "_apply_setup_create", side_effect=fail_after_frontend_create):
+                with self.assertRaisesRegex(InitError, "rolled back"):
+                    self.coordinate(
+                        root,
+                        apply=True,
+                        approve_preview=fingerprint,
+                    )
+
+            self.assertEqual(self.snapshot(root), before)
+            self.assertFalse((root / "docs/FRONTEND.md").exists())
 
     def test_apply_failure_rolls_back_all_bundle_writes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

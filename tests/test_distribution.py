@@ -33,7 +33,9 @@ EXPECTED_PACKAGE_DATA = [
 EXPECTED_ASSETS = {
     "document-first/claude/CLAUDE.md.tmpl",
     "document-first/docs/DESIGN.md.tmpl",
+    "document-first/docs/FRONTEND.md.tmpl",
     "document-first/docs/OPERATIONS.md.tmpl",
+    "document-first/docs/RELIABILITY.md.tmpl",
     "document-first/docs/PLANS.md.tmpl",
     "document-first/docs/PRODUCT.md.tmpl",
     "document-first/docs/QUALITY.md.tmpl",
@@ -155,7 +157,7 @@ class DistributionTests(unittest.TestCase):
             self.assertTrue(parts.isdisjoint(RETIRED_ASSET_PARTS), relative)
             self.assertNotIn("harness", Path(relative).name.casefold(), relative)
             self.assertNotIn("code-map", Path(relative).name.casefold(), relative)
-            self.assertNotIn("reliability", Path(relative).name.casefold(), relative)
+            self.assertNotIn("runtime", Path(relative).name.casefold(), relative)
 
     def test_document_first_repository_remains_useful_without_package_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

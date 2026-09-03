@@ -43,6 +43,17 @@ Completed Plans, superseded documents, and accepted decisions are durable record
 | [`OPERATIONS.md`](OPERATIONS.md) | Project-owned sole current authority for running, releasing, observing, backup, rollback, recovery, and incidents. | Required current authority. Remove only with an explicit replacement and repaired links. |
 | [`SECURITY.md`](SECURITY.md) | Project-owned security boundary and reporting route. | Required current authority. |
 | [`PLANS.md`](PLANS.md) | Project-owned compact Plan lifecycle and role rules. | Required current authority while Plans coordinate substantive work. |
+| `FRONTEND.md` | Optional project-owned frontend implementation and client-side loading, error, and retry guidance when `web_ui=yes` is explicitly Confirmed. | Created only for exact Confirmed `yes`; not a generic output and not service reliability authority. |
+| `RELIABILITY.md` | Optional project-owned service/runtime reliability guidance when `deployed_runtime=yes` is explicitly Confirmed. | Created only for exact Confirmed `yes`; supplemental and subordinate to `OPERATIONS.md`, never a replacement. |
+
+## Conditional capability artifacts
+
+`OPERATIONS.md` is universal. The optional artifacts below are created only when the visible definition evidence contains the exact capability answer in **Confirmed**:
+
+- `FRONTEND.md` covers frontend source ownership, framework/routing/components, state and data fetching, forms, styling, accessibility, performance, and client-side loading/error/retry behavior. It does not become service or deployed-runtime reliability guidance.
+- `RELIABILITY.md` covers service/runtime failure modes, SLI/SLO, observability, deployment/rollback, recovery, and incident boundaries. It supplements and remains subordinate to `OPERATIONS.md`.
+
+A missing, `no`, Proposed, Open, Sources-only, inferred, or otherwise unverified `web_ui` or `deployed_runtime` value creates no optional artifact. Audit output and source provenance are observations, not confirmation. Setup performs only the bounded selection/preview/apply transaction; it does not create a Plan or execute project commands. Plan state remains the host/project work record and is not capability evidence. Each optional document must cite its owner and sources, keep unsupported facts Open or Proposed, and rely on project-owned checks named by `QUALITY.md` and operational procedures named by `OPERATIONS.md`.
 
 ## Durable document families
 

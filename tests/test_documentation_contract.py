@@ -38,6 +38,10 @@ SPEC = REPOSITORY / "docs/product-specs/SPEC-REPORIVET-003-document-first-harnes
 DESIGN = REPOSITORY / "docs/design-docs/DESIGN-REPORIVET-003-document-first-harness.md"
 PROTOCOL = REPOSITORY / "docs/references/project-definition-protocol.md"
 PACKAGE_PROTOCOL = REPOSITORY / "src/reporivet/assets/project/document-first/docs/references/project-definition-protocol.md.tmpl"
+GENERATED_CAPABILITY_DOCUMENTS = (
+    REPOSITORY / "src/reporivet/assets/project/document-first/docs/FRONTEND.md.tmpl",
+    REPOSITORY / "src/reporivet/assets/project/document-first/docs/RELIABILITY.md.tmpl",
+)
 PLANS = REPOSITORY / "docs/PLANS.md"
 ARTIFACT_READINESS_DOCUMENTS = (
     REPOSITORY / "ARCHITECTURE.md",
@@ -258,6 +262,42 @@ class DocumentationContractTests(unittest.TestCase):
                     text,
                     r"(?i)publication, signing, release, deployment, and ci repair/readiness remain unestablished and outside scope",
                 )
+
+    def test_optional_capability_documents_keep_current_and_generated_boundaries(self) -> None:
+        current = "\n".join(
+            read(path)
+            for path in (
+                REPOSITORY / "ARCHITECTURE.md",
+                REPOSITORY / "docs/README.md",
+                REPOSITORY / "docs/QUALITY.md",
+                REPOSITORY / "docs/OPERATIONS.md",
+            )
+        )
+        for phrase in (
+            "FRONTEND.md",
+            "RELIABILITY.md",
+            "`web_ui=yes`",
+            "`deployed_runtime=yes`",
+            "Created only for exact Confirmed `yes`",
+            "Proposed, Open, Sources-only, inferred",
+            "Audit observations",
+            "subordinate to `OPERATIONS.md`",
+        ):
+            with self.subTest(current_phrase=phrase):
+                self.assertIn(phrase, current)
+
+        frontend, reliability = (read(path) for path in GENERATED_CAPABILITY_DOCUMENTS)
+        self.assertIn("web_ui` topic's **Confirmed** evidence", frontend)
+        self.assertIn("deployed_runtime` topic's **Confirmed** evidence", reliability)
+        self.assertIn("client-side loading, empty, error", frontend)
+        self.assertIn("service-level indicators (SLIs)", reliability)
+        self.assertIn("without replacing or outranking `OPERATIONS.md`", reliability)
+        for document in (frontend, reliability):
+            with self.subTest(document=document[:20]):
+                self.assertFalse(document.startswith("---\n"))
+                self.assertNotRegex(document, r"(?m)^(?:allowed-tools|hooks|executor):")
+                self.assertNotIn("command registration", document.casefold())
+                self.assertNotIn("privilege-bearing configuration", document.casefold())
 
     def test_current_authority_records_completed_artifact_lifecycle(self) -> None:
         stale_status = re.compile(

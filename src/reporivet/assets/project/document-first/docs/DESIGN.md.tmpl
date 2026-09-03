@@ -8,6 +8,12 @@ This document records current product design, interaction, accessibility, and du
 
 The target favors rich, inspectable repository knowledge and a thin setup handoff. After handoff, the project explains itself through Markdown authority, ordinary Plans, static runbooks, Git, and project-owned tools rather than hidden state or a continuing package runtime.
 
+## Universal design boundary
+
+`DESIGN.md` is universal and remains focused on visual language, interaction behavior, information architecture, and accessibility. It is the authority route for those principles across the project; it does not become a frontend implementation inventory or a service/runtime reliability record. When `web_ui=yes` is explicitly Confirmed, `docs/FRONTEND.md` may supplement this document with implementation and client-side loading/error/retry details. When `deployed_runtime=yes` is explicitly Confirmed, `docs/RELIABILITY.md` may supplement `OPERATIONS.md` with service/runtime reliability details; it does not change this document's design scope.
+
+Design statements require an accountable owner and a source. Keep explicit facts **Confirmed**, candidate guidance **Proposed**, missing or conflicting requirements **Open**, and provenance in **Sources**. Scanner signals and audit output do not establish a design decision. `QUALITY.md` names project-owned checks; a fresh Verification Sub records criterion-level evidence for the integrated candidate rather than treating this document as proof that a design or accessibility requirement passed.
+
 ## Canonical authority over duplicated instructions
 
 - `AGENTS.md` is the host-neutral entry point.

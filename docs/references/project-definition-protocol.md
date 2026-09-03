@@ -22,8 +22,12 @@ The fixed interview asks about:
 - project-owned test, lint, type, build, package, and smoke commands;
 - running, release, observation, backup, rollback, recovery, and incidents;
 - authentication, authorization, sensitive data, secrets, permissions, exposure, and retention;
-- Main, implementation, and verification working agreements; and
-- repeatable procedures that deserve a static runbook.
+- Main, implementation, and verification working agreements;
+- repeatable procedures that deserve a static runbook;
+- whether the project includes a web UI (`web_ui`, exactly `yes` or `no`); and
+- whether the project deploys or operates a service/runtime (`deployed_runtime`, exactly `yes` or `no`).
+
+Capability answers are constrained visible inputs, not scanner classifications. A missing answer remains **Open**; `Proposed`, `Open`, or **Sources** evidence never activates an optional artifact, and only exactly `yes` in **Confirmed** can do so.
 
 A procedure is runbook-eligible only when one complete, unique, user-confirmed, strict structured record is present in `Confirmed`. The record must contain exactly these nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. All nine fields are required; no additional fields or aliases are accepted, and no values or defaults are inferred.
 
@@ -32,6 +36,12 @@ Only such a record produces ordinary Markdown at `docs/runbooks/<slug>.md` throu
 The optional external `/reporivet-setup` wrapper is instruction-only and remains outside target assets. It only relays the deterministic setup preview/apply flow and never installs, resolves, downloads, or edits target files itself. Reporivet does not generate a target role or procedure Skill. Existing, differing, stale, or arbitrary project Skills are preserved and never deleted by procedure rendering; any explicit legacy cleanup requires separate exact ownership evidence and safety controls.
 
 Users answer facts and procedures, not canonical filenames.
+
+## Conditional capability artifacts
+
+An explicitly Confirmed `web_ui=yes` answer permits setup to create the ordinary project-owned `docs/FRONTEND.md` artifact for frontend implementation and client-side loading/error/retry guidance. An explicitly Confirmed `deployed_runtime=yes` answer permits setup to create the ordinary project-owned `docs/RELIABILITY.md` artifact for service/runtime reliability guidance. The latter supplements and remains subordinate to `docs/OPERATIONS.md`; `docs/DESIGN.md` remains universal and visual/interaction/accessibility focused.
+
+Neither artifact is created for `no`, missing, Proposed, Open, Sources-only, inferred, or otherwise unverified evidence. Scanner signals and provenance do not establish confirmation. `setup` selects and previews these paths; `audit` reports observations; the host/project Plan records subsequent work and verification. These are distinct vocabularies and no one substitutes for another.
 
 ## Package-side flow
 

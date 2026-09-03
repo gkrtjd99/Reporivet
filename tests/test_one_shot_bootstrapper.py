@@ -295,7 +295,9 @@ class OneShotBootstrapperTests(unittest.TestCase):
         expected_assets = {
             "document-first/claude/CLAUDE.md.tmpl",
             "document-first/docs/DESIGN.md.tmpl",
+            "document-first/docs/FRONTEND.md.tmpl",
             "document-first/docs/OPERATIONS.md.tmpl",
+            "document-first/docs/RELIABILITY.md.tmpl",
             "document-first/docs/PLANS.md.tmpl",
             "document-first/docs/PRODUCT.md.tmpl",
             "document-first/docs/QUALITY.md.tmpl",

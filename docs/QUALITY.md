@@ -65,6 +65,12 @@ A runbook is eligible only for one complete, unique, user-confirmed strict nine-
 
 There is no current `reporivet doctor` command. Setup validates only its own exact approved transaction and postconditions. Do not replace the retired command with another Reporivet diagnosis or command runner, and do not treat package absence after setup as `UNKNOWN`, blocking, or a residual risk. Project-owned checks remain the verification boundary for the generated target.
 
+### Capability artifact verification
+
+`docs/DESIGN.md` remains the universal visual, interaction, and accessibility authority. If `web_ui=yes` is explicitly Confirmed, `docs/FRONTEND.md` is a project-owned implementation and client-side loading/error/retry artifact; if `deployed_runtime=yes` is explicitly Confirmed, `docs/RELIABILITY.md` is a project-owned service/runtime reliability supplement subordinate to `docs/OPERATIONS.md`. Neither optional document changes this quality authority or creates a verification service.
+
+A capability file is not evidence merely because it exists. Keep missing, Proposed, Open, Sources-only, inferred, and unverified values visibly distinct, and keep audit observations separate from setup selection and Plan state. For frontend work, name exact project-owned UI checks; for runtime reliability work, name exact project-owned operational observations and checks. Record candidate identity, command or observation, result, supporting record, provenance, and residual risk in the active Plan or applicable runbook. A fresh Verification Sub checks the integrated candidate read-only; this document remains the route for deciding what project-owned verification establishes acceptance.
+
 ### Patch hygiene
 
 ```bash

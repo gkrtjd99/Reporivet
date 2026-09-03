@@ -45,3 +45,7 @@ A qualifying runbook should make the following visible in ordinary Markdown:
 - rollback or recovery conditions.
 
 Keep project-specific commands in the runbook only when the project has confirmed them. Keep credentials and secret values out of the file. Link back to `OPERATIONS.md`, the governing Plan, and relevant decisions or quality evidence.
+
+## Relationship to capability artifacts
+
+A static runbook may support `docs/FRONTEND.md` client-side behavior or `docs/RELIABILITY.md` service/runtime operations only when the applicable capability is explicitly Confirmed; it never changes those documents' scope. `docs/RELIABILITY.md`, when present, supplements and remains subordinate to `OPERATIONS.md`, while `DESIGN.md` remains universal and visual/interaction/accessibility focused. Keep procedure evidence, capability evidence, audit observations, setup actions, and Plan state distinct; cite the owner, source, exact project-owned verification, and residual risk.

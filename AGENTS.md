@@ -24,9 +24,11 @@ Do not preload every document, dependency tree, cache, generated output, or hist
 - Running, release, observation, backup, rollback, recovery, and incidents: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) and [`docs/runbooks/`](docs/runbooks/)
 - Security: [`docs/SECURITY.md`](docs/SECURITY.md)
 - Plan lifecycle: [`docs/PLANS.md`](docs/PLANS.md)
+- Frontend implementation and client-side behavior, when explicitly enabled: [`docs/FRONTEND.md`](docs/FRONTEND.md)
+- Service/runtime reliability, when explicitly enabled: [`docs/RELIABILITY.md`](docs/RELIABILITY.md), supplemental and subordinate to [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 - Durable decisions and historical execution: [`docs/decisions/`](docs/decisions/) and [`docs/exec-plans/completed/`](docs/exec-plans/completed/)
 
-When current sources conflict, stop and report the conflict. Do not silently choose the easiest interpretation.
+`docs/DESIGN.md` remains the universal visual, interaction, and accessibility authority. `docs/FRONTEND.md` is created only after an exact `web_ui=yes` value is explicitly Confirmed; `docs/RELIABILITY.md` is created only after an exact `deployed_runtime=yes` value is explicitly Confirmed. Missing, Proposed, Open, Sources-only, inferred, or unverified values do not create either optional artifact. When current sources conflict, stop and report the conflict. Do not silently choose the easiest interpretation.
 
 ## One-shot generated-target boundary
 

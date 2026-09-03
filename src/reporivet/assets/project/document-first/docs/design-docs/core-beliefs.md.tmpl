@@ -28,6 +28,12 @@ After each design or implementation, perform an ablation pass.
 - Verify the simpler implementation against all current requirements and invariants.
 - If required behavior does not change, keep the simpler implementation.
 
+## Authority, evidence, and verification boundary
+
+These defaults apply to universal documents and to optional capability artifacts without creating a second authority tree. `AGENTS.md` and `docs/README.md` route readers; `docs/DESIGN.md` owns universal visual, interaction, and accessibility principles; `docs/FRONTEND.md`, when explicitly Confirmed `web_ui=yes`, owns only frontend implementation and client-side behavior; and `docs/RELIABILITY.md`, when explicitly Confirmed `deployed_runtime=yes`, supplements and remains subordinate to `docs/OPERATIONS.md` for service/runtime reliability.
+
+Every claim names an accountable project owner and attributable source. Keep **Confirmed**, **Proposed**, **Open**, and **Sources** separate; scanner or audit observations and provenance do not establish confirmation, and unknown or unverified values remain Open or Proposed. `QUALITY.md` and `OPERATIONS.md` remain the routes for project-owned checks and operational evidence. A fresh Verification Sub records candidate-specific evidence; a design record does not execute work or prove acceptance by itself.
+
 ## Explicit boundaries
 
 Keep ownership, concerns, and dependency direction explicit. Stable boundaries should be enforced by tests or lint where practical.

@@ -1,0 +1,70 @@
+# Reliability
+
+This optional, project-owned document is created only when the visible definition draft records exactly `yes` in the `deployed_runtime` topic's **Confirmed** evidence. It is ordinary Markdown with no frontmatter or execution metadata. A missing, `no`, Proposed, Open, Sources-only, inferred, or otherwise unverified capability answer does not create this file.
+
+## Purpose, scope, and authority
+
+`RELIABILITY.md` supplements the universal operational authority in `OPERATIONS.md`. It records service- or runtime-specific reliability expectations and evidence without replacing or outranking `OPERATIONS.md`, `QUALITY.md`, `SECURITY.md`, `PRODUCT.md`, or an applicable Plan. `OPERATIONS.md` remains the current authority for running, releasing, observing, backup, rollback, recovery, and incidents.
+
+Keep this document limited to the project's explicitly confirmed deployed service or runtime boundary:
+
+- service and runtime ownership, dependencies, and failure modes;
+- service-level indicators (SLIs), service-level objectives (SLOs), and measurement windows;
+- observability signals, dashboards, logs, traces, alerts, and evidence retention;
+- deployment, rollout, rollback, and change boundaries;
+- recovery objectives, restore or failover expectations, and recovery evidence; and
+- incident severity, escalation, containment, communication, and post-incident boundaries.
+
+This document does not define frontend implementation or client-side loading, error, and retry behavior; use `FRONTEND.md` for that scope when `web_ui` is explicitly Confirmed `yes`. It does not create a service, assert that a topology exists, or make an availability, telemetry, deployment, recovery, or incident-response claim merely because this template is present.
+
+## Ownership and authority route
+
+The project service or runtime owner owns this document, its service-specific facts, and its review cadence. Route authority through `AGENTS.md` and `docs/README.md`, then use `OPERATIONS.md` for universal operational decisions, `QUALITY.md` for project-owned verification evidence, `SECURITY.md` for trust and sensitive-data boundaries, and this document for supplemental reliability detail. Link each durable choice to the applicable product specification, design, decision, Plan, runbook, or project record.
+
+A reliability statement cannot authorize deployment, rollback, recovery, access, or other external action. Those actions require the project-owned approval and procedure route in `OPERATIONS.md` and any applicable current Plan or static runbook.
+
+## Capability evidence and provenance
+
+The evidence below records why this optional artifact is applicable. Keep reliability facts in four visibly separate states:
+
+{{RELIABILITY_EVIDENCE}}
+
+Only explicit owner input or an attributable, accepted repository fact belongs in **Confirmed**. Scanner signals, inferred topology, and source paths remain **Proposed** or **Sources** until an authorized owner accepts them; missing, conflicting, or unverified values remain **Open**. Setup selection, audit observation, and Plan state are separate vocabularies: none of them establishes a reliability claim by itself.
+
+Do not turn a `yes` capability answer into an invented service topology, SLI, SLO, alert, deployment guarantee, recovery objective, or incident process. Record the source and date or candidate identity for every confirmed reliability fact.
+
+## Service and runtime failure modes
+
+Name the service or runtime boundary, owner, dependencies, failure modes, blast radius, safe degradation behavior, stop conditions, and recovery handoff. Distinguish confirmed behavior from hypotheses and link evidence for each statement. Do not claim a dependency, redundancy, failover path, or recovery guarantee without a project-owned source.
+
+## SLI and SLO contract
+
+Record only project-approved SLIs, SLOs, targets, windows, exclusions, error budgets, and measurement sources. If an SLI or SLO has not been selected, keep the decision **Open** or **Proposed** rather than supplying a conventional target. State who reviews the result and where the exact measurement evidence is retained.
+
+## Observability and evidence
+
+Record the confirmed logs, metrics, traces, health signals, dashboards, alert ownership, retention, privacy boundary, and evidence route. Identify the source, time range, environment, candidate, and review owner for each result. Do not treat a tool name, configuration file, scanner signal, or an unexecuted query as evidence that telemetry exists or is healthy.
+
+## Deployment and rollback
+
+Record project-owned deployment units, prerequisites, rollout or change strategy, approval boundary, rollback trigger, rollback owner, and observable post-change evidence. Keep exact commands and environment-specific actions in `OPERATIONS.md` or an eligible subordinate runbook. Do not imply that deployment, release, rollback, or automation has been performed or verified without direct project-owned evidence.
+
+## Recovery
+
+Record confirmed recovery objectives, backup or restore scope, failover or rebuild steps, data-loss assumptions, validation checks, and escalation boundaries. Link the governing operational procedure and its evidence. Keep unavailable recovery facts **Open** and never manufacture RTO, RPO, restore success, or service continuity claims.
+
+## Incident boundaries
+
+Record confirmed severity, detection, containment, communication, escalation, ownership, and post-incident review boundaries. Route executable incident procedures through `OPERATIONS.md` and static runbooks when applicable. Do not invent an on-call rotation, response-time promise, alert route, or incident channel.
+
+## Project-owned verification boundary
+
+`OPERATIONS.md` owns operational evidence and `QUALITY.md` owns project checks. For reliability changes, record the exact project-owned check, observation, environment, time, candidate identity, result, supporting artifact, and residual risk in the active Plan or applicable runbook. A fresh Verification Sub checks the integrated candidate read-only and reports criterion-level evidence; this document does not execute checks or establish an SLI, SLO, deployment, recovery, or incident result merely by naming one.
+
+## Constraints and non-goals
+
+- Do not infer service topology, failure modes, SLI/SLO values, observability, deployment behavior, rollback safety, recovery objectives, or incident controls from scanner output, provenance, filenames, dependencies, or conventional defaults.
+- Keep this document supplemental and subordinate to `OPERATIONS.md`; it is not a replacement operations authority.
+- Keep frontend implementation and client-side resilience in `FRONTEND.md`, universal visual and interaction principles in `DESIGN.md`, security boundaries in `SECURITY.md`, and work state in a project-owned Plan.
+- Keep credentials, tokens, private data, and unsupported claims out of this document.
+- This document is descriptive project guidance; it is not an executor, permission grant, monitoring service, availability guarantee, or substitute for project-owned verification.

@@ -6,6 +6,12 @@ A Plan is the single durable Markdown record for one substantive goal. It carrie
 
 Use [`exec-plans/_template.md`](exec-plans/_template.md) with `format: 2`.
 
+## Conditional capability documents
+
+A Plan records work on optional capability documents without becoming their authority. When `web_ui=yes` is explicitly Confirmed, `docs/FRONTEND.md` is the project-owned route for frontend implementation and client-side loading/error/retry guidance. When `deployed_runtime=yes` is explicitly Confirmed, `docs/RELIABILITY.md` is supplemental reliability guidance subordinate to `docs/OPERATIONS.md`; the latter remains universal operational authority.
+
+Capability answers are visible setup/define evidence, audit output is attributable observation, and Plan status is work state. These vocabularies remain distinct: missing, Proposed, Open, Sources-only, inferred, or unverified capability values do not activate an artifact or establish acceptance. A Plan's Documentation Impact names any changed optional artifact, its owner and sources, and the exact project-owned checks or operational evidence used by a fresh Verification Sub.
+
 ## Setup and first-Plan handoff
 
 The setup handoff is one-shot and package-side only. Setup handoff creates no Plan, Plan runtime, scheduler, or hidden state. The Main owns the handoff: it searches active and completed history, resumes exactly one matching active ordinary Markdown Plan, stops on ambiguity, or creates a new Plan from `_template.md` using the lowest unused current-year ID without overwriting an existing file. Reporivet does not create or close Plans automatically.

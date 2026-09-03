@@ -57,6 +57,15 @@ The durable target repository contains:
 
 The product does not install a copied command executor, target Skill, package marker, generated settings, runtime configuration, command registry, generated CI workflow, task database, journal, evidence archive, or package-independent Reporivet maintenance command into a target.
 
+## Conditional capability artifacts
+
+The universal target authority remains `PRODUCT.md`, `ARCHITECTURE.md`, `DESIGN.md`, `QUALITY.md`, `OPERATIONS.md`, `SECURITY.md`, and `PLANS.md`. When the visible definition draft has an exact capability value in **Confirmed**, setup may also create these ordinary project-owned documents:
+
+- `docs/FRONTEND.md` only for `web_ui=yes`; it records frontend source ownership, framework/routing/components, state and data fetching, forms, styling, accessibility, performance, and client-side loading/error/retry behavior. It does not own service reliability.
+- `docs/RELIABILITY.md` only for `deployed_runtime=yes`; it records service/runtime failure modes, SLI/SLO, observability, deployment/rollback, recovery, and incident boundaries. It is supplemental and subordinate to `docs/OPERATIONS.md`, which remains universal operational authority.
+
+Missing, `no`, Proposed, Open, Sources-only, inferred, or otherwise unverified answers create neither optional document. Audit signals and provenance identify sources but do not establish confirmation. Each optional document must state its owner, authority route, constraints, sources, and project-owned verification boundary; `docs/QUALITY.md` owns checks and `docs/OPERATIONS.md` owns operational procedures. Setup selection is not Plan state or verification evidence, and setup does not create a Plan or execute project commands.
+
 ## Core workflow
 
 1. **Set up** the target with the integrated `reporivet setup` flow; use structure-only `init` only when guided onboarding is not wanted.

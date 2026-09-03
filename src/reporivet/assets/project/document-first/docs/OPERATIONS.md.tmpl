@@ -10,6 +10,14 @@ The target is handed off once as a bounded set of project-owned Markdown, ordina
 
 No generated authority directs an Agent to locate, install, resolve, import, invoke, or verify Reporivet or a package diagnosis command. The setup handoff itself does not execute project commands, dispatch Agents, create a Plan, or silently mutate project-owned paths.
 
+## Conditional reliability guidance
+
+`docs/RELIABILITY.md` appears only when the visible definition draft contains exactly `deployed_runtime=yes` in **Confirmed**. It is a project-owned, ordinary Markdown supplement for service/runtime failure modes, SLI/SLO, observability, deployment/rollback, recovery, and incident boundaries. It is subordinate to this document: `docs/OPERATIONS.md` remains the universal authority for running, releasing, observing, backup, rollback, recovery, and incidents, and its procedures and approvals cannot be replaced by the supplement.
+
+`docs/FRONTEND.md`, when `web_ui=yes` is explicitly Confirmed, covers frontend implementation and client-side loading/error/retry behavior only; it is not service reliability authority. Missing, `no`, Proposed, Open, Sources-only, inferred, or unverified capability values create no optional artifact. Audit observations and provenance do not establish confirmation, and setup selection is not Plan state or operational evidence.
+
+Reliability statements require an accountable project owner, an attributable source, the applicable environment and candidate or time range, and direct project-owned evidence. Keep unavailable or uncertain topology, SLI/SLO, telemetry, deployment, recovery, and incident facts Open or Proposed rather than inventing them. `docs/QUALITY.md` remains the route for project checks; record exact operational observations and results in the active Plan or applicable runbook.
+
 ## Static runbooks
 
 Only one complete, unique, user-confirmed strict structured procedure record in `Confirmed` qualifies for a runbook. It must contain exactly these nine fields:

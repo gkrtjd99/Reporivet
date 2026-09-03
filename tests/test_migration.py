@@ -17,7 +17,7 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
 sys.path.insert(0, str(SRC))
 
-from reporivet import migration
+from reporivet import guided, migration
 from reporivet.cli import main as cli_main
 from reporivet.initializer import InitError
 
@@ -692,12 +692,47 @@ owner: main
                 backup = base / "backup"
                 root.mkdir()
                 self.install_canonical_02(root)
+                if phase == "_apply_setup_update":
+                    # The public migration preview intentionally excludes legacy
+                    # marker cleanup.  Use the explicit guided setup preview for
+                    # this subcase so the exact generated marker produces a real
+                    # convert -> setup-update transaction operation.
+                    draft = guided._initial_definition(root, None)
+                    values = guided._bundle_values(root, draft)
+                    legacy_agents = guided._legacy_marker_expected("AGENTS.md", values)
+                    (root / "AGENTS.md").write_text(legacy_agents + "\n", encoding="utf-8")
+                    raw_preview = guided._build_guided_setup_preview(
+                        root=root,
+                        with_claude_settings=False,
+                        draft=draft,
+                    )
+                    preview = migration._bind_setup_preview(
+                        raw_preview,
+                        root=root,
+                        backup_dir=backup,
+                    )
+                    agents_action = next(
+                        action for action in preview.actions if action.path == "AGENTS.md"
+                    )
+                    self.assertEqual(agents_action.action, "convert")
+                    update_specs = migration._setup_mutation_specs(root=root, preview=preview)
+                    self.assertEqual(
+                        next(spec.operation for spec in update_specs if spec.path == "AGENTS.md"),
+                        "setup-update",
+                    )
+                    preview_factory = lambda: guided._build_guided_setup_preview(
+                        root=root,
+                        with_claude_settings=False,
+                        draft=draft,
+                    )
+                else:
+                    preview = migration.preview_migration(
+                        root=root,
+                        from_version="0.2",
+                        backup_dir=backup,
+                    )
+                    preview_factory = None
                 before = self.tree_snapshot(root)
-                preview = migration.preview_migration(
-                    root=root,
-                    from_version="0.2",
-                    backup_dir=backup,
-                )
                 original = getattr(migration, phase)
                 calls = 0
 
@@ -711,12 +746,20 @@ owner: main
 
                 with mock.patch.object(migration, phase, side_effect=fail_after_mutation):
                     with self.assertRaisesRegex(InitError, "automatically rolled back"):
-                        migration.apply_migration(
-                            root=root,
-                            from_version="0.2",
-                            approve_preview=preview.fingerprint,
-                            backup_dir=backup,
-                        )
+                        if preview_factory is None:
+                            migration.apply_migration(
+                                root=root,
+                                from_version="0.2",
+                                approve_preview=preview.fingerprint,
+                                backup_dir=backup,
+                            )
+                        else:
+                            migration._apply_setup_transition(
+                                root=root,
+                                preview=preview,
+                                backup_dir=backup,
+                                preview_factory=preview_factory,
+                            )
 
                 self.assertEqual(calls, 1)
                 self.assertEqual(before, self.tree_snapshot(root))

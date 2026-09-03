@@ -14,6 +14,12 @@ The one-shot design optimizes for safe adoption, agent legibility, human review,
 
 The prior source candidate and wheel lifecycle remain recorded historical evidence: source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4` passed the recorded isolated pipx and pip install/use/uninstall lifecycle. The verification artifacts are temporary and are not a durable or downloadable evidence archive; this does not establish a continuing target dependency, publication, signing, release, deployment, or CI readiness.
 
+## Universal design boundary
+
+`DESIGN.md` is universal and remains focused on visual language, interaction behavior, information architecture, and accessibility. It is the authority route for those principles across the project; it does not become a frontend implementation inventory or a service/runtime reliability record. When `web_ui=yes` is explicitly Confirmed, `docs/FRONTEND.md` may supplement this document with implementation and client-side loading/error/retry details. When `deployed_runtime=yes` is explicitly Confirmed, `docs/RELIABILITY.md` may supplement `OPERATIONS.md` with service/runtime reliability details; it does not change this document's design scope.
+
+Design statements require an accountable owner and a source. Keep explicit facts **Confirmed**, candidate guidance **Proposed**, missing or conflicting requirements **Open**, and provenance in **Sources**. Scanner signals and audit output do not establish a design decision. `QUALITY.md` names project-owned checks; a fresh Verification Sub records criterion-level evidence for the integrated candidate rather than treating this document as proof that a design or accessibility requirement passed.
+
 ## Durable defaults
 
 ### Canonical authority over duplicated instructions

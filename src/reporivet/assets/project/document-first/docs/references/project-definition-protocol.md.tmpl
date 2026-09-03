@@ -31,7 +31,11 @@ The visible definition draft covers, at minimum:
 - quality checks and evidence expectations;
 - operations, release, backup, rollback, recovery, and incidents;
 - security, permissions, sensitive data, and disclosure; and
-- Plan and task-ownership working agreements.
+- Plan and task-ownership working agreements;
+- whether the project includes a web UI (`web_ui`, exactly `yes` or `no`); and
+- whether the project deploys or operates a service/runtime (`deployed_runtime`, exactly `yes` or `no`).
+
+The `web_ui` and `deployed_runtime` answers are constrained visible inputs. A missing answer remains **Open**; `Proposed`, `Open`, or **Sources** evidence never activates an optional artifact, and only exactly `yes` in **Confirmed** can do so. Audit output and source provenance remain observations until an authorized owner confirms them.
 
 The draft is reviewable Markdown. Resume preserves existing answers and evidence states. Finalization rejects unresolved required fields rather than manufacturing authority.
 
@@ -42,6 +46,12 @@ A procedure record is eligible for a static runbook only when one complete, uniq
 A qualifying record renders exactly one ordinary Markdown file at `docs/runbooks/<slug>.md` during resumed setup only; ordinary target work does not depend on package-side context. The file is descriptive and instruction-only project documentation, not an executor. It carries no command execution, Agent spawn/dispatch, privilege-bearing frontmatter, executor metadata, hooks, command registration, shell metadata, tool permissions, or other privilege-bearing configuration.
 
 Generic, inferred, incomplete, Proposed, Open, Sources-only, malformed, or duplicate records never create a runbook; no procedure is inferred or executed. Existing differing, stale, arbitrary, unsafe, symlinked, or nonregular runbooks remain preserved and are never deleted by rendering, or are refused rather than overwritten by inference. A filename, marker, frontmatter block, or location alone never proves ownership.
+
+## Conditional capability artifacts
+
+An explicitly Confirmed `web_ui=yes` answer permits setup to create the ordinary project-owned `docs/FRONTEND.md` artifact for frontend implementation and client-side loading/error/retry guidance. An explicitly Confirmed `deployed_runtime=yes` answer permits setup to create the ordinary project-owned `docs/RELIABILITY.md` artifact for service/runtime reliability guidance. The latter supplements and remains subordinate to `docs/OPERATIONS.md`; `docs/DESIGN.md` remains universal and visual/interaction/accessibility focused.
+
+Neither artifact is created for `no`, missing, Proposed, Open, Sources-only, inferred, or otherwise unverified evidence. Scanner signals and provenance do not establish confirmation. `setup` selects and previews these paths; `audit` reports observations; the host/project Plan records subsequent work and verification. These are distinct vocabularies and no one substitutes for another.
 
 ## Project-owned handoff
 
