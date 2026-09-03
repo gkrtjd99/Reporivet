@@ -19,6 +19,15 @@ Deliver changes as observable end-to-end slices. After each integrated slice, th
 
 Choose the smallest implementation that satisfies current observable requirements and known operating constraints. Do not build extension points for hypothetical futures, and do not knowingly introduce architecture intended to be discarded later.
 
+## Ablation
+
+After each design or implementation, perform an ablation pass.
+
+- Remove each abstraction, layer, option, or design element that is not required.
+- Do not preserve an element for possible future use.
+- Verify the simpler implementation against all current requirements and invariants.
+- If required behavior does not change, keep the simpler implementation.
+
 ## Explicit boundaries
 
 Keep ownership, concerns, and dependency direction explicit. Stable boundaries should be enforced by tests or lint where practical.

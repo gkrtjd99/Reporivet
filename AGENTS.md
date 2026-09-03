@@ -19,6 +19,7 @@ Do not preload every document, dependency tree, cache, generated output, or hist
 - Product intent and requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)
 - Current structure and dependency direction: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Design and accessibility: [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/design-docs/`](docs/design-docs/)
+- Shared engineering defaults, including Ablation: [`docs/design-docs/core-beliefs.md`](docs/design-docs/core-beliefs.md)
 - Quality and project-owned verification: [`docs/QUALITY.md`](docs/QUALITY.md)
 - Running, release, observation, backup, rollback, recovery, and incidents: [`docs/OPERATIONS.md`](docs/OPERATIONS.md) and [`docs/runbooks/`](docs/runbooks/)
 - Security: [`docs/SECURITY.md`](docs/SECURITY.md)

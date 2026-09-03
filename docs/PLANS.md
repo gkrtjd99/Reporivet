@@ -90,6 +90,10 @@ Every implementation or verification packet states:
 
 Packets should be self-contained enough for a fresh context but no broader than the assigned task. When broad-milestone decomposition exists, each packet also records `Role`, `Parent`, `Parallel group`, `May delegate`, inherited boundaries and write isolation, and its compact `Return`. An inherently single or serial milestone may omit those hierarchy-only fields.
 
+## Ablation checkpoint
+
+For each design or implementation change, Main or the applicable Task Owner follows the [`Ablation`](design-docs/core-beliefs.md#ablation) guidance and records the outcome and rechecked requirements and invariants in the active Plan before integration and fresh verification.
+
 ## States and lifecycle
 
 Active states are:
