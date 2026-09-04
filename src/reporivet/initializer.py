@@ -25,6 +25,28 @@ MANAGED_MARKER = re.compile(r"# reporivet:managed version=[^\s]+")
 DEFINITION_DRAFT_PATH = Path("docs/product-specs/project-definition.draft.md")
 AUDIT_STATUSES = frozenset({"confirmed", "inferred", "unknown", "conflict", "skipped"})
 AUDIT_COMMAND_GROUPS = ("bootstrap", "run", "check", "verify", "smoke", "architecture")
+DOCUMENT_CAPABILITIES = ("visual-design", "frontend", "product-sense", "reliability")
+DOCUMENT_CAPABILITY_KEYS = {
+    "visual-design": "visual_design",
+    "frontend": "frontend",
+    "product-sense": "product_sense",
+    "reliability": "reliability",
+}
+PROJECT_KIND_DOCUMENT_DEFAULTS = {
+    "service": frozenset({"reliability"}),
+    "web": frozenset({"visual-design", "frontend", "reliability"}),
+    "application": frozenset({"reliability"}),
+    "app": frozenset({"reliability"}),
+    "library": frozenset(),
+    "cli": frozenset(),
+    "other": frozenset(),
+}
+OPTIONAL_DOCUMENT_ASSETS = {
+    "visual-design": ("docs/DESIGN.md", "docs/DESIGN.md.tmpl"),
+    "frontend": ("docs/FRONTEND.md", "docs/FRONTEND.md.tmpl"),
+    "product-sense": ("docs/PRODUCT_SENSE.md", "docs/PRODUCT_SENSE.md.tmpl"),
+    "reliability": ("docs/RELIABILITY.md", "docs/RELIABILITY.md.tmpl"),
+}
 GATE_PROTECTED_PATHS = (
     ".github/workflows/**",
     "AGENTS.md",
@@ -656,6 +678,57 @@ def toml_command_array(commands: Sequence[Sequence[str]]) -> str:
     return "[\n" + ",\n".join(rows) + ",\n]"
 
 
+def default_document_capabilities(kind: str) -> frozenset[str]:
+    return PROJECT_KIND_DOCUMENT_DEFAULTS.get(kind.strip().lower(), frozenset())
+
+
+def normalize_document_capabilities(capabilities: Iterable[str]) -> frozenset[str]:
+    normalized: set[str] = set()
+    for value in capabilities:
+        capability = value.strip().lower()
+        if capability not in DOCUMENT_CAPABILITIES:
+            choices = ", ".join(DOCUMENT_CAPABILITIES)
+            raise InitError(f"unsupported document capability '{value}'; expected one of: {choices}")
+        normalized.add(capability)
+    return frozenset(normalized)
+
+
+def configured_document_capabilities(config: dict[str, object]) -> frozenset[str] | None:
+    raw = config.get("documents")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise InitError("dev/harness.toml [documents] must be a table")
+    if raw.get("schema") != 2:
+        raise InitError("dev/harness.toml [documents].schema must be 2")
+    capabilities: set[str] = set()
+    for capability, key in DOCUMENT_CAPABILITY_KEYS.items():
+        value = raw.get(key, False)
+        if not isinstance(value, bool):
+            raise InitError(f"dev/harness.toml [documents].{key} must be true or false")
+        if value:
+            capabilities.add(capability)
+    quality_score = raw.get("quality_score", False)
+    if not isinstance(quality_score, bool):
+        raise InitError("dev/harness.toml [documents].quality_score must be true or false")
+    if quality_score:
+        raise InitError("dev/harness.toml [documents].quality_score must remain false")
+    return frozenset(capabilities)
+
+
+def effective_document_capabilities(
+    *,
+    kind: str,
+    requested: Iterable[str] | None,
+    existing_config: dict[str, object] | None = None,
+) -> frozenset[str]:
+    if existing_config:
+        configured = configured_document_capabilities(existing_config)
+        if configured is not None:
+            return configured
+    return default_document_capabilities(kind) | normalize_document_capabilities(requested or ())
+
+
 def build_config(
     *,
     name: str,
@@ -664,11 +737,13 @@ def build_config(
     language: str,
     runtime: str,
     root: Path,
+    capabilities: Iterable[str] | None = None,
     force_review: bool = False,
 ) -> str:
     commands = detect_commands(root)
     existing = has_existing_implementation(root)
     configuration = "review" if force_review or existing else "ready"
+    enabled = default_document_capabilities(kind) | normalize_document_capabilities(capabilities or ())
     lines = [
         "# Project-owned configuration. The initializer never overwrites this file.",
         "# Review detected commands against the repository before setting configuration = \"ready\".",
@@ -683,6 +758,14 @@ def build_config(
         'baseline = "draft" # change to "established" after PLAN-0000 is complete',
         f'configuration = "{configuration}"',
         'default_branch = "main"',
+        "",
+        "[documents]",
+        "schema = 2",
+        f"visual_design = {'true' if 'visual-design' in enabled else 'false'}",
+        f"frontend = {'true' if 'frontend' in enabled else 'false'}",
+        f"product_sense = {'true' if 'product-sense' in enabled else 'false'}",
+        f"reliability = {'true' if 'reliability' in enabled else 'false'}",
+        "quality_score = false",
         "",
         "[commands]",
     ]
@@ -753,12 +836,19 @@ def config_values(
     }
 
 
-def project_documents(kind: str) -> dict[str, str]:
+def project_documents(
+    kind: str,
+    capabilities: Iterable[str] | None = None,
+) -> dict[str, str]:
+    enabled = (
+        default_document_capabilities(kind)
+        if capabilities is None
+        else normalize_document_capabilities(capabilities)
+    )
     documents = {
         "ARCHITECTURE.md": "root/ARCHITECTURE.md.tmpl",
         "docs/README.md": "docs/README.md.tmpl",
         "docs/PRODUCT.md": "docs/PRODUCT.md.tmpl",
-        "docs/DESIGN.md": "docs/DESIGN.md.tmpl",
         "docs/QUALITY.md": "docs/QUALITY.md.tmpl",
         "docs/SECURITY.md": "docs/SECURITY.md.tmpl",
         "docs/PLANS.md": "docs/PLANS.md.tmpl",
@@ -780,8 +870,10 @@ def project_documents(kind: str) -> dict[str, str]:
         "docs/runbooks/index.md": "docs/runbooks/index.md.tmpl",
         "docs/runbooks/_template.md": "docs/runbooks/_template.md.tmpl",
     }
-    if kind.lower() in {"service", "web", "application", "app"}:
-        documents["docs/RELIABILITY.md"] = "docs/RELIABILITY.md.tmpl"
+    for capability in ("visual-design", "frontend", "product-sense", "reliability"):
+        if capability in enabled:
+            destination, asset = OPTIONAL_DOCUMENT_ASSETS[capability]
+            documents[destination] = asset
     return documents
 
 
@@ -1491,6 +1583,7 @@ def preflight_managed_conflicts(root: Path, *, with_ci: bool, mode: str) -> None
 def harness_target_relative_paths(
     *,
     kind: str,
+    capabilities: Iterable[str] | None = None,
     with_ci: bool,
     include_definition_draft: bool,
 ) -> tuple[str, ...]:
@@ -1512,7 +1605,7 @@ def harness_target_relative_paths(
         "docs/exec-plans/completed/.gitkeep",
         ".harness/runs/.gitkeep",
         "docs/exec-plans/active/PLAN-0000-establish-repository-baseline.md",
-        *project_documents(kind),
+        *project_documents(kind, capabilities),
         *managed_files(with_ci),
     }
     if include_definition_draft:
@@ -1529,11 +1622,13 @@ def preflight_safe_write_paths(
     root: Path,
     *,
     kind: str,
+    capabilities: Iterable[str] | None = None,
     with_ci: bool,
     include_definition_draft: bool,
 ) -> None:
     for relative in harness_target_relative_paths(
         kind=kind,
+        capabilities=capabilities,
         with_ci=with_ci,
         include_definition_draft=include_definition_draft,
     ):
@@ -1657,7 +1752,11 @@ def run_generated(root: Path, command: str, *args: str) -> int:
     return completed.returncode
 
 
-def preflight_adoption_blocks(root: Path, values: dict[str, str]) -> None:
+def preflight_adoption_blocks(
+    root: Path,
+    values: dict[str, str],
+    capabilities: Iterable[str] | None = None,
+) -> None:
     targets = [
         (
             root / "AGENTS.md",
@@ -1672,7 +1771,9 @@ def preflight_adoption_blocks(root: Path, values: dict[str, str]) -> None:
             GITIGNORE_END,
         ),
     ]
-    for relative, asset in project_documents(values["PROJECT_KIND"]).items():
+    for relative, asset in project_documents(
+        values["PROJECT_KIND"], capabilities
+    ).items():
         if relative not in AUDIT_CATALOG_PATHS:
             continue
         targets.append(
@@ -1708,14 +1809,25 @@ def apply_harness(
     baseline: bool,
     dry_run: bool,
     skip_check: bool,
+    capabilities: Sequence[str] | None = None,
     include_definition_draft: bool = False,
 ) -> ChangeSet:
     root = validate_root(root, create=mode in {"init", "define"}, dry_run=dry_run)
+    kind_value = kind.strip() or "other"
+    config_path = root / "dev" / "harness.toml"
+    existing_config: dict[str, object] = {}
+    if config_path.is_file() and symlink_component(config_path) is None:
+        existing_config = read_existing_config(root)
+    enabled_capabilities = effective_document_capabilities(
+        kind=kind_value,
+        requested=capabilities,
+        existing_config=existing_config,
+    )
     values = config_values(
         root=root,
         name=name.strip() or root.name,
         summary=summary.strip() or "TODO: define the project purpose during baseline establishment.",
-        kind=kind.strip() or "other",
+        kind=kind_value,
         primary_language=primary_language,
         runtime=runtime,
     )
@@ -1723,11 +1835,12 @@ def apply_harness(
     preflight_safe_write_paths(
         root,
         kind=values["PROJECT_KIND"],
+        capabilities=enabled_capabilities,
         with_ci=with_ci,
         include_definition_draft=include_definition_draft,
     )
     if mode == "adopt":
-        preflight_adoption_blocks(root, values)
+        preflight_adoption_blocks(root, values, enabled_capabilities)
     changes = ChangeSet()
     ensure_directories(root, dry_run=dry_run)
 
@@ -1754,7 +1867,9 @@ def apply_harness(
         dry_run=dry_run,
     )
 
-    for destination, asset in project_documents(values["PROJECT_KIND"]).items():
+    for destination, asset in project_documents(
+        values["PROJECT_KIND"], enabled_capabilities
+    ).items():
         # Keep runtime plan tokens intact. They are resolved by the copied
         # repository-local harness when a future plan is created, not by the
         # initializer that installs the template.
@@ -1775,7 +1890,6 @@ def apply_harness(
     if include_definition_draft:
         create_definition_draft(root, values, changes, dry_run=dry_run)
 
-    config_path = root / "dev" / "harness.toml"
     if not config_path.exists():
         config = build_config(
             name=values["PROJECT_NAME"],
@@ -1784,6 +1898,7 @@ def apply_harness(
             language=values["PRIMARY_LANGUAGE"],
             runtime=values["RUNTIME"],
             root=root,
+            capabilities=enabled_capabilities,
             force_review=mode == "adopt",
         )
         write_if_missing(config_path, config, changes, dry_run=dry_run)
@@ -1845,8 +1960,26 @@ def adopt_project(*, root: Path, dry_run: bool) -> ChangeSet:
         paths = ", ".join(sorted({finding.path for finding in report.conflicts}))
         raise InitError(f"adoption audit found conflicts; no files were written: {paths}")
 
+    config_path = root / "dev" / "harness.toml"
+    existing_config = (
+        read_existing_config(root)
+        if config_path.is_file() and symlink_component(config_path) is None
+        else {}
+    )
+    project = existing_config.get("project", {})
+    project_kind = (
+        str(project.get("kind", "other"))
+        if isinstance(project, dict)
+        else "other"
+    )
+    capabilities = effective_document_capabilities(
+        kind=project_kind,
+        requested=None,
+        existing_config=existing_config,
+    )
     relative_paths = harness_target_relative_paths(
-        kind="other",
+        kind=project_kind,
+        capabilities=capabilities,
         with_ci=False,
         include_definition_draft=True,
     )
@@ -1947,7 +2080,6 @@ def doctor_project(root: Path) -> int:
         ".reporivet-version",
         "docs/README.md",
         "docs/PRODUCT.md",
-        "docs/DESIGN.md",
         "docs/QUALITY.md",
         "docs/SECURITY.md",
         "docs/PLANS.md",
@@ -2003,12 +2135,19 @@ def doctor_project(root: Path) -> int:
     if config_path.exists():
         try:
             config = read_existing_config(root)
+            configured = configured_document_capabilities(config)
         except InitError as exc:
             errors.append(str(exc))
         else:
             advisory = gate_config_advisory(config)
             if advisory:
                 warnings.append(advisory)
+            project = config.get("project", {})
+            project_kind = project.get("kind", "other") if isinstance(project, dict) else "other"
+            enabled = configured if configured is not None else default_document_capabilities(str(project_kind))
+            for capability, (relative, _) in OPTIONAL_DOCUMENT_ASSETS.items():
+                if capability in enabled and not (root / relative).exists():
+                    errors.append(f"missing {relative}")
 
     for warning in warnings:
         print(f"WARNING: {warning}")

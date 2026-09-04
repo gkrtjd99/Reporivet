@@ -1,0 +1,51 @@
+---
+id: FRONTEND
+kind: frontend
+status: draft
+area: frontend
+summary: Frontend implementation rules and client-side behavior
+applies_to:
+  - "app/**"
+  - "packages/**"
+  - "src/**"
+---
+
+# Frontend
+
+## Purpose and scope
+
+TODO: describe the client-side boundary, supported platforms, and the implementation facts this document owns.
+
+## Ownership and source boundaries
+
+TODO: record frontend source roots, maintainers, generated-source boundaries, and review ownership.
+
+## Framework, routing, and components
+
+TODO: record the confirmed framework, entry points, routing model, navigation rules, component boundaries, and platform constraints.
+
+## State and data contracts
+
+TODO: record client state, server or cache state, data-fetching boundaries, freshness rules, cancellation semantics, and interface owners.
+
+## Forms and validation
+
+TODO: record form ownership, validation, submission, error reporting, and data-shape rules.
+
+## Accessibility and performance
+
+TODO: record keyboard, focus, semantics, assistive-technology, localization, browser-support, budget, and measurement requirements.
+
+## Loading, empty, error, and retry behavior
+
+TODO: describe client-side loading, empty, error, timeout, offline, cancellation, and retry states, including limits and idempotency assumptions.
+
+## Verification boundary
+
+TODO: name the project-owned lint, type, unit, integration, browser, accessibility, and performance checks that verify this implementation boundary.
+
+## Constraints and non-goals
+
+- Keep unverified framework, route, state, and performance claims open until an owner accepts them.
+- Keep service operation and deployment recovery in `RELIABILITY.md` when that document applies.
+- Keep implementation work state in the applicable ExecPlan rather than this document.

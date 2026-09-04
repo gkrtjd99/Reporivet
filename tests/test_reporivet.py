@@ -56,6 +56,25 @@ class ReporivetTests(unittest.TestCase):
             *options,
         )
 
+    def init_kind(
+        self, root: Path, kind: str, *extra: str
+    ) -> subprocess.CompletedProcess[str]:
+        options = list(extra)
+        if "--skip-check" not in options:
+            options.append("--skip-check")
+        return self.run_cli(
+            "init",
+            "--root",
+            str(root),
+            "--name",
+            "Test Project",
+            "--summary",
+            "A test project with an agent-readable repository harness.",
+            "--project-kind",
+            kind,
+            *options,
+        )
+
     def run_harness(self, root: Path, command: str, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(root / "dev" / "harness.py"), command, *args],
@@ -83,7 +102,6 @@ class ReporivetTests(unittest.TestCase):
                 "dev/garden",
                 "docs/README.md",
                 "docs/PRODUCT.md",
-                "docs/DESIGN.md",
                 "docs/QUALITY.md",
                 "docs/SECURITY.md",
                 "docs/RELIABILITY.md",
@@ -112,6 +130,91 @@ class ReporivetTests(unittest.TestCase):
 
             verify = self.run_harness(root, "verify")
             self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
+
+    def test_service_init_does_not_generate_design_or_frontend(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init_kind(root, "service")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((root / "docs/DESIGN.md").exists())
+            self.assertFalse((root / "docs/FRONTEND.md").exists())
+            self.assertTrue((root / "docs/RELIABILITY.md").exists())
+
+    def test_library_init_does_not_generate_design(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init_kind(root, "library")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((root / "docs/DESIGN.md").exists())
+
+    def test_cli_init_does_not_generate_visual_design(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init_kind(root, "cli")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((root / "docs/DESIGN.md").exists())
+
+    def test_web_init_generates_visual_design_and_frontend_drafts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init_kind(
+                root,
+                "web",
+                "--capability",
+                "visual-design",
+                "--capability",
+                "frontend",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for relative in ("docs/DESIGN.md", "docs/FRONTEND.md"):
+                path = root / relative
+                self.assertTrue(path.exists(), relative)
+                self.assertIn("status: draft", path.read_text(encoding="utf-8"))
+            config = tomllib.loads((root / "dev/harness.toml").read_text(encoding="utf-8"))
+            self.assertEqual(config["documents"]["schema"], 2)
+            self.assertTrue(config["documents"]["visual_design"])
+            self.assertTrue(config["documents"]["frontend"])
+
+    def test_visual_design_template_has_only_visual_design_sections(self) -> None:
+        template = initializer.read_asset("docs/DESIGN.md.tmpl")
+        headings = re.findall(r"^## (.+?)$", template, re.MULTILINE)
+        self.assertEqual(
+            headings,
+            [
+                "Overview",
+                "Colors",
+                "Typography",
+                "Layout",
+                "Elevation & Depth",
+                "Shapes",
+                "Components",
+                "Do's and Don'ts",
+            ],
+        )
+
+    def test_design_template_contains_no_agent_role_or_plan_policy(self) -> None:
+        template = initializer.read_asset("docs/DESIGN.md.tmpl").casefold()
+        self.assertNotIn("agent", template)
+        self.assertNotIn("plan", template)
+        self.assertNotIn("policy", template)
+
+    def test_frontend_template_contains_implementation_rules_not_visual_tokens(self) -> None:
+        template = initializer.read_asset("docs/FRONTEND.md.tmpl").casefold()
+        for term in ("routing", "state", "validation", "verification"):
+            self.assertIn(term, template)
+        for token in ("colors", "typography", "elevation", "shapes", "shadow"):
+            self.assertNotIn(token, template)
+
+    def test_quality_score_is_not_generated_without_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init_kind(root, "service")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse((root / "docs/QUALITY_SCORE.md").exists())
+            self.assertFalse(any(path.name == "QUALITY_SCORE.md" for path in root.rglob("*")))
+            self.assertFalse(any(path.name == "SKILL.md" for path in root.rglob("*")))
+            config = tomllib.loads((root / "dev/harness.toml").read_text(encoding="utf-8"))
+            self.assertFalse(config["documents"]["quality_score"])
 
     def test_release_version_and_managed_assets_are_in_sync(self) -> None:
         metadata = tomllib.loads((REPOSITORY / "pyproject.toml").read_text(encoding="utf-8"))

@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from .initializer import (
+    DOCUMENT_CAPABILITIES,
     InitError,
     adopt_project,
     apply_harness,
@@ -38,6 +39,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--project-kind",
         default="other",
         choices=("service", "web", "application", "library", "cli", "other"),
+    )
+    init.add_argument(
+        "--capability",
+        action="append",
+        choices=DOCUMENT_CAPABILITIES,
+        default=None,
+        metavar="NAME",
+        help="enable an optional document capability; repeat for multiple capabilities",
     )
     init.add_argument("--primary-language", default="")
     init.add_argument("--runtime", default="")
@@ -78,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
                 kind=args.project_kind,
                 primary_language=args.primary_language,
                 runtime=args.runtime,
+                capabilities=args.capability,
                 with_ci=args.with_ci,
                 baseline=not args.no_baseline_plan,
                 dry_run=args.dry_run,

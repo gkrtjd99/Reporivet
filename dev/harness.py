@@ -198,7 +198,6 @@ AUDIT_PROJECT_DOCUMENT_PATHS = (
     "ARCHITECTURE.md",
     "docs/README.md",
     "docs/PRODUCT.md",
-    "docs/DESIGN.md",
     "docs/QUALITY.md",
     "docs/SECURITY.md",
     "docs/PLANS.md",
@@ -271,7 +270,6 @@ REQUIRED_DOCS = (
     Path("ARCHITECTURE.md"),
     Path("docs/README.md"),
     Path("docs/PRODUCT.md"),
-    Path("docs/DESIGN.md"),
     Path("docs/QUALITY.md"),
     Path("docs/SECURITY.md"),
     Path("docs/PLANS.md"),
@@ -363,6 +361,22 @@ TRACE_TERMINAL_PLACEHOLDER = re.compile(
     r"\b(?:TODO|TBD|pending)\b|\{\{[^{}\n]+\}\}|\$\{[^{}\n]+\}|<<[^<>\n]+>>",
     re.IGNORECASE,
 )
+DOCUMENT_SCHEMA = 2
+DOCUMENT_CAPABILITY_KEYS = {
+    "visual_design": Path("docs/DESIGN.md"),
+    "frontend": Path("docs/FRONTEND.md"),
+    "product_sense": Path("docs/PRODUCT_SENSE.md"),
+    "reliability": Path("docs/RELIABILITY.md"),
+}
+PROJECT_KIND_DOCUMENT_DEFAULTS = {
+    "service": frozenset({"reliability"}),
+    "web": frozenset({"visual_design", "frontend", "reliability"}),
+    "application": frozenset({"reliability"}),
+    "app": frozenset({"reliability"}),
+    "library": frozenset(),
+    "cli": frozenset(),
+    "other": frozenset(),
+}
 
 
 SENSITIVE_DIRECTORY_NAMES = frozenset(
@@ -789,6 +803,34 @@ class Config:
         return value if isinstance(value, dict) else {}
 
     @property
+    def documents(self) -> dict[str, object]:
+        value = self.raw.get("documents", {})
+        return value if isinstance(value, dict) else {}
+
+    def document_capabilities(self) -> frozenset[str]:
+        if "documents" not in self.raw:
+            kind = str(self.project.get("kind", "other")).strip().lower()
+            return PROJECT_KIND_DOCUMENT_DEFAULTS.get(kind, frozenset())
+        raw = self.raw["documents"]
+        if not isinstance(raw, dict):
+            raise InfrastructureError("[documents] must be a table")
+        if raw.get("schema") != DOCUMENT_SCHEMA:
+            raise InfrastructureError("[documents].schema must be 2")
+        enabled: set[str] = set()
+        for key in DOCUMENT_CAPABILITY_KEYS:
+            value = raw.get(key, False)
+            if not isinstance(value, bool):
+                raise InfrastructureError(f"[documents].{key} must be true or false")
+            if value:
+                enabled.add(key)
+        quality_score = raw.get("quality_score", False)
+        if not isinstance(quality_score, bool):
+            raise InfrastructureError("[documents].quality_score must be true or false")
+        if quality_score:
+            raise InfrastructureError("[documents].quality_score must remain false")
+        return frozenset(enabled)
+
+    @property
     def commands(self) -> dict[str, object]:
         value = self.raw.get("commands", {})
         return value if isinstance(value, dict) else {}
@@ -924,6 +966,7 @@ def load_config() -> Config:
         raise InfrastructureError("[project].baseline must be 'draft' or 'established'")
     if config.configuration not in {"ready", "review"}:
         raise InfrastructureError("[project].configuration must be 'ready' or 'review'")
+    config.document_capabilities()
     gate_policy(config)
     return config
 
@@ -3765,15 +3808,28 @@ def command_plan_check(args: argparse.Namespace) -> int:
 CORE_DOCUMENT_SCHEMAS = {
     Path("ARCHITECTURE.md"): ("ARCHITECTURE", "architecture"),
     Path("docs/PRODUCT.md"): ("PRODUCT", "product"),
-    Path("docs/DESIGN.md"): ("DESIGN", "design"),
     Path("docs/QUALITY.md"): ("QUALITY", "quality"),
     Path("docs/SECURITY.md"): ("SECURITY", "security"),
+    Path("docs/DESIGN.md"): ("DESIGN", "design"),
+    Path("docs/FRONTEND.md"): ("FRONTEND", "frontend"),
+    Path("docs/PRODUCT_SENSE.md"): ("PRODUCT_SENSE", "product-sense"),
     Path("docs/RELIABILITY.md"): ("RELIABILITY", "reliability"),
+}
+OPTIONAL_CORE_DOCUMENTS = {
+    path: capability for capability, path in DOCUMENT_CAPABILITY_KEYS.items()
 }
 
 
-def validate_core_documents(errors: list[str], *, strict: bool) -> None:
+def validate_core_documents(
+    errors: list[str],
+    *,
+    strict: bool,
+    enabled: frozenset[str] | None = None,
+) -> None:
     for relative, (expected_id, expected_kind) in CORE_DOCUMENT_SCHEMAS.items():
+        capability = OPTIONAL_CORE_DOCUMENTS.get(relative)
+        if capability is not None and enabled is not None and capability not in enabled:
+            continue
         path = ROOT / relative
         if not path.exists():
             continue
@@ -3798,16 +3854,18 @@ def command_docs_check(args: argparse.Namespace) -> int:
     strict = bool(args.strict or config.lifecycle == "active")
     errors: list[str] = []
     warnings: list[str] = []
+    enabled = config.document_capabilities()
     required = list(REQUIRED_DOCS)
-    if str(config.project.get("kind", "")).lower() in {"service", "web", "application", "app"}:
-        required.extend((Path("docs/RELIABILITY.md"), Path("docs/runbooks/index.md")))
+    required.extend(
+        path for capability, path in DOCUMENT_CAPABILITY_KEYS.items() if capability in enabled
+    )
     for relative in required:
         if not (ROOT / relative).exists():
             errors.append(f"missing required file: {relative}")
 
     documents = durable_documents(errors)
     _, _, code_entries = code_map_model(config, errors)
-    validate_core_documents(errors, strict=strict)
+    validate_core_documents(errors, strict=strict, enabled=enabled)
     agents = ROOT / "AGENTS.md"
     max_lines = int(config.policy.get("agents_max_lines", 140))
     if agents.exists():
@@ -3829,12 +3887,14 @@ def command_docs_check(args: argparse.Namespace) -> int:
             ROOT / "AGENTS.md",
             ROOT / "ARCHITECTURE.md",
             ROOT / "docs" / "PRODUCT.md",
-            ROOT / "docs" / "DESIGN.md",
             ROOT / "docs" / "QUALITY.md",
             ROOT / "docs" / "SECURITY.md",
         ]
-        if (ROOT / "docs" / "RELIABILITY.md").exists():
-            strict_files.append(ROOT / "docs" / "RELIABILITY.md")
+        strict_files.extend(
+            ROOT / path
+            for capability, path in DOCUMENT_CAPABILITY_KEYS.items()
+            if capability in enabled
+        )
         for path in strict_files:
             if path.exists() and PLACEHOLDER in path.read_text(encoding="utf-8"):
                 errors.append(f"{path.relative_to(ROOT)}: unresolved {PLACEHOLDER} marker in active lifecycle")
@@ -5597,6 +5657,8 @@ def command_context(args: argparse.Namespace) -> int:
     print(f"- Lifecycle: {config.lifecycle}")
     print(f"- Primary language: {config.project.get('primary_language', 'unknown')}")
     print(f"- Runtime: {config.project.get('runtime', 'unknown')}")
+    capabilities = config.document_capabilities()
+    print(f"- Document capabilities: {', '.join(sorted(capabilities)) or 'none'}")
     print("- Operating contract: `AGENTS.md`")
     print("- Knowledge map: `docs/README.md`")
     print("- Current architecture: `ARCHITECTURE.md`")
