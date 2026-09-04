@@ -14,7 +14,7 @@ supersedes: []
 
 ## Observable structure
 
-A service or application profile creates this operating surface:
+A generated profile creates this operating surface. Optional document entries appear only when selected by project kind or the project-owned `[documents]` configuration:
 
 ```text
 .
@@ -45,10 +45,12 @@ A service or application profile creates this operating surface:
 ├── docs/
 │   ├── README.md
 │   ├── PRODUCT.md
-│   ├── DESIGN.md
+│   ├── PRODUCT_SENSE.md             # optional: product_sense
+│   ├── DESIGN.md                    # optional: visual_design
+│   ├── FRONTEND.md                  # optional: frontend
 │   ├── QUALITY.md
 │   ├── SECURITY.md
-│   ├── RELIABILITY.md
+│   ├── RELIABILITY.md               # optional: reliability
 │   ├── PLANS.md
 │   ├── product-specs/
 │   │   └── project-definition.draft.md  # only after explicit definition
@@ -62,7 +64,7 @@ A service or application profile creates this operating surface:
 └── .harness/runs/
 ```
 
-Library, CLI, and other profiles omit `RELIABILITY.md` unless service operations knowledge is required. CI workflows are added only with `--with-ci` or when an existing managed CI surface is upgraded.
+Service and application profiles select `RELIABILITY.md` by default; web profiles also select `DESIGN.md` and `FRONTEND.md`; library, CLI, and other profiles select no optional documents by default. Explicit capabilities may select optional documents in schema 2 configuration. CI workflows are added only with `--with-ci` or when an existing managed CI surface is upgraded.
 
 ## New empty repository lifecycle
 

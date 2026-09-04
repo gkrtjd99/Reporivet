@@ -73,6 +73,32 @@ class AuditAdoptionTests(unittest.TestCase):
         )
         audit.chmod(audit.stat().st_mode | 0o111)
 
+    def write_legacy_config(self, root: Path, *, kind: str) -> bytes:
+        config = root / "dev/harness.toml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        payload = f'''version = 1
+
+[project]
+name = "Legacy Fixture"
+summary = "An existing project-owned configuration."
+kind = "{kind}"
+primary_language = "TypeScript"
+runtime = "Node.js"
+baseline = "draft"
+configuration = "review"
+default_branch = "main"
+
+[commands]
+bootstrap = []
+run = []
+check = []
+verify = []
+smoke = []
+architecture = []
+'''.encode("utf-8")
+        config.write_bytes(payload)
+        return payload
+
     def tree_snapshot(self, root: Path) -> tuple[tuple[str, str, int, bytes | str | None], ...]:
         entries: list[tuple[str, str, int, bytes | str | None]] = []
         root_mode = stat.S_IMODE(root.lstat().st_mode)
@@ -203,6 +229,320 @@ class AuditAdoptionTests(unittest.TestCase):
             )
             self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
             self.assertEqual(package_audit.stdout.encode("utf-8"), runtime_audit.stdout.encode("utf-8"))
+
+    def test_legacy_web_adoption_preserves_kind_and_default_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_existing_repository(root)
+            config_bytes = self.write_legacy_config(root, kind="web")
+
+            audit = self.run_cli("audit", "--root", str(root))
+            self.assertEqual(audit.returncode, 0, audit.stderr)
+            proposed = {
+                finding["path"]
+                for finding in json.loads(audit.stdout)["findings"]
+                if finding["category"] == "proposed-addition"
+                and finding["status"] == "inferred"
+            }
+            self.assertTrue(
+                {
+                    "docs/DESIGN.md",
+                    "docs/FRONTEND.md",
+                    "docs/RELIABILITY.md",
+                }.issubset(proposed)
+            )
+
+            adoption = self.run_cli("define", "--root", str(root), "--adopt")
+
+            self.assertEqual(adoption.returncode, 0, adoption.stdout + adoption.stderr)
+            self.assertEqual((root / "dev/harness.toml").read_bytes(), config_bytes)
+            for relative in (
+                "docs/DESIGN.md",
+                "docs/FRONTEND.md",
+                "docs/RELIABILITY.md",
+            ):
+                self.assertTrue((root / relative).is_file(), relative)
+
+    def test_audit_doctor_and_docs_check_agree_on_missing_optional_document(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            initialized = self.run_cli(
+                "init",
+                "--root",
+                str(root),
+                "--project-kind",
+                "library",
+                "--capability",
+                "product-sense",
+                "--skip-check",
+            )
+            self.assertEqual(
+                initialized.returncode,
+                0,
+                initialized.stdout + initialized.stderr,
+            )
+            optional = root / "docs/PRODUCT_SENSE.md"
+            optional.unlink()
+
+            package_audit = self.run_cli("audit", "--root", str(root))
+            runtime_audit = subprocess.run(
+                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            doctor = self.run_cli("doctor", "--root", str(root))
+            docs_check = subprocess.run(
+                [sys.executable, "-I", str(root / "dev/harness.py"), "docs-check"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
+            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
+            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
+            findings = json.loads(package_audit.stdout)["findings"]
+            self.assertTrue(
+                any(
+                    finding["category"] == "proposed-addition"
+                    and finding["status"] == "inferred"
+                    and finding["path"] == "docs/PRODUCT_SENSE.md"
+                    for finding in findings
+                )
+            )
+            self.assertEqual(doctor.returncode, 2)
+            self.assertIn("missing docs/PRODUCT_SENSE.md", doctor.stderr)
+            self.assertEqual(docs_check.returncode, 2)
+            self.assertIn(
+                "missing required file: docs/PRODUCT_SENSE.md",
+                docs_check.stderr,
+            )
+
+    def test_malformed_documents_config_is_audit_conflict_before_adoption_or_commands(self) -> None:
+        malformed = {
+            "version": (
+                "version = 1",
+                "version = 2",
+                "unsupported dev/harness.toml version; expected version = 1",
+            ),
+            "schema": ("schema = 2", "schema = 1", "[documents].schema must be 2"),
+            "boolean": (
+                "frontend = false",
+                'frontend = "yes"',
+                "[documents].frontend must be true or false",
+            ),
+            "quality-score": (
+                "quality_score = false",
+                "quality_score = true",
+                "[documents].quality_score must remain false",
+            ),
+        }
+        for label, (current, replacement, expected_error) in malformed.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                initialized = self.run_cli(
+                    "init",
+                    "--root",
+                    str(root),
+                    "--project-kind",
+                    "library",
+                    "--skip-check",
+                )
+                self.assertEqual(
+                    initialized.returncode,
+                    0,
+                    initialized.stdout + initialized.stderr,
+                )
+                sentinel = root / "configured-command-ran"
+                config = root / "dev/harness.toml"
+                text = config.read_text(encoding="utf-8")
+                text = text.replace(current, replacement, 1)
+                text = text.replace(
+                    "check = []",
+                    f"check = [[\"touch\", {json.dumps(str(sentinel))}]]",
+                    1,
+                )
+                config.write_text(text, encoding="utf-8")
+                before = self.tree_snapshot(root)
+
+                package_audit = self.run_cli("audit", "--root", str(root))
+                runtime_audit = subprocess.run(
+                    [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                adoption = self.run_cli("define", "--root", str(root), "--adopt")
+                command = subprocess.run(
+                    [sys.executable, "-I", str(root / "dev/harness.py"), "check"],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
+                self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
+                self.assertEqual(package_audit.stdout, runtime_audit.stdout)
+                document_conflicts = [
+                    finding
+                    for finding in json.loads(package_audit.stdout)["findings"]
+                    if finding["category"] == "document-configuration"
+                    and finding["status"] == "conflict"
+                    and finding["path"] == "dev/harness.toml"
+                ]
+                self.assertEqual(len(document_conflicts), 1)
+                self.assertIn(expected_error, document_conflicts[0]["detail"])
+                self.assertEqual(adoption.returncode, 2)
+                self.assertIn("adoption audit found conflicts", adoption.stderr)
+                self.assertEqual(command.returncode, 2)
+                self.assertIn(expected_error, command.stderr)
+                self.assertFalse(sentinel.exists())
+                self.assertEqual(before, self.tree_snapshot(root))
+
+    def test_invalid_utf8_config_is_audit_conflict_before_adoption_or_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            initialized = self.run_cli(
+                "init",
+                "--root",
+                str(root),
+                "--project-kind",
+                "library",
+                "--skip-check",
+            )
+            self.assertEqual(
+                initialized.returncode,
+                0,
+                initialized.stdout + initialized.stderr,
+            )
+            config = root / "dev/harness.toml"
+            config.write_bytes(b"\xff\xfe")
+            before = self.tree_snapshot(root)
+
+            package_audit = self.run_cli("audit", "--root", str(root))
+            runtime_audit = subprocess.run(
+                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            adoption = self.run_cli("define", "--root", str(root), "--adopt")
+            command = subprocess.run(
+                [sys.executable, "-I", str(root / "dev/harness.py"), "check"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
+            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
+            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
+            self.assertTrue(
+                any(
+                    finding["status"] == "conflict"
+                    and finding["path"] == "dev/harness.toml"
+                    for finding in json.loads(package_audit.stdout)["findings"]
+                )
+            )
+            self.assertEqual(adoption.returncode, 2)
+            self.assertIn("adoption audit found conflicts", adoption.stderr)
+            self.assertEqual(command.returncode, 2)
+            self.assertIn("cannot read dev/harness.toml", command.stderr)
+            self.assertNotIn("Traceback", command.stderr)
+            self.assertEqual(before, self.tree_snapshot(root))
+
+    def test_legacy_config_rejects_unenforced_explicit_capability_before_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_bytes = self.write_legacy_config(root, kind="library")
+            before = self.tree_snapshot(root)
+
+            result = self.run_cli(
+                "init",
+                "--root",
+                str(root),
+                "--project-kind",
+                "library",
+                "--capability",
+                "product-sense",
+                "--skip-check",
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("cannot persist explicit document capabilities", result.stderr)
+            self.assertIn("has no [documents] table", result.stderr)
+            self.assertEqual(before, self.tree_snapshot(root))
+            self.assertEqual((root / "dev/harness.toml").read_bytes(), config_bytes)
+            self.assertFalse((root / "docs/PRODUCT_SENSE.md").exists())
+
+    def test_optional_document_targets_are_preflighted_before_any_writes(self) -> None:
+        for case in ("directory", "symlink", "invalid-utf8"):
+            with (
+                self.subTest(case=case),
+                tempfile.TemporaryDirectory() as directory,
+                tempfile.TemporaryDirectory() as external_directory,
+            ):
+                root = Path(directory).resolve()
+                external = Path(external_directory).resolve()
+                target = root / "docs/DESIGN.md"
+                target.parent.mkdir(parents=True)
+                if case == "directory":
+                    target.mkdir()
+                elif case == "symlink":
+                    outside = external / "DESIGN.md"
+                    outside.write_text("# External design\n", encoding="utf-8")
+                    target.symlink_to(outside)
+                else:
+                    target.write_bytes(b"\xff\xfe")
+                before = self.tree_snapshot(root)
+                external_before = self.tree_snapshot(external)
+
+                result = self.run_cli(
+                    "init",
+                    "--root",
+                    str(root),
+                    "--project-kind",
+                    "web",
+                    "--skip-check",
+                )
+
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("docs/DESIGN.md", result.stderr)
+                self.assertEqual(before, self.tree_snapshot(root))
+                self.assertEqual(external_before, self.tree_snapshot(external))
+                self.assertFalse((root / "AGENTS.md").exists())
+                self.assertFalse((root / "dev").exists())
+
+    def test_adoption_preflights_unreadable_optional_document_before_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_existing_repository(root)
+            self.write_legacy_config(root, kind="web")
+            target = root / "docs/DESIGN.md"
+            target.write_text("# Existing design\n", encoding="utf-8")
+            before = self.tree_snapshot(root)
+            original_read_bytes = Path.read_bytes
+
+            def unreadable_optional(path: Path) -> bytes:
+                if path == target:
+                    raise PermissionError("simulated unreadable optional document")
+                return original_read_bytes(path)
+
+            with mock.patch.object(Path, "read_bytes", unreadable_optional):
+                adoption = self.run_cli("define", "--root", str(root), "--adopt")
+
+            self.assertEqual(adoption.returncode, 2)
+            self.assertIn("cannot read optional document target as UTF-8", adoption.stderr)
+            self.assertIn("docs/DESIGN.md", adoption.stderr)
+            self.assertNotIn("Traceback", adoption.stderr)
+            self.assertEqual(before, self.tree_snapshot(root))
 
     def test_configured_commands_are_redacted_without_reproducing_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

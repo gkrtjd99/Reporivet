@@ -377,6 +377,7 @@ PROJECT_KIND_DOCUMENT_DEFAULTS = {
     "cli": frozenset(),
     "other": frozenset(),
 }
+PROJECT_CONFIG_KINDS = tuple(PROJECT_KIND_DOCUMENT_DEFAULTS)
 
 
 SENSITIVE_DIRECTORY_NAMES = frozenset(
@@ -807,10 +808,23 @@ class Config:
         value = self.raw.get("documents", {})
         return value if isinstance(value, dict) else {}
 
+    def project_kind(self) -> str:
+        project = self.raw.get("project", {})
+        if not isinstance(project, dict):
+            raise InfrastructureError("[project] must be a table")
+        raw_kind = project.get("kind", "other")
+        if not isinstance(raw_kind, str):
+            raise InfrastructureError("[project].kind must be a string")
+        kind = raw_kind.strip().lower()
+        if kind not in PROJECT_KIND_DOCUMENT_DEFAULTS:
+            choices = ", ".join(PROJECT_CONFIG_KINDS)
+            raise InfrastructureError(f"[project].kind must be one of: {choices}")
+        return kind
+
     def document_capabilities(self) -> frozenset[str]:
+        kind = self.project_kind()
         if "documents" not in self.raw:
-            kind = str(self.project.get("kind", "other")).strip().lower()
-            return PROJECT_KIND_DOCUMENT_DEFAULTS.get(kind, frozenset())
+            return PROJECT_KIND_DOCUMENT_DEFAULTS[kind]
         raw = self.raw["documents"]
         if not isinstance(raw, dict):
             raise InfrastructureError("[documents] must be a table")
@@ -957,7 +971,7 @@ def load_config() -> Config:
     try:
         with CONFIG_PATH.open("rb") as handle:
             raw = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
         raise InfrastructureError(f"cannot read {CONFIG_PATH.relative_to(ROOT)}: {exc}") from exc
     if raw.get("version") != 1:
         raise InfrastructureError("unsupported dev/harness.toml version; expected version = 1")
@@ -1537,8 +1551,51 @@ def audit_command_findings() -> list[AuditFinding]:
     return findings
 
 
+def audit_project_document_paths() -> tuple[tuple[str, ...], list[AuditFinding]]:
+    base_paths = tuple(sorted(AUDIT_PROJECT_DOCUMENT_PATHS))
+    if audit_symlink_component(CONFIG_PATH) is not None:
+        return base_paths, []
+    if CONFIG_PATH.exists() and not CONFIG_PATH.is_file():
+        return base_paths, []
+    if not CONFIG_PATH.is_file():
+        return base_paths, []
+    try:
+        with CONFIG_PATH.open("rb") as handle:
+            raw = tomllib.load(handle)
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError):
+        return base_paths, []
+    if raw.get("version") != 1:
+        return base_paths, [
+            AuditFinding(
+                category="document-configuration",
+                status="conflict",
+                path="dev/harness.toml",
+                detail="unsupported dev/harness.toml version; expected version = 1",
+            )
+        ]
+    config = Config(raw)
+    try:
+        capabilities = config.document_capabilities()
+    except InfrastructureError as exc:
+        return base_paths, [
+            AuditFinding(
+                category="document-configuration",
+                status="conflict",
+                path="dev/harness.toml",
+                detail=f"dev/harness.toml {exc}",
+            )
+        ]
+    selected = set(base_paths)
+    selected.update(
+        path.as_posix()
+        for capability, path in DOCUMENT_CAPABILITY_KEYS.items()
+        if capability in capabilities
+    )
+    return tuple(sorted(selected)), []
+
+
 def audit_adoption_findings() -> list[AuditFinding]:
-    findings: list[AuditFinding] = []
+    project_document_paths, findings = audit_project_document_paths()
     shared_targets = (
         ("AGENTS.md", AGENTS_START, AGENTS_END, "agent operating contract"),
         (".gitignore", GITIGNORE_START, GITIGNORE_END, "generated evidence exclusions"),
@@ -1588,7 +1645,7 @@ def audit_adoption_findings() -> list[AuditFinding]:
                 )
             )
 
-    for relative in sorted(AUDIT_PROJECT_DOCUMENT_PATHS):
+    for relative in project_document_paths:
         path = ROOT / relative
         if audit_symlink_component(path) is not None:
             findings.append(

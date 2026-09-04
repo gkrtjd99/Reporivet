@@ -41,6 +41,7 @@ PROJECT_KIND_DOCUMENT_DEFAULTS = {
     "cli": frozenset(),
     "other": frozenset(),
 }
+PROJECT_CONFIG_KINDS = tuple(PROJECT_KIND_DOCUMENT_DEFAULTS)
 OPTIONAL_DOCUMENT_ASSETS = {
     "visual-design": ("docs/DESIGN.md", "docs/DESIGN.md.tmpl"),
     "frontend": ("docs/FRONTEND.md", "docs/FRONTEND.md.tmpl"),
@@ -682,6 +683,27 @@ def default_document_capabilities(kind: str) -> frozenset[str]:
     return PROJECT_KIND_DOCUMENT_DEFAULTS.get(kind.strip().lower(), frozenset())
 
 
+def validate_config_version(config: dict[str, object]) -> None:
+    if config.get("version") != 1:
+        raise InitError("unsupported dev/harness.toml version; expected version = 1")
+
+
+def configured_project_kind(config: dict[str, object]) -> str:
+    project = config.get("project", {})
+    if not isinstance(project, dict):
+        raise InitError("dev/harness.toml [project] must be a table")
+    raw_kind = project.get("kind", "other")
+    if not isinstance(raw_kind, str):
+        raise InitError("dev/harness.toml [project].kind must be a string")
+    kind = raw_kind.strip().lower()
+    if kind not in PROJECT_KIND_DOCUMENT_DEFAULTS:
+        choices = ", ".join(PROJECT_CONFIG_KINDS)
+        raise InitError(
+            f"dev/harness.toml [project].kind must be one of: {choices}"
+        )
+    return kind
+
+
 def normalize_document_capabilities(capabilities: Iterable[str]) -> frozenset[str]:
     normalized: set[str] = set()
     for value in capabilities:
@@ -716,17 +738,36 @@ def configured_document_capabilities(config: dict[str, object]) -> frozenset[str
     return frozenset(capabilities)
 
 
+def selected_document_capabilities(config: dict[str, object]) -> frozenset[str]:
+    validate_config_version(config)
+    kind = configured_project_kind(config)
+    configured = configured_document_capabilities(config)
+    return configured if configured is not None else default_document_capabilities(kind)
+
+
 def effective_document_capabilities(
     *,
     kind: str,
     requested: Iterable[str] | None,
     existing_config: dict[str, object] | None = None,
 ) -> frozenset[str]:
-    if existing_config:
+    requested_capabilities = normalize_document_capabilities(requested or ())
+    if existing_config is not None:
+        validate_config_version(existing_config)
+        existing_kind = configured_project_kind(existing_config)
         configured = configured_document_capabilities(existing_config)
         if configured is not None:
             return configured
-    return default_document_capabilities(kind) | normalize_document_capabilities(requested or ())
+        unenforced = requested_capabilities - default_document_capabilities(existing_kind)
+        if unenforced:
+            formatted = ", ".join(sorted(unenforced))
+            raise InitError(
+                "cannot persist explicit document capabilities in the existing "
+                "project-owned dev/harness.toml because it has no [documents] table: "
+                f"{formatted}; update that configuration explicitly before retrying"
+            )
+        return default_document_capabilities(existing_kind)
+    return default_document_capabilities(kind) | requested_capabilities
 
 
 def build_config(
@@ -1285,8 +1326,39 @@ def audit_command_findings(root: Path) -> list[AuditFinding]:
     return findings
 
 
+def audit_project_document_paths(
+    root: Path,
+) -> tuple[tuple[str, ...], list[AuditFinding]]:
+    base_paths = tuple(sorted(project_documents("other")))
+    config_path = root / "dev" / "harness.toml"
+    if audit_symlink_component(root, config_path) is not None:
+        return base_paths, []
+    if config_path.exists() and not config_path.is_file():
+        return base_paths, []
+    if not config_path.is_file():
+        return base_paths, []
+    try:
+        with config_path.open("rb") as handle:
+            config = tomllib.load(handle)
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError):
+        return base_paths, []
+    try:
+        capabilities = selected_document_capabilities(config)
+        kind = configured_project_kind(config)
+    except InitError as exc:
+        return base_paths, [
+            AuditFinding(
+                category="document-configuration",
+                status="conflict",
+                path="dev/harness.toml",
+                detail=str(exc),
+            )
+        ]
+    return tuple(sorted(project_documents(kind, capabilities))), []
+
+
 def audit_adoption_findings(root: Path) -> list[AuditFinding]:
-    findings: list[AuditFinding] = []
+    project_document_paths, findings = audit_project_document_paths(root)
     shared_targets = (
         ("AGENTS.md", AGENTS_START, AGENTS_END, "agent operating contract"),
         (".gitignore", GITIGNORE_START, GITIGNORE_END, "generated evidence exclusions"),
@@ -1336,7 +1408,7 @@ def audit_adoption_findings(root: Path) -> list[AuditFinding]:
                 )
             )
 
-    for relative in sorted(project_documents("other")):
+    for relative in project_document_paths:
         path = root / relative
         if audit_symlink_component(root, path) is not None:
             findings.append(
@@ -1635,6 +1707,24 @@ def preflight_safe_write_paths(
         ensure_safe_write_path(root / relative)
 
 
+def preflight_optional_document_targets(
+    root: Path,
+    capabilities: Iterable[str],
+) -> None:
+    for capability in sorted(normalize_document_capabilities(capabilities)):
+        relative, _ = OPTIONAL_DOCUMENT_ASSETS[capability]
+        path = root / relative
+        ensure_safe_write_path(path)
+        if not path.exists():
+            continue
+        if not path.is_file():
+            raise InitError(f"optional document target is not a regular file: {relative}")
+        try:
+            path.read_bytes().decode("utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise InitError(f"cannot read optional document target as UTF-8: {relative}") from exc
+
+
 @dataclass(frozen=True)
 class PathSnapshot:
     path: Path
@@ -1650,12 +1740,17 @@ def capture_path_snapshots(root: Path, relative_paths: Sequence[str]) -> tuple[P
         if path.is_symlink():
             raise InitError(f"refusing to snapshot a symbolic-link path: {relative}")
         if path.is_file():
+            try:
+                content = path.read_bytes()
+                mode = path.stat().st_mode & 0o7777
+            except OSError as exc:
+                raise InitError(f"cannot snapshot adoption path: {relative}: {exc}") from exc
             snapshots.append(
                 PathSnapshot(
                     path=path,
                     kind="file",
-                    content=path.read_bytes(),
-                    mode=path.stat().st_mode & 0o7777,
+                    content=content,
+                    mode=mode,
                 )
             )
         elif path.is_dir():
@@ -1815,9 +1910,10 @@ def apply_harness(
     root = validate_root(root, create=mode in {"init", "define"}, dry_run=dry_run)
     kind_value = kind.strip() or "other"
     config_path = root / "dev" / "harness.toml"
-    existing_config: dict[str, object] = {}
+    existing_config: dict[str, object] | None = None
     if config_path.is_file() and symlink_component(config_path) is None:
         existing_config = read_existing_config(root)
+        kind_value = configured_project_kind(existing_config)
     enabled_capabilities = effective_document_capabilities(
         kind=kind_value,
         requested=capabilities,
@@ -1839,6 +1935,7 @@ def apply_harness(
         with_ci=with_ci,
         include_definition_draft=include_definition_draft,
     )
+    preflight_optional_document_targets(root, enabled_capabilities)
     if mode == "adopt":
         preflight_adoption_blocks(root, values, enabled_capabilities)
     changes = ChangeSet()
@@ -1964,12 +2061,11 @@ def adopt_project(*, root: Path, dry_run: bool) -> ChangeSet:
     existing_config = (
         read_existing_config(root)
         if config_path.is_file() and symlink_component(config_path) is None
-        else {}
+        else None
     )
-    project = existing_config.get("project", {})
     project_kind = (
-        str(project.get("kind", "other"))
-        if isinstance(project, dict)
+        configured_project_kind(existing_config)
+        if existing_config is not None
         else "other"
     )
     capabilities = effective_document_capabilities(
@@ -1977,6 +2073,7 @@ def adopt_project(*, root: Path, dry_run: bool) -> ChangeSet:
         requested=None,
         existing_config=existing_config,
     )
+    preflight_optional_document_targets(root, capabilities)
     relative_paths = harness_target_relative_paths(
         kind=project_kind,
         capabilities=capabilities,
@@ -1990,13 +2087,14 @@ def adopt_project(*, root: Path, dry_run: bool) -> ChangeSet:
             mode="adopt",
             name="",
             summary="",
-            kind="other",
+            kind=project_kind,
             primary_language="",
             runtime="",
             with_ci=False,
             baseline=True,
             dry_run=dry_run,
             skip_check=False,
+            capabilities=tuple(sorted(capabilities)),
             include_definition_draft=True,
         )
     except Exception as exc:
@@ -2016,9 +2114,11 @@ def read_existing_config(root: Path) -> dict[str, object]:
         return {}
     try:
         with config_path.open("rb") as handle:
-            return tomllib.load(handle)
+            config = tomllib.load(handle)
     except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
         raise InitError(f"cannot read dev/harness.toml: {exc}") from exc
+    validate_config_version(config)
+    return config
 
 
 def gate_config_advisory(config: dict[str, object]) -> str:
@@ -2135,16 +2235,13 @@ def doctor_project(root: Path) -> int:
     if config_path.exists():
         try:
             config = read_existing_config(root)
-            configured = configured_document_capabilities(config)
+            enabled = selected_document_capabilities(config)
         except InitError as exc:
             errors.append(str(exc))
         else:
             advisory = gate_config_advisory(config)
             if advisory:
                 warnings.append(advisory)
-            project = config.get("project", {})
-            project_kind = project.get("kind", "other") if isinstance(project, dict) else "other"
-            enabled = configured if configured is not None else default_document_capabilities(str(project_kind))
             for capability, (relative, _) in OPTIONAL_DOCUMENT_ASSETS.items():
                 if capability in enabled and not (root / relative).exists():
                     errors.append(f"missing {relative}")
