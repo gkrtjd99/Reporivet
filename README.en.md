@@ -65,10 +65,10 @@ docs/
     _template.md
     <slug>.md                                   static procedure documentation
 
-CLAUDE.md                                      optional exact adapter: @AGENTS.md
+CLAUDE.md                                      exact `@AGENTS.md` adapter when absent
 ```
 
-The draft appears only while guided definition needs resuming. Setup creates the empty Plan directories when needed but never creates an active Plan file. The Main host/project procedure searches active and completed history, resumes one matching active Plan, or creates the first ordinary Markdown Plan with the lowest unused current-year ID.
+The visible draft is project-owned resume state while guided definition needs resuming. After approved setup, remove it deliberately only when no resume or provenance need remains; setup does not silently hide or remove it. Setup creates the empty Plan directories when needed but never creates an active Plan file. The Main host/project procedure searches active and completed history, resumes one matching active Plan, or creates the first ordinary Markdown Plan with the lowest unused current-year ID.
 
 ## Conditional capability documents
 
@@ -78,13 +78,17 @@ The draft appears only while guided definition needs resuming. Setup creates the
 
 Fresh targets contain no Reporivet role or procedure Skill, `.reporivet-version`, generated `.claude/settings.json`, copied module/runtime, doctor gate, registry or package-resolution instruction, command wrapper, scheduler, dispatcher, task store, Gate, evidence archive, or hidden state. Existing legacy paths may be examined only during an explicit setup rerun with exact canonical ownership evidence; names, markers, frontmatter, or locations alone never authorize deletion.
 
+## Reporivet setup versus Harness installation
+
+The tree above is the current Reporivet setup boundary. A host-side Harness or plugin installation is a separate operation: it may copy host files such as `.claude/skills/**`, `.claude/settings.json`, `.worktreeinclude`, `docs/templates/**`, `rules/**`, or editor/lint configuration. Current `reporivet setup` does not create those paths, and their presence does not prove that setup created them; establish ownership before changing or removing them. Reporivet does not install or inject a continuing Harness/plugin runtime into the target. The external `/reporivet-setup` wrapper, described above, only relays instructions and never performs that installation.
+
 ## Static procedure runbooks
 
 Only one complete, unique, user-confirmed strict structured procedure record qualifies. It must contain exactly these nine fields: `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback`. The deterministic output is ordinary Markdown at `docs/runbooks/<slug>.md`, with no frontmatter, executor metadata, hooks, command registration, or privilege-bearing configuration. Incomplete, malformed, generic, inferred, Proposed, Open, Sources-only, or duplicate records produce no runbook. A runbook is reviewed project documentation, not an executor.
 
 ## Install for setup-time users
 
-Public installation guidance is for invoking setup or an explicit package-side transition:
+Public installation guidance is needed only while invoking setup or an explicit package-side transition. After setup, the target project continues through its own Markdown, Plans, runbooks, Git, project commands, and host-native Agents without the package.
 
 ```bash
 pipx install reporivet
@@ -96,7 +100,48 @@ Pip is also supported from the same wheel:
 python -m pip install reporivet
 ```
 
-These are two ways to install one setup-time package. They do not create a continuing package requirement for a generated target. Completed PLAN-2026-0003 records that source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and exact wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4` passed the recorded isolated pipx and pip install/use/uninstall lifecycle. The verification artifacts are temporary and are not a durable or downloadable evidence archive. Publication, signing, release, deployment, and CI repair/readiness remain unestablished and outside scope.
+These are two ways to install one setup-time package. They do not create a continuing Reporivet package requirement for a generated target. Completed PLAN-2026-0003 records that source candidate `c1f8c72d684106a5a6896f957945dab177b538f964a57a71f47107f02eee9cf4` and exact wheel SHA-256 `512e304c231f830ce64e6b822d57f8fe8df5705b76ff440ae53f8b7941110ae4` passed the recorded isolated pipx and pip install/use/uninstall lifecycle. The verification artifacts are temporary and are not a durable or downloadable evidence archive. Publication, signing, release, deployment, and CI repair/readiness remain unestablished and outside scope; the current public index state is not established as this repository's quality evidence.
+
+### Build a wheel from source for another project
+
+A source build requires Python 3.11 or newer and the `setuptools>=77` build backend declared in `pyproject.toml`. Run the following from the Reporivet source root. It creates a wheel in a temporary directory without publishing or releasing anything.
+
+```bash
+PYTHON=/absolute/path/to/python3.11-or-newer
+"$PYTHON" --version
+
+WHEEL_DIR="$(mktemp -d)"
+"$PYTHON" -m pip wheel . \
+  --no-build-isolation \
+  --no-deps \
+  --no-index \
+  --wheel-dir "$WHEEL_DIR"
+```
+
+Install the local wheel into the setup-time environment, then choose the target project. Choose either pipx or pip.
+
+```bash
+"$PYTHON" -m pip install "$WHEEL_DIR"/reporivet-*.whl
+# or
+pipx install "$WHEEL_DIR"/reporivet-*.whl
+
+ROOT=/absolute/path/to/target
+```
+
+A successful wheel build does not establish installation, publication, signing, release, or deployment. Follow [`docs/QUALITY.md`](docs/QUALITY.md) and [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for project-owned checks and boundaries.
+
+If you intentionally use the selected source checkout without installing its wheel, run the package-side commands from that checkout:
+
+```bash
+REPORIVET_CHECKOUT=/absolute/path/to/Reporivet
+ROOT=/absolute/path/to/target
+cd "$REPORIVET_CHECKOUT"
+
+PYTHONPATH=src "$PYTHON" -m reporivet setup \
+  --root "$ROOT"
+```
+
+Copy the emitted `preview.fingerprint` into `SETUP_PREVIEW_SHA256` and use the same source-checkout form with `--apply --approve-preview "$SETUP_PREVIEW_SHA256"` only after reviewing the preview. This is still a setup-time package operation; it does not copy the checkout or a runtime into the target.
 
 ## Contributors only: source checkout
 
@@ -112,18 +157,95 @@ PYTHONPATH=src \
 "$PYTHON" -m reporivet --help
 ```
 
-## Default onboarding
+## Default onboarding: apply to another project
 
-Choose an absolute target path and use the integrated setup command while Reporivet is available for setup:
+`setup` accepts an existing, safe target directory. To create a missing directory and prepare only its structure, use `reporivet init --root "$ROOT"` instead. Reporivet does not invent or overwrite project-owned files in the target.
+
+The first setup invocation performs the audit, visible guided definition, answer resume, and exact preview:
 
 ```bash
 ROOT=/absolute/path/to/target
 reporivet setup --root "$ROOT"
 ```
 
-`setup` coordinates the read-only audit, visible guided definition, answer resume, exact preview, and explicitly approved apply. It reports actual Open items and revalidates the target immediately before mutation. It does not execute project commands, create a Plan, spawn or dispatch Agents, or leave a target runtime or package-resolution requirement.
+If you already have a valid answers file, provide it during this preview/definition phase:
 
-A fresh target receives Markdown authority, Plan templates/directories, deterministic static runbooks for eligible records, and at most an exact root `CLAUDE.md` containing `@AGENTS.md` plus one trailing newline. It receives none of the retired Reporivet target artifacts described above. Package absence after setup is expected and is not `UNKNOWN`, blocking, or a residual risk.
+```bash
+reporivet setup \
+  --root "$ROOT" \
+  --answers /absolute/path/to/answers.json
+```
+
+This invocation prints a JSON envelope. Its `state` is normally `awaiting-approval`; it may instead report `backup-required`, `conflict`, or `dry-run`, which require the corresponding next step. Review `definition`, `changes`, `preview.actions`, and `preview.diagnostics`, then copy the exact SHA-256 in `preview.fingerprint`. The target bundle is not applied by this invocation. Normal setup may create or update the visible `docs/product-specs/project-definition.draft.md`; this is project-owned resume state, and setup does not silently hide or remove it.
+
+There is no separate `setup --preview` flag: the invocation without `--apply` is the setup preview phase. Keep the same root, draft, and backup paths that you reviewed, then approve the exact fingerprint to apply the target bundle:
+
+```bash
+PREVIEW_SHA256='paste-the-preview-fingerprint-from-the-json-output'
+
+reporivet setup \
+  --root "$ROOT" \
+  --apply \
+  --approve-preview "$PREVIEW_SHA256"
+```
+
+`--apply` rereads the current target and visible draft, recomputes the preview, and applies only when the fingerprint matches exactly. If the target, draft, answers, or backup path changes, do not reuse the old fingerprint; run preview again. `setup --apply` cannot be combined with `--answers` or `--dry-run`.
+
+If the preview contains legacy cleanup or another destructive action, pass an absolute external backup directory outside the target during both preview and apply. A create-only fresh-target setup normally does not need one.
+
+```bash
+BACKUP_DIR=/absolute/path/outside/target/reporivet-backup
+
+reporivet setup \
+  --root "$ROOT" \
+  --backup-dir "$BACKUP_DIR"
+
+# Review the JSON output, then apply with the same backup path.
+reporivet setup \
+  --root "$ROOT" \
+  --backup-dir "$BACKUP_DIR" \
+  --apply \
+  --approve-preview "$PREVIEW_SHA256"
+```
+
+### When preview and approval are required
+
+Not every Reporivet command needs a preview. The preview fingerprint is the approval boundary for applying a setup bundle or a legacy transition.
+
+| Command or situation | Behavior | Preview and approval |
+| --- | --- | --- |
+| `reporivet setup --root "$ROOT"` | Runs audit, guided definition, visible draft handling, and target preview. | Review the JSON preview and fingerprint; this invocation does not apply the target bundle. |
+| `reporivet setup --root "$ROOT" --apply` | Applies the setup bundle from the current draft. | `--approve-preview <HASH>` is mandatory and must match the exact fingerprint. |
+| `reporivet setup --root "$ROOT" --dry-run` | Calculates answers and expected actions without writing files. | No approval is needed; it cannot be combined with `--apply`. |
+| `reporivet define finalize --root "$ROOT"` | Prints the lower-level visible-definition target preview. | Apply with `define finalize --root "$ROOT" --apply --approve-preview <HASH>`. |
+| `reporivet audit --root "$ROOT"`, `reporivet define status --root "$ROOT"` | Prints a package-side read-only inventory or draft status. | No setup preview or approval is needed. |
+| `reporivet init --root "$ROOT"` | Prepares missing structure with create-if-missing behavior. | There is no setup fingerprint gate; use `--dry-run` to inspect without writing. |
+| `reporivet migrate --root "$ROOT" --from 0.2 --preview --backup-dir "$BACKUP_DIR"` | Runs a separate legacy transition preview. | Always preview explicitly, then apply with the exact fingerprint and external backup. See the transition section below. |
+
+### Answers files
+
+`--answers` accepts a JSON object keyed by topic. A value can be a Confirmed shorthand string or an object containing only `confirmed`, `proposed`, `open`, and `sources`; each value can be one string or an array of strings. An omitted topic remains Open. `setup --apply` does not accept a new answers file; it uses the visible draft saved before preview.
+
+```json
+{
+  "product": "Maintainers need a reviewable repository setup.",
+  "design": {
+    "confirmed": "Keyboard operation is required.",
+    "proposed": ["Review reduced-motion behavior."],
+    "open": ["Which locales must be supported?"],
+    "sources": ["Project owner answer."]
+  },
+  "web_ui": "no",
+  "deployed_runtime": "no",
+  "procedures": {
+    "confirmed": [
+      "{\"slug\":\"release-check\",\"title\":\"Release check\",\"trigger\":\"Before release\",\"reads\":[\"QUALITY.md\"],\"actions\":[\"Run project checks\"],\"stop_conditions\":[\"A required check fails\"],\"evidence\":[\"Check output\"],\"permissions\":[\"Maintainer approval\"],\"rollback\":[\"Follow the project rollback procedure\"]}"
+    ]
+  }
+}
+```
+
+Each `procedures.confirmed` item must be a string containing a strict nine-field JSON record like the one above. Only a unique Confirmed record containing exactly `slug`, `title`, `trigger`, `reads`, `actions`, `stop_conditions`, `evidence`, `permissions`, and `rollback` can create `docs/runbooks/<slug>.md`. Generic, incomplete, duplicate, Proposed, Open, or Sources-only records create no runbook.
 
 `reporivet init --root "$ROOT"` is the structure-only, non-overwriting create-if-missing path. It does not perform the guided interview or create a Plan. The Main host/project procedure, not Reporivet, creates or resumes the first ordinary Markdown Plan.
 
@@ -145,16 +267,18 @@ The visible Markdown draft is the only resume state. Each topic keeps **Confirme
 
 | Command | Purpose | Mutation boundary |
 | --- | --- | --- |
-| `reporivet setup` | Default integrated audit, guided definition, exact preview, and approved one-shot setup. | Writes only after explicit approval and safety revalidation; never creates a Plan or executes project commands. |
+| `reporivet setup` | Default integrated audit, guided definition, exact preview, and approved one-shot setup. | Applies the canonical target bundle only after explicit approval of the exact preview fingerprint and safety revalidation; normal setup may write or update the visible draft before approval; never creates a Plan or executes project commands. |
 | `reporivet init` | Structure-only, non-overwriting create-if-missing bundle. | Preserves existing project-owned content and does not run guided setup or create a Plan. |
 | `reporivet define start/resume/status/finalize` | Lower-level visible guided definition and exact preview/apply. | Writes only documented draft steps and approved bounded setup paths. |
 | `reporivet audit` | Deterministic package-side repository inventory. | Read-only; it does not execute project commands. |
 | `reporivet upgrade` | Maintain missing current bundle paths during package-side maintenance. | Refuses recognized legacy 0.2 surfaces rather than guessing ownership. |
-| `reporivet migrate` | Preview, apply, or roll back a recognized legacy 0.2 transaction. | Requires exact approval and an external backup for destructive apply. |
+| `reporivet migrate` | Preview, apply, or roll back a separate historical legacy 0.2 transaction. | Requires exact approval and an external backup for destructive apply. |
 
 `reporivet doctor` is retired; there is no ongoing Reporivet diagnosis contract. Use project-owned checks for target verification. The installed `reporivet <command>` and `PYTHONPATH=src "$PYTHON" -m reporivet <command>` forms are setup-time or contributor-only package operations, not post-setup target requirements.
 
-## Main / Task Owner / Implementation Sub / Verification Sub
+## Host/project workflow (not a Reporivet runtime)
+
+The following Main, Plan, and Agent roles are a host-native/project-owned operating contract expressed through `AGENTS.md`, ordinary Markdown Plans, project commands, and the host's Agent facilities. They apply after handoff; Reporivet does not provide or run this workflow.
 
 - **Main** owns intent, scope, non-goals, acceptance, the overall task tree, integration, decisions, candidate identity, evidence judgment, and every serialized Plan edit. Main uses host-native Agent dispatch; Reporivet does not spawn or dispatch Agents.
 - **Task Owner** is the default role for every broad or multi-part root and has `May delegate: yes`. The Owner first returns a finite child manifest inside its approved envelope; Main serializes accepted child rows and complete matching packets into the Plan, then resumes that serialized Owner. Only the resumed serialized Task Owner dispatches its declared dependency-ready descendants through host-native Agent execution.
@@ -169,7 +293,9 @@ Main dispatches independent root Owners concurrently. Every child task retains i
 
 This is a host/project operating contract, not a Reporivet runtime. Reporivet installs no Agent spawn/dispatch mechanism, command runner, CI/deployment system, scheduler, dispatcher, task store, lease, lock, Gate, evidence archive, hidden state, or automatic closure.
 
-## Explicit legacy transition, backup, and rollback
+## Historical Reporivet 0.2 migration (separate from current setup)
+
+This is not the normal fresh-project setup path. It applies only to recognized legacy 0.2 surfaces. Older Harness-era artifacts such as `dev/`, `.harness/runs`, copied runtimes, old Skills, generated settings, and related command surfaces are historical transition candidates only; they are not fresh setup outputs and do not show that current setup installs a Harness or persistent runtime.
 
 An ordinary fresh setup does not silently remove legacy artifacts. An owner may explicitly rerun setup against an existing target. Cleanup or conversion is allowed only for paths proven to be exact Reporivet-owned bytes or exact strict parse-and-rerender matches. Modified, project-owned, ambiguous, unknown, unsafe, symlinked, and nonregular paths are preserved or refused.
 
@@ -241,4 +367,9 @@ Reporivet is not:
 - Operations: [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 - Security: [`docs/SECURITY.md`](docs/SECURITY.md)
 - Plans: [`docs/PLANS.md`](docs/PLANS.md)
-- Current decision/specification/design: ADR-0002, SPEC-REPORIVET-004, and DESIGN-REPORIVET-004
+- Guided definition protocol: [`project-definition-protocol.md`](docs/references/project-definition-protocol.md)
+- Current one-shot setup specification: [`SPEC-REPORIVET-004-one-shot-bootstrapper.md`](docs/product-specs/SPEC-REPORIVET-004-one-shot-bootstrapper.md)
+- Current one-shot setup design: [`DESIGN-REPORIVET-004-one-shot-setup.md`](docs/design-docs/DESIGN-REPORIVET-004-one-shot-setup.md)
+- Current one-shot setup decision: [`ADR-0002-one-shot-bootstrapper-boundary.md`](docs/decisions/ADR-0002-one-shot-bootstrapper-boundary.md)
+
+These SPEC-004, DESIGN-004, and ADR-0002 documents govern current setup behavior. Older Harness-era references are historical background only and do not override the current generated-tree or one-shot-boundary claims.

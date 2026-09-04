@@ -342,3 +342,5 @@ DerivedData/
 xcuserdata/
 
 # reporivet:end
+
+/.claude/settings.json
