@@ -1,20 +1,20 @@
 ---
 id: PLAN-2026-0002
 kind: exec-plan
-status: verifying
+status: complete
 owner: main
 area: harness
 created: 2026-08-29
 updated: 2026-09-07
 base_commit: "9d6d6600c54d29f7bb67dcb65eb5bffed56e337c"
-integrated_commit: "HEAD"
-verified_commit: ""
+integrated_commit: 467dfdd4eec97c1a466466b8258d92665a46d527
+verified_commit: 467dfdd4eec97c1a466466b8258d92665a46d527
 traceability: 1
 product_spec: SPEC-REPORIVET-002
-verification_run: ""
-manifest_sha256: ""
-gate_verdict: ""
-gate_review_reason: ""
+verification_run: "20260907T105802775131Z-verify"
+manifest_sha256: "882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e"
+gate_verdict: "REVIEW"
+gate_review_reason: "사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다."
 ---
 
 # Unified project definition, evidence-bound verification, and skill retirement
@@ -713,21 +713,21 @@ Run commands from the repository root with `PYTHON=/Users/hakseong/.local/bin/py
 
 | Acceptance criterion | Task | Evidence path | Run ID | Manifest SHA-256 | Verified commit | Gate verdict | Review reason |
 |---|---|---|---|---|---|---|---|
-| AC-1 | T2/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-2 | T2/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-3 | T3/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-4 | T4/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-5 | T5/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-6 | T2/T5/T8/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-7 | T6/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-8 | T6/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-9 | T6/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-10 | T7/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-11 | T7/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-12 | T7/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-13 | T8/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-14 | T2/T3/T4/T5/T6/T7/T8/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
-| AC-15 | T1/T8/T9 | closure-bound | closure-bound | closure-bound | `HEAD` | closure-bound | required only for REVIEW |
+| AC-1 | T2/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-2 | T2/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-3 | T3/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-4 | T4/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-5 | T5/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-6 | T2/T5/T8/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-7 | T6/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-8 | T6/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-9 | T6/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-10 | T7/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-11 | T7/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-12 | T7/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-13 | T8/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-14 | T2/T3/T4/T5/T6/T7/T8/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
+| AC-15 | T1/T8/T9 | `.harness/runs/20260907T105802775131Z-verify/manifest.json` | `20260907T105802775131Z-verify` | `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e` | `467dfdd4eec97c1a466466b8258d92665a46d527` | `REVIEW` | 사용자는 repository-local runtime과 project-owned 문서·설정 보존 경계를 유지한 정의·audit·검증·Gate 통합 및 후속 복구 변경, 독립 보수 재검증과 전체 168개 테스트 통과 결과를 설명받았다. PLAN-0002와 PLAN-0003의 REVIEW 사유 기반 종료 절차 설명에 resume으로 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포·옛 저장소 작업은 승인 범위에 포함하지 않으며 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다. |
 
 - Integrated target: `HEAD`
 - Verified commit: bound by `close-plan`
