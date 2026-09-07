@@ -1,13 +1,13 @@
 ---
 id: PLAN-2026-0004
 kind: exec-plan
-status: blocked
+status: verifying
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "1d064217da738ebc3ed593ce4aeccf365fb0cd16"
-integrated_commit: "ea051d74dbfd662dabda04363b15fedd06531909"
+integrated_commit: "HEAD"
 verified_commit: "ea051d74dbfd662dabda04363b15fedd06531909"
 traceability: 0
 product_spec: ""
@@ -30,7 +30,8 @@ gate_review_reason: ""
 - [x] 잘못된 메모리를 제거하고 사용자 선호를 모델 중립적으로 정리.
 - [x] 독립 검토와 clean exact-target canonical verification.
 - [x] T4 추가 승인: Main·Lead 분해 책임과 Verifier의 적극적인 반증 의무 보강, 독립 finding 보수·재검증 및 clean 후보 canonical 검증.
-- [ ] 공식 close-plan: 이번 추가 요청은 구현 승인이다. 이전 REVIEW 승인이나 공식 closure로 자동 처리하지 않는다.
+- [x] 사람 REVIEW 사유 확보: 사용자가 Main·Lead 경계 및 분해 책임, 적극적인 반증 검증 방향을 수락했고 DESIGN 보수·독립 재검증·155 tests 결과 설명 후 REVIEW 기록과 공식 종료에 동의했다.
+- 공식 종료 여부와 최종 검증 근거는 `close-plan`이 기록하는 frontmatter의 status/verified_commit/verification_run/gate_review_reason을 따른다.
 
 ## Context and Orientation
 
@@ -302,6 +303,8 @@ Main은 exact 후보의 bounded 구현 evidence를 수락한다. 사용자 구�
 
 ## Decision Log
 
+- 2026-09-07 — 사용자 REVIEW 판단: Task 내부 조정은 Lead, 범위 변경·최종 승인은 Main에 두고 Main·Lead가 공유 인터페이스와 수정 경계를 분리한다. Verifier의 적극적인 반증과 증거 기반 판단을 채택한다. 잔존 DESIGN 제한 보수 및 독립 재검증·전체 테스트 통과 설명 후 사용자가 REVIEW 사유 기록과 공식 종료에 동의했다. 이 승인 범위는 PLAN-0004 종료이며 PR4/PR5 완료, push/release를 포함하지 않는다.
+
 - 2026-09-07 — 사용자 업데이트 승인 범위를 운영 계약·메모리·선택 안내에 한정한다. PR4/PR5 전체 완료를 묵시적으로 포함하지 않는다.
 - 2026-09-07 — Main이 직접 bounded 구현과 검증을 위임한다. 아직 적용 전인 Task Lead 규칙으로 먼저 재위임하지 않는다.
 - 2026-09-07 — Task Lead는 선택적 역할이고 Main → Lead → leaf만 허용한다. source of truth와 실행 환경의 상위 권한은 구분한다.
@@ -332,7 +335,7 @@ Main은 exact 후보의 bounded 구현 evidence를 수락한다. 사용자 구�
 
 ## Outcomes and Retrospective
 
-T1–T3에 이어 T4의 분해 책임과 적극적 반증 의무를 구현했다. 독립 verifier가 초기 테스트 통과에도 활성 DESIGN의 잔존 계약 충돌을 찾아냈고, Main 보수 뒤 별도 재검증과 clean exact 후보의 canonical 155 tests를 통과했다. Main은 이 증거로 T4 bounded acceptance를 승인했다. 기존 parser/schema·Gate·target 소유권·PR4/PR5 경계는 유지했다. 계획의 blocked 상태는 구현 실패가 아니라 공식 REVIEW/close-plan 미처리를 뜻한다. 이 최종 증거 기록은 검증 후 plan-only 변경이며, 코드 후보를 변경하지 않는다.
+T1–T3에 이어 T4의 분해 책임과 적극적 반증 의무를 구현했다. 독립 verifier가 초기 테스트 통과에도 활성 DESIGN의 잔존 계약 충돌을 찾아냈고, Main 보수 뒤 별도 재검증과 clean exact 후보의 canonical 155 tests를 통과했다. Main은 이 증거로 T4 bounded acceptance를 승인했다. 기존 parser/schema·Gate·target 소유권·PR4/PR5 경계는 유지했다. 이전 blocked 상태는 구현 실패가 아니라 공식 REVIEW/close-plan 미처리를 뜻했다. 2026-09-07 사용자는 운영 방향 판단과 DESIGN 잔존 제한 보수·독립 재검증 결과에 대한 설명을 받고 REVIEW 사유 기록 및 공식 종료에 동의했다. Main은 이 대화의 실제 판단을 요약한 사유로 기존 close-plan 절차를 적용한다. 종료의 최종 상태와 exact 검증 증거는 frontmatter에 바인딩되며 이 준비 기록은 코드 후보를 변경하지 않는다.
 
 ## Follow-ups
 
