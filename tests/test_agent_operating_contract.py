@@ -184,14 +184,33 @@ class AgentOperatingContractTests(unittest.TestCase):
                     self.assertIn(required, contract)
                 self.assertNotIn("Beyond composing those packets", contract)
 
-    def test_design_role_summary_defers_boundary_rules_to_canonical_contracts(self) -> None:
-        roles = section(self.read("docs/DESIGN.md"), "Agent role conventions")
+    def test_retired_source_design_routes_to_preserved_authorities(self) -> None:
+        self.assertFalse((REPOSITORY / "docs/DESIGN.md").exists())
+        for path in ("AGENTS.md", "CLAUDE.md", "docs/README.md", "docs/design-docs/index.md"):
+            text = self.read(path)
+            self.assertNotRegex(text, r"\]\([^)]*(?:/|\b)DESIGN\.md\)")
+            self.assertIn("core-beliefs.md", text)
+        roles = section(self.read("AGENTS.md"), "Agent operating roles")
         self.assertIn("상위 계약 안의 leaf 분해·경계 설계", roles)
-        self.assertIn("[AGENTS.md](../AGENTS.md)", roles)
-        self.assertIn("[PLANS.md](PLANS.md)", roles)
-        self.assertNotIn("Beyond composing leaf packets", roles)
-        self.assertNotIn("a Lead only schedules", roles)
-        self.assertIn("does not edit the ExecPlan or integrate and approve the candidate", roles)
+        self.assertIn("edit the durable ExecPlan, perform final integration, or approve acceptance", roles)
+        self.assertIn("Repository as operating environment", self.read("docs/design-docs/core-beliefs.md"))
+        self.assertIn("UTF-8", self.read("docs/PRODUCT.md"))
+        self.assertIn("Required failure takes precedence", self.read("ARCHITECTURE.md"))
+
+    def test_investigation_invariants_and_source_templates_match_targets(self) -> None:
+        for source, target, heading in (
+            ("AGENTS.md", "src/reporivet/assets/project/root/AGENTS.md.tmpl", "Engineering invariants"),
+            ("docs/PLANS.md", "src/reporivet/assets/project/docs/PLANS.md.tmpl", "Required properties"),
+        ):
+            self.assertEqual(section(self.read(source), heading), section(self.read(target), heading))
+        invariants = section(self.read("AGENTS.md"), "Engineering invariants")
+        for required in ("normative", "reason", "scope", "prevented failure", "repository and dependency capabilities",
+                         "official primary sources", "no-change", "practical alternatives", "rejection reasons",
+                         "verification/enforcement", "revisit/retirement"):
+            self.assertIn(required, invariants)
+        for relative in ("design-docs/_template.md", "decisions/_template.md"):
+            self.assertEqual(self.read("docs/" + relative),
+                             self.read("src/reporivet/assets/project/docs/" + relative + ".tmpl"))
 
     def test_verifier_falsification_and_evidence_based_findings(self) -> None:
         plans = self.read("docs/PLANS.md")

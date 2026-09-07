@@ -1,6 +1,6 @@
 # Design Documents
 
-Use this directory for durable design knowledge shared by multiple changes. Keep repository-wide current conventions in [`../DESIGN.md`](../DESIGN.md), and task-specific design reasoning in an active ExecPlan.
+Use this directory for durable design knowledge shared by multiple changes. Keep engineering principles in [`core-beliefs.md`](core-beliefs.md), current technical boundaries in [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md), and task-specific design reasoning in an active ExecPlan.
 
 Create a document from [`_template.md`](_template.md), then run `./dev/docs-index`.
 

@@ -27,9 +27,9 @@ CI + garden        Enforced invariants and long-term drift reporting
 ### Agent entry points
 
 - `AGENTS.md` is the repository operating contract and documentation entry point for every agent.
-- This repository's `CLAUDE.md` is a thin adapter that imports only `@AGENTS.md` instead of duplicating Claude-specific rules.
-- Generated projects do not automatically receive tool-specific `CLAUDE.md`, `.claude/`, or nested `AGENTS.md` files. If a tool requires its own entry point, the project may add a thin adapter that points to the same `AGENTS.md`.
-- Even when a tool-specific entry point exists, `AGENTS.md` remains the single repository authority.
+- In this source repository only, author the portable block in `CLAUDE.md`, then run `./dev/agent-contract-sync` to project its exact bytes to the entire `AGENTS.md`. Do not edit the projection directly. `./dev/agent-contract-sync --check` detects drift without writes; provider-specific text outside the block is not copied.
+- Generated projects do not receive this source-only sync tool, tool-specific `CLAUDE.md`, `.claude/`, or nested `AGENTS.md` files. If a tool requires its own entry point, the project may add a thin adapter that points to the same `AGENTS.md`.
+- In generated targets, `AGENTS.md` remains canonical even when a tool-specific entry point exists.
 
 The two-lifetime structure is documented in [`DESIGN-REPORIVET-001`](docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md), definition/adoption/evidence Gate design in [`DESIGN-REPORIVET-002`](docs/design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md), generated behavior in [`SPEC-REPORIVET-001`](docs/product-specs/SPEC-REPORIVET-001-generated-project.md), and detailed requirements in [`SPEC-REPORIVET-002`](docs/product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md).
 
@@ -50,11 +50,13 @@ project/
 ├── docs/
 │   ├── README.md                Knowledge map and reading order
 │   ├── PRODUCT.md               Current purpose, users, requirements, and non-goals
-│   ├── DESIGN.md                Current principles and durable-design routing
+│   ├── DESIGN.md                Visual design, only with visual-design capability
+│   ├── FRONTEND.md              Frontend implementation, only with frontend capability
+│   ├── PRODUCT_SENSE.md         Product judgment, only with product-sense capability
 │   ├── QUALITY.md               Tests, Verification Run, and Gate expectations
 │   ├── SECURITY.md              Trust, secrets, command execution, and review boundaries
 │   ├── PLANS.md                 ExecPlan, Task Packet, and closure policy
-│   ├── RELIABILITY.md           Only for service/web/application profiles
+│   ├── RELIABILITY.md           Only with reliability capability
 │   ├── product-specs/           Durable behavioral specifications
 │   ├── design-docs/             Durable designs and trade-off records
 │   ├── exec-plans/              Active work and completed history
@@ -155,7 +157,7 @@ reporivet init \
   --with-ci
 ```
 
-Supported profiles are `service`, `web`, `application`, `library`, `cli`, and `other`. The `service`, `web`, and `application` profiles add `docs/RELIABILITY.md`.
+Supported profiles are `service`, `web`, `application`, `library`, `cli`, and `other`. By default, `web` enables visual-design and frontend documents; `service`, `web`, and `application` enable reliability. Product-sense is opt-in. The selected document capabilities determine whether `DESIGN.md` (visual only), `FRONTEND.md`, `PRODUCT_SENSE.md`, and `RELIABILITY.md` are created; existing project-owned documents remain preserved during upgrade.
 
 To inspect the planned changes without applying them:
 

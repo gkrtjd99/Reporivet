@@ -21,7 +21,7 @@ Do not preload all documentation, dependencies, generated output, caches, or raw
 - Product intent and current requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)
 - Project-definition procedure: [`docs/references/project-definition-protocol.md`](docs/references/project-definition-protocol.md)
 - Current system structure: [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- Design principles and durable design documents: [`docs/DESIGN.md`](docs/DESIGN.md) and [`docs/design-docs/`](docs/design-docs/)
+- Design principles and durable design documents: [`docs/design-docs/core-beliefs.md`](docs/design-docs/core-beliefs.md) and [`docs/design-docs/`](docs/design-docs/)
 - Quality, security, and reliability: [`docs/QUALITY.md`](docs/QUALITY.md), [`docs/SECURITY.md`](docs/SECURITY.md), and `docs/RELIABILITY.md` when present
 - Planning policy and active work: [`docs/PLANS.md`](docs/PLANS.md), [`docs/exec-plans/active/`](docs/exec-plans/active/)
 - Historical execution and decisions: [`docs/exec-plans/completed/`](docs/exec-plans/completed/), [`docs/decisions/`](docs/decisions/)
@@ -53,6 +53,7 @@ Memory is auxiliary context and never overrides current project sources of truth
 
 ## Engineering invariants
 
+- For normative rules and decisions, record reason, scope and prevented failure; review repository and dependency capabilities, official primary sources for external choices, no-change and practical alternatives with rejection reasons, verification/enforcement, and revisit/retirement conditions.
 - Deliver working, observable end-to-end slices; keep the integrated repository runnable.
 - Choose the smallest durable implementation that meets current requirements and known operating constraints.
 - Preserve explicit module ownership and dependency direction; encode stable boundaries in tests or lint rules.

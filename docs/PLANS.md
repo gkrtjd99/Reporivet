@@ -26,6 +26,9 @@ Active plans live in [`exec-plans/active/`](exec-plans/active/). Completed, canc
 - Continuously updated progress, discoveries, decisions, documentation impact, and evidence.
 - Idempotent or recoverable steps where possible.
 - An integrated Git target and independent verification before closure.
+- Durable normative choices record their scope, reason, protected condition or prevented failure, existing repository and dependency/framework capabilities reviewed, official primary sources when an external technical choice is involved, no-change and practical alternatives, rejection reasons, verification or enforcement, and revisit or retirement condition.
+
+Generated repository facts are evidence, not authority. Plans and reviews must preserve observed facts and candidates separately and must not promote a scanner candidate to a normative choice without explicit project-owned review.
 
 ## Product Traceability
 

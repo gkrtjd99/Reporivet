@@ -60,12 +60,18 @@ Detailed journey, P0 requirement, and acceptance authority for definition, adopt
 - **REQ-SAFE-1:** Initialization and adoption refuse symlinked, nonregular, or unmarked canonical command collisions before writes.
 - **REQ-SAFE-2:** Ignore and tracked-file controls protect local secrets and artifacts while preserving source, examples, migrations, and lockfiles.
 
+## CLI interaction and internationalization
+
+CLI commands use explicit subcommands, visible exit codes, and actionable errors. `--dry-run` does not create or modify a target path. Definition starts only when explicitly requested; initialization and upgrade do not invent product work. Audit is deterministic and read-only, and adoption audits before writing and fails closed on authority conflicts. Commands compute progress and validate structure; a human or Main supplies semantic answers and resolves conflicts. Generated entry points use stable names under `dev/` so agents do not invent project commands.
+
+The CLI emits plain UTF-8 text and accepts Unicode project names, summaries, areas, plan titles, and safe REVIEW reasons. Generated operational documents use stable English headings for predictable parsing; project content may use any UTF-8 language.
+
 ## Non-goals
 
 - Running or supervising autonomous agents, model judges, or an LLM evaluation service.
 - Providing a task database, lease service, scheduler, daemon, journal, replay engine, plugin, MCP bridge, or external control plane.
 - Generating host-specific Skill/runtime target bundles or maintaining duplicate completion gates.
-- Automatically deciding semantic product quality, resolving requirement conflicts, or manufacturing REVIEW acceptance.
+- Automatically deciding semantic product quality, resolving requirement conflicts, or manufacturing REVIEW acceptance through a confidence score, semantic interviewer, or automatic human-approval substitute.
 - Creating, reviewing, merging, or publishing GitHub changes or packages.
 - Backing up, archiving, deprecating through an external write, deleting, or otherwise operating the former repository.
 - Rewriting historical completed plans or project-owned authority to retrofit new behavior.

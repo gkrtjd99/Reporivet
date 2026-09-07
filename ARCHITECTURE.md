@@ -107,6 +107,27 @@ Configured project commands execute only as argument arrays committed in `dev/ha
 - Wheel tests require a complete packaged-asset inventory with no bytecode, Skill bundle, target bundle, model, or daemon surface.
 - An isolated installed CLI can generate and diagnose a project; after uninstall, repository-local definition, audit, context, planning, checks, verification, closure, and gardening continue to work.
 
+## Ownership and fail-closed conventions
+
+The installed initializer and copied repository runtime have separate lifetimes. Project-owned files are created only when absent. Harness-owned files carry `reporivet:managed` in their first lines and are rendered from canonical package assets. Shared ownership uses bounded paired markers; malformed or fenced lookalikes do not grant ownership. Unmarked canonical path collisions, symlink traversal, and nonregular inputs are errors. Potentially destructive ambiguity, unsafe paths, malformed evidence, and target mismatch fail closed rather than guessing. Configured argv execution uses no shell interpolation; command detection remains separate from approval.
+
+## Gate precedence and closure
+
+Required failure takes precedence over required infrastructure error. Gate classifies explicit changed paths as `contained`, `wide`, `irreversible`, or `unknown` and returns, in order:
+
+1. `BLOCK` for a required check failure.
+2. `INCONCLUSIVE` for required error/unknown, malformed policy, or target mismatch/error.
+3. `REVIEW` for protected, unknown, wide, irreversible, or policy-required dirty conditions.
+4. `PASS` only for a clean, confirmed, contained target with every required check passing.
+
+Shadow mode allows deterministic `PASS` and `REVIEW` to return success while preserving the verdict. Enforce mode allows only `PASS`. Neither mode can override `BLOCK` or `INCONCLUSIVE`. The runtime flow above owns the single shared run and transactional evidence-bound closure. Detailed trade-offs remain in [`DESIGN-REPORIVET-002`](docs/design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md).
+
+## Source-only contract projection
+
+In this source repository only, `CLAUDE.md` authors one standalone paired `reporivet:portable:start` / `reporivet:portable:end` block. `dev/agent-contract-sync` invokes the single standard-library helper `dev/agent_contract_sync.py` using the `PYTHON` override and projects the intervening UTF-8 bytes as the entire `AGENTS.md`. Provider instructions outside the block are excluded. Edit the source block, then sync; `--check` reports drift without changing bytes, modes, or mtimes and is exercised by the existing test suite.
+
+The helper rejects unsafe root/parent and contract paths, malformed or fenced markers, and invalid UTF-8 before writing. Drift replacement uses a completed same-directory temporary file, preserves the existing mode, rechecks source and target preimages, and leaves unchanged output untouched. These checks do not provide full OS-level concurrent isolation. This wrapper and helper are not package assets or target commands; generated targets keep their independent AGENTS authority.
+
 ## Known limits
 
 - Generated shell wrappers target POSIX environments.

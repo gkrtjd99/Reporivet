@@ -27,9 +27,9 @@ CI + garden        불변 조건 강제와 장기 드리프트 보고
 ### 에이전트 진입점
 
 - `AGENTS.md`가 모든 에이전트가 따라야 할 저장소 운영 계약과 문서 진입점입니다.
-- 이 저장소의 `CLAUDE.md`는 Claude 전용 규칙을 중복하지 않고 `@AGENTS.md`만 불러오는 얇은 연결 파일입니다.
-- 생성 대상 프로젝트에는 도구별 `CLAUDE.md`, `.claude/`, 중첩 `AGENTS.md`를 자동 추가하지 않습니다. 사용하는 도구가 별도 진입점을 요구하면 같은 `AGENTS.md`를 가리키는 얇은 연결 파일만 프로젝트가 선택적으로 둡니다.
-- 도구별 진입점이 있더라도 저장소의 기준은 `AGENTS.md` 하나로 유지합니다.
+- 이 source 저장소에서만 `CLAUDE.md`의 portable block을 작성하고 `./dev/agent-contract-sync`로 정확한 bytes를 `AGENTS.md` 전체에 투영합니다. 투영 파일을 직접 수정하지 않습니다. `./dev/agent-contract-sync --check`는 쓰기 없이 drift를 검사하며 block 밖 provider 설명은 복사하지 않습니다.
+- 생성 대상 프로젝트에는 이 source-only sync 도구, 도구별 `CLAUDE.md`, `.claude/`, 중첩 `AGENTS.md`를 자동 추가하지 않습니다. 사용하는 도구가 별도 진입점을 요구하면 같은 `AGENTS.md`를 가리키는 얇은 연결 파일만 프로젝트가 선택적으로 둡니다.
+- 생성 대상에서는 도구별 진입점이 있더라도 `AGENTS.md`를 정본으로 유지합니다.
 
 두 수명 구조는 [`DESIGN-REPORIVET-001`](docs/design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md), 정의·adoption·evidence Gate 설계는 [`DESIGN-REPORIVET-002`](docs/design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md), 생성 결과는 [`SPEC-REPORIVET-001`](docs/product-specs/SPEC-REPORIVET-001-generated-project.md), 상세 요구사항은 [`SPEC-REPORIVET-002`](docs/product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md)에 정리되어 있습니다.
 
@@ -50,11 +50,13 @@ project/
 ├── docs/
 │   ├── README.md                지식 지도와 읽기 순서
 │   ├── PRODUCT.md               현재 제품 목적·사용자·요구·비목표
-│   ├── DESIGN.md                현재 설계 원칙과 durable design 라우팅
+│   ├── DESIGN.md                visual-design capability일 때만 시각 디자인
+│   ├── FRONTEND.md              frontend capability일 때만 프론트엔드 구현
+│   ├── PRODUCT_SENSE.md         product-sense capability일 때만 제품 판단
 │   ├── QUALITY.md               테스트·Verification Run·Gate 기준
 │   ├── SECURITY.md              신뢰 경계·secret·명령 실행·review 기준
 │   ├── PLANS.md                 ExecPlan·Task Packet·closure 정책
-│   ├── RELIABILITY.md           service/web/application에서만 생성
+│   ├── RELIABILITY.md           reliability capability일 때만 생성
 │   ├── product-specs/           장기 제품 동작 명세
 │   ├── design-docs/             장기 설계와 trade-off 기록
 │   ├── exec-plans/              active 작업과 completed 역사
@@ -155,7 +157,7 @@ reporivet init \
   --with-ci
 ```
 
-지원 프로필은 `service`, `web`, `application`, `library`, `cli`, `other`입니다. 서비스·웹·애플리케이션 프로필에는 `docs/RELIABILITY.md`가 추가됩니다.
+지원 프로필은 `service`, `web`, `application`, `library`, `cli`, `other`입니다. 기본적으로 `web`은 visual-design과 frontend 문서를, `service`·`web`·`application`은 reliability를 활성화하며 product-sense는 opt-in입니다. 선택된 document capability에 따라 시각 전용 `DESIGN.md`, `FRONTEND.md`, `PRODUCT_SENSE.md`, `RELIABILITY.md`를 생성하며, 기존 프로젝트 소유 문서는 upgrade 중에도 보존합니다.
 
 변경 예정만 확인하려면:
 

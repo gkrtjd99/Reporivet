@@ -18,7 +18,7 @@ With no `--plan`, context reports that no plan is selected; inspect [`exec-plans
 |---|---|
 | Product purpose and current requirements | [`PRODUCT.md`](PRODUCT.md), [`product-specs/`](product-specs/) |
 | Current architecture and dependency direction | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) |
-| Design principles and durable design decisions | [`DESIGN.md`](DESIGN.md), [`design-docs/`](design-docs/) |
+| Engineering principles and durable design decisions | [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md), [`design-docs/`](design-docs/) |
 | Quality expectations and gaps | [`QUALITY.md`](QUALITY.md) |
 | Security boundaries and controls | [`SECURITY.md`](SECURITY.md) |
 | Reliability and operations, when applicable | `RELIABILITY.md`, [`runbooks/`](runbooks/) |
@@ -38,7 +38,7 @@ With no `--plan`, context reports that no plan is selected; inspect [`exec-plans
 | New product definition or first milestone | Project-definition protocol, persisted draft, current product specs |
 | Existing-repository adoption | Audit output, current authority files, security and ownership design |
 | User-visible behavior | Product overview, relevant product spec, current flow, tests |
-| UX or interaction | Product overview, design overview, relevant design document |
+| UX or interaction | Product overview and CLI interaction contract, relevant design document |
 | Module or dependency boundary | Architecture, matching module contract/code-map row, related ADR, architecture checks |
 | Public API or persistent data | Product, architecture, security, ADRs, approved ExecPlan |
 | Production operations | Reliability, runbook, deployment configuration, approved ExecPlan |
@@ -47,7 +47,11 @@ With no `--plan`, context reports that no plan is selected; inspect [`exec-plans
 
 ## Document authority and lifecycle
 
-- Current-state documents are updated when approved intent or implemented reality changes.
+- `AGENTS.md` remains the compact portable routing contract; this source repository authors it in the `CLAUDE.md` portable block and projects it with `./dev/agent-contract-sync`. Generated targets keep AGENTS canonical.
+- Current-state documents describe implemented reality and verified intent and are updated when either changes.
+- Confirmed, Proposed, Open, and Sources evidence stay distinct during definition; only confirmed declarations satisfy traceability. Stable `JRN-*`, `REQ-P0-*`, and `AC-*` identifiers connect product intent, plans, tasks, and criterion evidence under [`PLANS.md`](PLANS.md).
+- Module contracts exist only for justified durable boundaries; `generated/code-map.md` is derived and non-authoritative.
+- Structured Verification Run artifacts are inspectable evidence; raw command logs remain ignored and disposable.
 - Active ExecPlans are living, restartable execution records.
 - Completed plans and accepted decisions are historical records; supersede them rather than rewriting history.
 - Generated documents identify their generator and are never edited manually.
