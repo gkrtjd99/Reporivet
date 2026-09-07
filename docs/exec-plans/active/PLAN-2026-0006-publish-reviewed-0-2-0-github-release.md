@@ -244,6 +244,10 @@ https://github.com/gkrtjd99/Reporivet/releases/tag/v0.2.0 공개 완료. --targe
 
 ## Surprises and Discoveries
 
+게시 후 계획 종료용 Python3.12 canonical은 전체178 중 distribution1개가 `BackendUnavailable: Cannot import 'setuptools.build_meta'`로 실패해 Gate BLOCK, close-plan rc2였다. 당시 해당 venv의 setuptools 부재를 직접 확인했다. 제품 wheel은 이 환경 변화 전에 빌드됐고 actual wheel의 독립 설치와 공개 bytes 대조는 별도로 성공했다. 실패 로그는 `/private/tmp/reporivet-release-020-H7ZI4J/close-plan.log`에 보존한다. 테스트나 Gate를 약화하지 않고 setuptools84가 확인된 기존 Python3.13 환경에서 새 canonical 종료 검증을 수행한다.
+
+Sonnet이 T2에서 자신의 새 경로 대신 기존 공유 `/tmp/reporivet-pr3-venv`를 삭제·재생성했다고 확인했다. 이는 허용 쓰기 경계를 위반한 환경 incident이며 제품 결함과 구분한다. Main은 추가 agent 쓰기를 중지시키고 충돌 없는 파일만 검사해 기존 로컬 setuptools84의345개 파일을 해당 임시 venv에 복원했다. build_meta import 성공 확인. 과거 venv 전체의 동일성을 복구했다고 주장하지 않는다. 게시 wheel bytes 및 source는 변경되지 않았다. 원본에서 새 임시경로를 재사용 없이 생성해야 한다는 기존 경계를 재강조한다.
+
 기존 release/tag/publish workflow는 없었다. 과거의 GitHub 읽기 전용 제한은 현재 인증 경로에는 해당하지 않으며 PR 생성·merge로 실제 쓰기를 확인했다.
 
 ## Concrete Steps
