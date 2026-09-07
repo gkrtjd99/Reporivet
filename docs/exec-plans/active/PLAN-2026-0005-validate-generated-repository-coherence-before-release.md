@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-0005
 kind: exec-plan
-status: blocked
+status: in-progress
 owner: main
 area: harness
 created: 2026-09-07
@@ -70,6 +70,12 @@ gate_review_reason: ""
 
 T7에서 해당 SECURITY 설명만 정정한다. T8의 다른 현행 계약 충돌은 조사·평가가 범위이며 정책·코드 변경까지 승인받은 것으로 확대하지 않는다. 발견된 충돌은 해당 항목의 기대값 판단을 중지하고 보고한다. T7/T8/T9의 문서 조사·수정·독립 검토는 모두 model=sonnet으로 명시 실행한다. 모델 선택은 이번 사용자 요청에 따른 실행 배정이지 portable contract의 역할 규칙 변경이 아니다. Main은 계획·범위·최종 통합·검증만 소유한다. 이전 T6 REVIEW는 사용자에게 이미 보고한 검증 결과지만 이번 지시를 임의의 새 Gate rationale로 변환하지 않는다. push/release/deployment는 계속 비목표다.
 
+## 승인된 두 검증 누락 보수 — 2026-09-07
+
+사용자는 T9 결과·권고 보고에 “응”이라고 답한 뒤 “음 작업은 두 누락을 보수하고 재검증”이라고 명시했다. T10/T11은 Task type membership guard와 context core expected id/kind guard 두 건의 회귀·최소 보수·재검증에만 한정한다. 다른 계약 조사나 별도 기능을 확대하지 않는다. Sonnet 구현·독립 검증 배정을 유지하며 Main은 계획/범위/통합/canonical만 소유한다.
+
+현행 문서가 이미 약속한 structural validation을 복원한다. 기존 Task type 집합과 core schema 검증 시설을 먼저 재사용하고, no-change 및 문서 보장 약화는 재현된 결함을 남기므로 기각한다. 모든 context에 전체 completion gate를 강제하는 대안은 정상 draft/legacy 라우팅까지 바꿀 수 있어 기각한다. legacy 허용 범위는 실제 현행 계약·기존 테스트에 따르며 임의 호환 shim이나 새 schema를 만들지 않는다. enforcement는 보수 전 실패 회귀, 정상·실패 대조군 및 새 exact candidate의 독립 검증이다. 명시 Task type/core schema 계약이 변경될 때만 재검토한다. 외부 기술/dependency 선택·사용자 문서 migration·설정 변경은 없다. package runtime과 source copy를 동기화하며 기존 저장소는 정상 managed runtime upgrade 경로를 유지한다. rollback은 해당 bounded code/test commit의 정상 revert로 가능하다. 배포·push·다른 파일 안전 작업은 비목표다.
+
 ## Acceptance Criteria
 
 - **AC-1:** 생성 문서의 논리 정합성을 실제 산출물과 canonical 요구사항/명령에 대조한다.
@@ -83,6 +89,10 @@ T7에서 해당 SECURITY 설명만 정정한다. T8의 다른 현행 계약 충�
 
 - **AC-8:** SECURITY가 fenced 예시의 비ownership·원문 보존과 actual malformed marker 거부를 구분해 기존 테스트·구현과 일치한다. 동작·config·테스트를 바꾸지 않는다.
 - **AC-9:** 다른 현행 계약 충돌 조사 범위·exact target·서로 대립하는 근거·실험 및 불확실성을 기록하고 별도 Sonnet이 후보를 재검토한다. 기대값을 임의 결정하거나 조사하지 않은 영역을 통과로 주장하지 않는다.
+
+- **AC-10:** 명시된 unsupported Task type은 strict plan-check에서 실패하고 허용된 support/implementation/verification 및 기존 정상·legacy 계약은 유지한다. 참조·미참조 packet 대조와 traceability 오류를 구분한다.
+- **AC-11:** core 문서 expected id/kind 위반은 context가 authority를 노출하기 전에 명시적으로 실패한다. 정상 active/draft, include-drafts와 허용된 legacy 동작은 유지한다. schema 실패에 docs-check와 context의 기대가 일치한다.
+- **AC-12:** 보수 전 실패/후 성공 회귀, source/package runtime 동기화, 새 exact 후보의 Sonnet 독립 검증·full suite/distribution·Main canonical 증거를 수락한다. 문서 보장을 낮추거나 unrelated behavior를 바꾸지 않는다.
 
 ## Milestones
 
@@ -639,6 +649,122 @@ T8-A 후보 두 건은 별도 새 fixture에서도 확인됐다. A: traceable pl
 Main canonical은 exact clean d57fc5f에서 `REPORIVET_BASE_SHA=58665a897b891b0abc721e159593725c0b71af6d REPORIVET_HEAD_SHA=d57fc5fe9aa10e8ea137d34565724025f9e40f24 REPORIVET_TARGET=PLAN-2026-0005 ./dev/verify`를 Python3.12.14 환경으로 실행했다. required6 checks PASS, optional smoke skipped, 전체176 tests PASS/106.232초. run `20260907T135921536448Z-verify`, manifest SHA256 `f1c789db7aac3254e1c4d0489d53707269ee7953b02283071b784a73279301c5`, Gate REVIEW(RISK_WIDE/PROTECTED_PATH_MATCH: dev/harness.py, docs/SECURITY.md). Main은 실제 manifest hash와 exact target/clean HEAD 바인딩을 assert로 확인했다. 기존 suite 통과가 새 두 실패 경로를 검증했다는 뜻은 아니다.
 
 이번 문서 수정·조사·독립 검토의 네 agent 호출은 모두 model=sonnet이었다. Main은 계획과 범위·통합·canonical 검증만 담당했으며 새 portable 모델 종속 규칙을 추가하지 않았다. 최종 verdict는 문구 정정 수락 및 두 추가 결함 확인이고 release 승인/계획 공식 종료가 아니다.
+
+### T10 — Sonnet 두 structural guard 보수
+
+#### State
+
+in-progress
+
+#### Task type
+
+implementation
+
+#### Depends on
+
+T9
+
+#### Execution constraints
+
+- Required capabilities: Sonnet의 Python schema/authority 검증·회귀 보수.
+- Tool access: read/edit/local Python tests와 임시 fixture. commit/계획 쓰기 금지.
+- Concurrency: 단일 Implementer 순차 쓰기, Main은 작업 중 tracked 쓰기 없음.
+- Retry budget: 같은 접근 두 번 실패 시 Main에 반환.
+- Time budget: 20분.
+
+#### Outcome
+
+T9에서 확인한 두 누락을 failing regression으로 고정하고 현행 계약에 맞게 최소 보수한다.
+
+#### Non-goals
+
+다른 계약 탐색/보수, public API/schema/config 변경, 새 dependency, 테스트 약화, 재위임, 외부 작업.
+
+#### Read
+
+이 계획 T9 결과/T10 승인 범위, PLANS/SPEC-002의 관련 요구, core schema/Task Packet 검증 runtime 및 관련 기존 테스트. 과거 재현 로그는 참고만 하며 새 실패 테스트를 작성한다.
+
+#### Allowed writes
+
+`src/reporivet/assets/project/dev/harness.py`, `dev/harness.py`, `tests/test_traceability.py`, `tests/test_authority_lifecycle.py`, `tests/test_code_map.py`와 자신의 임시 fixture/log만.
+
+#### Protected paths
+
+위 목록 외 모든 tracked 파일, initializer/설정/CI/AGENTS/CLAUDE/문서/completed history/외부 저장소/다른 fixture.
+
+#### Acceptance
+
+AC-10, AC-11, AC-12
+
+#### Verify
+
+보수 전 명시 malformed type 및 core wrong id/kind 실패를 재현하고, 보수 후 거부·정상 types·legacy·active/draft/include-drafts 대조군을 검증한다. runtime version token 정규화 bytes 일치, focused tests 및 전체 suite를 실행한다.
+
+#### Stop conditions
+
+현행 authority 충돌, 허용 경로 밖 변경, 새 규칙 필요, 같은 접근 두 번 실패.
+
+#### Result
+
+구현 대기. 후보 수락과 최종 승인은 Main 소유다.
+
+### T11 — Sonnet 독립 반증과 Main 최종 수락
+
+#### State
+
+blocked
+
+#### Task type
+
+verification
+
+#### Depends on
+
+T10
+
+#### Execution constraints
+
+- Required capabilities: Sonnet의 독립 schema/authority 반증, Main의 exact target/canonical 통합.
+- Tool access: 별도 exact Git archive 읽기와 자기 임시 fixture/log만. Main만 계획·통합 commit·canonical 명령.
+- Concurrency: T10 종료 및 후보 고정 후. Main canonical/Python 대조와 읽기 전용 병렬 허용.
+- Retry budget: 같은 접근 두 번 실패 시 보고.
+- Time budget: 독립 leaf 10분, Main 통합 10분.
+
+#### Outcome
+
+새 exact 후보에서 두 누락의 해결과 정상·legacy 흐름 보존을 독립 판정하고 Main이 evidence를 수락한다.
+
+#### Non-goals
+
+코드 수정, 구현자 설명에 의존한 승인, 새 계약 조사, 재위임, 배포 승인/사람 REVIEW 사유 발명.
+
+#### Read
+
+고정 후보와 AC-10/11/12, 현행 관련 요구·새 tests·runtime schema/라우팅 경로만.
+
+#### Allowed writes
+
+leaf는 자신의 임시 archive/fixture/log만. Main은 이 계획 및 승인된 후보의 통합 기록만.
+
+#### Protected paths
+
+모든 원본 코드·tests·config·CI·문서와 다른 task fixture, 외부 저장소.
+
+#### Acceptance
+
+AC-10, AC-11, AC-12
+
+#### Verify
+
+두 문제를 독립 fixture에서 반증하고 정상 대조군과 focused/distribution 검증을 수행한다. Main은 exact clean SHA에 explicit base/head/target canonical verify 및 applicable Python 대조를 실행한다. 실패·미실행·한계를 명확히 보고한다.
+
+#### Stop conditions
+
+새 정책 판단 필요, exact target 불일치, 외부 설치 필요, scope 확장.
+
+#### Result
+
+T10 후보 대기.
 
 ## Architecture Impact
 
