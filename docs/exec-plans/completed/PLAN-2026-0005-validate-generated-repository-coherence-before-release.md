@@ -1,20 +1,20 @@
 ---
 id: PLAN-2026-0005
 kind: exec-plan
-status: verifying
+status: complete
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-08
 base_commit: "58665a897b891b0abc721e159593725c0b71af6d"
-integrated_commit: HEAD
-verified_commit: "78b935e9d71e58d9084ade788bccf777bdcecaa5"
+integrated_commit: 5a9074e7e8b715cc5a96306bae930c0e97759a6b
+verified_commit: 5a9074e7e8b715cc5a96306bae930c0e97759a6b
 traceability: 0
 product_spec: ""
-verification_run: "20260907T145056308534Z-verify"
-manifest_sha256: "3ba1c0a14043099e7caba5175b698ea27d03a21ae01ba7a2eb8fc3174ed426d5"
+verification_run: "20260907T160803567042Z-verify"
+manifest_sha256: "f043bef33879df0233781424e3dceb9b0b066225d3cac2ac3bf797d3273428d2"
 gate_verdict: "REVIEW"
-gate_review_reason: ""
+gate_review_reason: "사용자가 두 보수 결과와 legacy 유지 경계를 항목별로 검토·수락하고, 승인 기록에서 멈추지 말고 남은 공식 종료까지 처리하도록 지시했다. 기존 계약을 복원하는 누적 보수와 SECURITY 설명 정정은 독립 검증을 거쳤으며, wide/protected 변경의 REVIEW를 이 계획 종료 범위에서 수락한다. 미검증 환경의 통과 및 외부 push/release/deployment 승인은 포함하지 않는다."
 ---
 
 # 생성 저장소의 배포 전 논리 정합성 검증
