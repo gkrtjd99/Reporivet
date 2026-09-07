@@ -11,6 +11,10 @@ supersedes: []
 
 # Core engineering beliefs
 
+## Repository as operating environment
+
+The repository, not a hidden conversation or external control plane, is the operating system for agent work. Durable facts needed to define, resume, constrain, verify, or maintain work are discoverable through a short entry map and version-controlled artifacts.
+
 ## Working behavior first
 
 Deliver changes as observable end-to-end slices. After each integrated slice, the repository remains runnable and passes the applicable feedback gate.
@@ -30,6 +34,13 @@ Prefer searchable source, deterministic commands, structured output, inspectable
 ## Dependency choice
 
 Inspect current project facilities and dependency documentation, types, and relevant source before adding infrastructure or packages. Choose the option with the lowest total lifecycle complexity and reliability risk, whether that is an existing dependency, an established library, or a small fully tested local implementation.
+
+## Implementation conventions
+
+- Use the Python standard library unless a production dependency materially reduces total lifecycle complexity and is explicitly approved.
+- Prefer narrow parsers, fixed data structures, and deterministic schemas over a registry, plugin system, policy DSL, or compatibility framework.
+- Add a mechanical rule only when it is objective, stable, and produces an actionable repair path.
+- Preserve explicit local evidence rather than inferring Git parents, remotes, or network state.
 
 ## Compatibility
 

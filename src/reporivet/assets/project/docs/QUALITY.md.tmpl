@@ -3,7 +3,7 @@ id: QUALITY
 kind: quality
 status: draft
 area: repository
-summary: Current quality model, verification layers, and known quality gaps
+summary: Current quality model, verification layers, check statuses, Gate expectations, and known gaps
 applies_to:
   - "**"
 ---
@@ -12,24 +12,46 @@ applies_to:
 
 ## Quality model
 
-TODO: define the observable qualities that matter for this project.
+TODO: define the observable qualities that matter for this project and the commands that provide credible evidence.
 
 ## Verification layers
 
 | Layer | Purpose | Canonical command | Evidence |
 |---|---|---|---|
-| Fast feedback | TODO | `./dev/check` | TODO |
-| Completion gate | TODO | `./dev/verify` | TODO |
-| Smoke or end-to-end | TODO | `./dev/smoke` | TODO |
+| Fast feedback | Structural checks plus configured short commands | `./dev/check` | Terminal result and project output |
+| Completion gate | One fixed Verification Run over required stages | `./dev/verify` | `.harness/runs/<run>-verify/manifest.json`, `gate.json`, `report.md`, check JSON, and available logs |
+| Smoke or end-to-end | User-observable project behavior | `./dev/smoke` | Project-specific output under the same run when invoked by verify |
+
+The completion gate executes security, document-catalog drift, documentation, plans/traceability, architecture, configured project verification, and optional smoke in a fixed order. `dev/harness.toml` is the project-owned source of configured commands.
+
+## Check status and Gate
+
+Checks record only:
+
+- `pass`: the declared check completed successfully;
+- `fail`: candidate behavior did not satisfy the check;
+- `error`: configuration or infrastructure prevented reliable evidence;
+- `skipped`: an optional check is correctly not configured; or
+- `unknown`: evidence could not be determined and must not be treated as pass.
+
+A required `fail` takes precedence over a required `error` or `unknown`. Missing configured tools and malformed configured smoke fail visibly. Artifacts are finalized as far as possible for success, candidate failure, and infrastructure error.
+
+Gate classifies explicit local changed paths as `contained`, `wide`, `irreversible`, or `unknown` and returns `PASS`, `REVIEW`, `BLOCK`, or `INCONCLUSIVE`. Shadow mode may return zero for PASS/REVIEW while preserving the verdict; enforce mode returns zero only for PASS. BLOCK and INCONCLUSIVE are never overridden.
 
 ## Test ownership
 
-- TODO: describe where unit, integration, contract, architecture, and end-to-end tests live.
+- TODO: describe where unit, integration, contract, architecture, distribution, and end-to-end tests live.
+- Keep each acceptance criterion tied to an observable command or artifact rather than implementation explanation.
+- Module contracts and `docs/generated/code-map.md` may route verification ownership, but the generated map is not authority.
 
 ## Review expectations
 
 - TODO: identify changes that require independent verification or specialist review.
+- Ownership, public contracts, persistent data, path safety, command execution, Gate policy, CI, and closure changes should be reviewed in a context separate from implementation.
+- A REVIEW verdict requires a genuine reason from the responsible person; an agent does not manufacture acceptance.
 
 ## Known gaps
 
 - TODO: point to an active plan or the technical-debt tracker.
+- Optional smoke remains skipped until this project defines a credible user-observable command.
+- Structural validation does not prove that product or architecture decisions are semantically correct.

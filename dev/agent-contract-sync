@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# Source repository only; not a generated harness asset.
+set -eu
+SCRIPT_DIR=$(dirname -- "$0")
+PYTHON=${PYTHON:-python3}
+exec "$PYTHON" "$SCRIPT_DIR/agent_contract_sync.py" "$@"

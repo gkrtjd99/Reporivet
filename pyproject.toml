@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reporivet"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Repository-native harness initializer for long-running agent-driven software development"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,6 +31,9 @@ reporivet = "reporivet.cli:main"
 
 [tool.setuptools]
 include-package-data = false
+
+[tool.setuptools.dynamic]
+version = {attr = "reporivet.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

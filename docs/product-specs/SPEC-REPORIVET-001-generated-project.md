@@ -14,7 +14,7 @@ supersedes: []
 
 ## Observable structure
 
-A service or application profile creates:
+A generated profile creates this operating surface. Optional document entries appear only when selected by project kind or the project-owned `[documents]` configuration:
 
 ```text
 .
@@ -26,6 +26,9 @@ A service or application profile creates:
 │   ├── harness.py
 │   ├── bootstrap
 │   ├── context
+│   ├── define
+│   ├── audit
+│   ├── code-map
 │   ├── run
 │   ├── check
 │   ├── verify
@@ -42,56 +45,115 @@ A service or application profile creates:
 ├── docs/
 │   ├── README.md
 │   ├── PRODUCT.md
-│   ├── DESIGN.md
+│   ├── PRODUCT_SENSE.md             # optional: product_sense
+│   ├── DESIGN.md                    # optional: visual_design
+│   ├── FRONTEND.md                  # optional: frontend
 │   ├── QUALITY.md
 │   ├── SECURITY.md
-│   ├── RELIABILITY.md
+│   ├── RELIABILITY.md               # optional: reliability
 │   ├── PLANS.md
 │   ├── product-specs/
+│   │   └── project-definition.draft.md  # only after explicit definition
 │   ├── design-docs/
 │   ├── exec-plans/{active,completed}/
+│   ├── module-contracts/
 │   ├── decisions/
 │   ├── runbooks/
 │   ├── generated/
-│   └── references/
+│   │   ├── code-map.md
+│   │   ├── repository-facts.md
+│   │   └── baseline-questions.md
+│   └── references/project-definition-protocol.md
 └── .harness/runs/
 ```
 
-Library, CLI, and other profiles omit `RELIABILITY.md` unless the project needs service operations knowledge.
+Service and application profiles select `RELIABILITY.md` by default; web profiles also select `DESIGN.md` and `FRONTEND.md`; library, CLI, and other profiles select no optional documents by default. Explicit capabilities may select optional documents in schema 2 configuration. CI workflows are added only with `--with-ci` or when an existing managed CI surface is upgraded.
+
+## Authority draft and evidence lifecycle
+
+- `repository-facts.md` records only directly observed manifests, lockfiles, source/test roots, CI, runtime configuration, and entry-point paths plus mechanically derived language, runtime, and command candidates. Every row names an evidence path, observed facts and candidates remain distinct, and neither becomes normative authority automatically.
+- `baseline-questions.md` identifies product intent, user, non-goal, ownership, security, reliability/SLO, and visual-choice questions that scanning cannot answer.
+- `PRODUCT.md` and `ARCHITECTURE.md` start as target-centered drafts with a one-line provenance marker. Their baseline review sections require completed evidence checklists and concrete review evidence before an established baseline can pass; lifecycle status edits alone do not satisfy the guard.
+- Fresh initialization creates only the design-document index and reusable template, not a project-specific technical design or replacement for an existing `core-beliefs.md`.
 
 ## New empty repository lifecycle
 
-- Starts with `baseline = "draft"`.
-- Starts with `configuration = "ready"` because no implementation command is being claimed.
-- Can run documentation-only `./dev/verify` while configured source paths do not exist.
-- Must add canonical commands when implementation appears.
+- Starts with `baseline = "draft"` and `configuration = "ready"` because no implementation command is being claimed.
+- Can run documentation-only `./dev/verify` while neither configured source paths nor recognized implementation evidence exist.
+- The empty-command guard also recognizes conventional source directories, known audit manifests, and supported root-level source files. It does not recursively scan arbitrary directories or turn observations into configured paths or commands. Documentation examples under `docs/` alone do not require project commands.
+- Must add and review canonical command arrays when implementation appears, including nonstandard layouts or file types the guard cannot recognize.
+- Does not receive a definition draft unless `reporivet define` is explicitly invoked.
 
 ## Existing implementation lifecycle
 
-- Receives `PLAN-0000-establish-repository-baseline.md`.
-- Starts with `configuration = "review"` even when commands were inferred.
-- Requires evidence-based current-state documents and confirmed command arrays.
-- Becomes strict only after current-state documents are active and `baseline = "established"`.
+- `init` receives `PLAN-0000-establish-repository-baseline.md`.
+- Inferred commands start with `configuration = "review"` and cannot produce a false-green check or verify.
+- The project becomes strict only after current-state documents are active, commands are confirmed, and `baseline = "established"`.
+
+## Definition and adoption lifecycle
+
+- `reporivet define --root <path>` installs missing harness responsibilities and creates the project-owned fourteen-section draft.
+- `./dev/define status` reports persisted progress; `validate` rejects structural uncertainty that blocks handoff; `finalize` transactionally creates one final spec and one first-slice plan.
+- `reporivet audit` and `./dev/audit` are deterministic, read-only, and do not execute project commands.
+- `reporivet define --adopt` audits first, preserves current authority, adds only missing responsibilities, refuses collisions before writing, and keeps inferred commands in review.
+
+## Context, authority, and traceability behavior
+
+- Module contracts are created only for justified actual, configured, or confirmed planned multi-file boundaries.
+- `./dev/code-map` emits only evidence-backed rows and marks the map as generated/non-authoritative.
+- `./dev/context --path`, `--area`, or `--plan` includes active current-state/product/design/runbook documents and accepted decisions by default; an active plan is authority only when explicitly selected with `--plan`. `--include-drafts` exposes draft/proposed authority; `--include-history` exposes deprecated/superseded/rejected authority and completed plans.
+- Context fails on objective authority ambiguity such as duplicate authority IDs or inconsistent explicit supersession links. Different IDs with related or identical `applies_to` scopes are legal and are not treated as a semantic conflict. Frontmatter-free legacy notes warn and remain non-authoritative, while malformed explicit authority metadata and unsafe, symlinked, or nonregular core-authority paths fail closed before content is read.
+- Accepted decisions require concrete context/reason, at least two substantive alternatives with rejection rationale, and verification or enforcement. Context applies the same structural validation as `docs-check` before exposing an accepted decision as authority. New decision/design templates additionally prompt for scope, protected condition or prevented failure, existing repository/dependency capabilities, applicable official primary sources, no-change and practical alternatives, and revisit/retirement conditions.
+- Plans opt into product-to-evidence traceability through `traceability: 1` and one active `product_spec`; historical non-opt-in plans remain valid.
+
+## Mutation preview and recovery behavior
+
+- Existing `init --dry-run` and `upgrade --dry-run` remain read-only and emit the same additive mutation-plan format used by apply.
+- The plan fingerprint is SHA-256 over canonical, path-sorted entries containing only repository-relative path, action, preimage type/mode/content hash, and postimage type/mode/content hash. It contains no absolute path, timestamp, random identifier, approval token, or persisted backup reference.
+- Apply renders its own current plan from immutable initial staging images, includes only renderer changes, validates every original preimage before mutation, and revalidates the target immediately before each write. Unrelated concurrent edits are neither included nor overwritten. Existing file replacements use completed temporary bytes and modes, not in-place truncation. Staged runtime calls use Python `-I` to exclude target/environment import paths; staging remains a deterministic planning aid, not an OS isolation or authorization boundary.
+- The plan includes the final `code-map` and document-catalog bytes rather than reporting their later updates as hidden partial success.
+- Failure restores transaction-owned bytes and modes and removes transaction-created empty files/directories only while their current state still matches the transaction postimage. A concurrent user edit or type/mode/hash divergence is preserved and reported as an incomplete rollback with the affected repository-relative path.
+- Preview output is informational. There is no separate dry-run-to-apply approval binding, approval CLI, backup registry, daemon, or external transaction runtime.
 
 ## Upgrade behavior
 
-- Managed code and blocks may be refreshed.
-- Future-work tokens in the ExecPlan template remain unresolved until `./dev/new-plan` creates a plan.
-- Missing newly introduced scaffold files may be created.
-- Project-owned current-state documents, specifications, plans, decisions, runbooks, and command configuration are preserved.
-- Unmarked existing canonical command paths are never silently replaced.
+- Managed runtime, wrappers, workflows, and bounded blocks may be refreshed.
+- Future-work tokens in templates remain unresolved until a repository-local command creates the corresponding artifact.
+- Missing newly introduced scaffold or generated-evidence files may be created.
+- New baseline-evidence artifacts are required only for target-centered drafts carrying the new provenance marker; legacy project-owned configurations and authority are not silently migrated or made invalid merely because an upgrade can add those artifacts.
+- Project-owned current-state documents, specifications, plans, decisions, runbooks, definition evidence, and command configuration are preserved.
+- New configurations include explicit conservative `[gate]` shadow defaults.
+- Existing configuration bytes are never rewritten. Missing `[gate]` uses conservative in-memory defaults and produces a doctor advisory.
+- Unmarked, symlinked, or nonregular canonical managed paths are never silently replaced.
 
 ## Repository hygiene behavior
 
 - The managed `.gitignore` blocks common environment files, credentials, private keys, local infrastructure state, databases, build output, logs, caches, and personal editor state.
-- Documented example, sample, and template environment or credential files remain trackable.
-- `./dev/security-check` catches sensitive files that were force-added or already tracked; narrow non-secret fixtures require an explicit policy allowlist.
+- Documented examples, samples, templates, source, migrations, documentation, and dependency lockfiles remain trackable.
+- `./dev/security-check` catches sensitive files that were force-added or already tracked; narrow non-secret fixtures require an explicit reviewed allowlist.
 
-## Verification behavior
+## Verification Run and Gate behavior
 
-- Tracked sensitive paths and high-confidence secret signatures are rejected before project commands.
-- Catalog, document, plan, and architecture checks run before project commands.
-- Missing configured executables fail visibly.
-- Source-bearing projects cannot pass with an empty verification group.
-- Command output is streamed and written to ignored raw logs.
-- Completed plans record the clean integrated Git commit actually verified.
+- One `./dev/verify` invocation creates exactly one `.harness/runs/<run>-verify/`.
+- Security, catalog, documentation, plan, architecture, project, and optional smoke checks execute in fixed order.
+- Checks record `pass`, `fail`, `error`, `skipped`, or `unknown`; required candidate failure takes precedence over required infrastructure error.
+- Missing configured executables, malformed command groups, recursive verify configuration, and source-bearing empty project verification fail visibly.
+- Manifest, Gate, report, check JSON, and available logs survive pass, candidate failure, and infrastructure error.
+- Structured artifacts contain sanitized command metadata rather than raw arguments or raw logs.
+- Gate uses only explicit local base/head/target evidence and explicit changed paths. It never infers a parent, remote, or network state.
+- Verdicts are `PASS`, `REVIEW`, `BLOCK`, or `INCONCLUSIVE`; shadow and enforce modes apply declared exit semantics without overriding BLOCK/INCONCLUSIVE.
+
+## Plan closure behavior
+
+- `./dev/close-plan` requires a clean current HEAD and the plan's explicit base.
+- It invokes canonical verification exactly once, then records run ID, manifest hash, Gate verdict, verified SHA, criterion evidence, and a genuine human REVIEW reason when required.
+- PASS closes directly; REVIEW requires the reason; BLOCK and INCONCLUSIVE cannot be overridden.
+- Post-move structural failure restores an unchanged transaction postimage to the exact active-plan bytes and mode while retaining run evidence. Concurrent edits at either the active or completed path are preserved and named as incomplete rollback state; the unaffected side is still recovered when its postimage matches.
+
+## CI behavior
+
+The generated verify workflow keeps immutable action SHAs and `contents: read`, checks out the explicit PR/push head with full history, exports base/head/target evidence, runs bootstrap then verify once, appends the latest report to the step summary, and uploads `.harness/runs/` with `if: always()`. An all-zero push base remains unavailable.
+
+## Package-removal behavior
+
+The copied runtime does not import the installed package. After Reporivet is uninstalled, generated definition, audit, context, planning, checks, verification, closure, and gardening continue through repository-local wrappers and Python standard-library code.

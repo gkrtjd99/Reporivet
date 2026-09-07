@@ -1,6 +1,6 @@
 # {{PROJECT_NAME}} Knowledge Map
 
-This directory is the version-controlled record system for product intent, architecture, design, execution plans, decisions, quality, security, reliability, generated facts, and curated references.
+This directory is the version-controlled record system for product intent, product judgment, architecture, visual design, frontend implementation, execution plans, decisions, quality, security, reliability, generated facts, and curated references.
 
 ## Reading protocol
 
@@ -10,17 +10,24 @@ This directory is the version-controlled record system for product intent, archi
 4. Follow the selected plan's context and Task Packet rather than scanning all documents.
 5. Expand the search only when evidence shows the current context is insufficient.
 
+With no `--plan`, context reports that no plan is selected; inspect [`exec-plans/active/`](exec-plans/active/) and rerun with `--plan PLAN-...` when a matching plan exists. It does not select or reveal an active plan automatically.
+
 ## Stable entry points
 
 | Need | Read |
 |---|---|
 | Product purpose and current requirements | [`PRODUCT.md`](PRODUCT.md), [`product-specs/`](product-specs/) |
+| Product outcome and trade-off principles, when applicable | `PRODUCT_SENSE.md`, [`product-specs/`](product-specs/) |
 | Current architecture and dependency direction | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) |
-| Design principles and durable design decisions | [`DESIGN.md`](DESIGN.md), [`design-docs/`](design-docs/) |
+| Visual design system, when applicable | `DESIGN.md`, [`design-docs/`](design-docs/) |
+| Frontend implementation rules, when applicable | `FRONTEND.md`, project source and tests |
 | Quality expectations and gaps | [`QUALITY.md`](QUALITY.md) |
 | Security boundaries and controls | [`SECURITY.md`](SECURITY.md) |
 | Reliability and operations, when applicable | `RELIABILITY.md`, [`runbooks/`](runbooks/) |
-| Complex work and Task Packets | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/) |
+| Project definition draft and operating protocol | `product-specs/project-definition.draft.md` when present, [`references/project-definition-protocol.md`](references/project-definition-protocol.md) |
+| Complex work, Product Trace, and Task Packets | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/) |
+| Module ownership and derived path map | [`module-contracts/`](module-contracts/), [`generated/code-map.md`](generated/code-map.md) |
+| Verification Run and Gate evidence | `.harness/runs/<run>-verify/report.md`, [`QUALITY.md`](QUALITY.md), [`SECURITY.md`](SECURITY.md) |
 | Durable decisions | [`decisions/`](decisions/) |
 | Known follow-ups and debt | [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md) |
 | Generated facts | [`generated/`](generated/) |
@@ -30,9 +37,11 @@ This directory is the version-controlled record system for product intent, archi
 
 | Change | Minimum context |
 |---|---|
+| New product definition or first milestone | Project-definition protocol, persisted draft, current product specs |
+| Existing-repository adoption | Audit output, current authority files, security and ownership design |
 | User-visible behavior | Product overview, relevant product spec, current flow, tests |
 | UX or interaction | Product overview, design overview, relevant design document |
-| Module or dependency boundary | Architecture, related ADR, architecture checks |
+| Module or dependency boundary | Architecture, matching module contract/code-map row, related ADR, architecture checks |
 | Public API or persistent data | Product, architecture, security, ADRs, approved ExecPlan |
 | Production operations | Reliability, runbook, deployment configuration, approved ExecPlan |
 | Local bug | Reproduction, nearby code and tests; create a plan only if scope grows |
@@ -40,10 +49,11 @@ This directory is the version-controlled record system for product intent, archi
 
 ## Document authority and lifecycle
 
-- Current-state documents are updated when approved intent or implemented reality changes.
-- Active ExecPlans are living, restartable execution records.
-- Completed plans and accepted decisions are historical records; supersede them rather than rewriting history.
-- Generated documents identify their generator and are never edited manually.
+- Current-state, product/design, and runbook documents enter default context only while active; decisions enter it only while accepted.
+- Draft/proposed authority requires `./dev/context --include-drafts`; deprecated, superseded, rejected, and completed history requires `--include-history`.
+- Active ExecPlans are living, restartable execution records; completed plans are history.
+- Duplicate authority IDs and inconsistent explicit supersession fail context. Different IDs may legitimately cover the same scope, and tooling does not judge natural-language meaning.
+- Generated documents identify their generator and are never edited manually. Observed facts and mechanically derived candidates remain non-authoritative evidence.
 - A durable document is added only when knowledge is long-lived, shared across changes, and too detailed for an existing source of truth.
 - Retirement requires an explicit plan action, replacement or rationale, and removal of current references.
 
