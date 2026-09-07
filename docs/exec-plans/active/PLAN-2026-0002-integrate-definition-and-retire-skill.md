@@ -1,11 +1,11 @@
 ---
 id: PLAN-2026-0002
 kind: exec-plan
-status: verifying
+status: blocked
 owner: main
 area: harness
 created: 2026-08-29
-updated: 2026-08-30
+updated: 2026-09-07
 base_commit: "9d6d6600c54d29f7bb67dcb65eb5bffed56e337c"
 integrated_commit: "HEAD"
 verified_commit: ""
@@ -35,7 +35,11 @@ Observable completion requires all acceptance criteria below, current-state docu
 - [x] Deliver one Verification Run, Gate policy, evidence-bound close-plan, and CI evidence.
 - [x] Resolve runtime parity, documentation, deterministic regression, and release packaging.
 - [x] Integrate and independently verify the clean candidate.
-- [x] Prepare evidence-bound closure and resolve all follow-ups without external old-repository actions.
+- [ ] Prepare evidence-bound closure and resolve all follow-ups without external old-repository actions.
+
+2026-09-07 복구 상태: 위 구현 체크는 과거 milestone 기록이며 현재 계획의 종료 증거가 아니다. 기준선 `84d7b73`의 `20260904T072252466210Z-verify`는 95 tests와 구조적 base `5df73f7`에서 PASS였다. 하지만 이 계획의 실제 base는 `9d6d660`이며, 해당 base를 사용한 `20260904T050546323863Z-verify`는 필수 검사를 통과하고도 wide/protected 변경으로 REVIEW였다. 현재 복구 HEAD `16e6a477eaefc41ca374fd77f35f9ec61a3191a0`의 `20260904T085920448058Z-verify`도 모든 필수 검사와 110 tests를 통과했지만 protected runtime 변경으로 REVIEW였다. 이 결과들은 close-plan이 생성한 이 계획의 종료 증거가 아니다.
+
+현재 blocker는 미실행 close-plan 및 사용자 제공 REVIEW 사유 부재다. `verified_commit`, run, manifest, criterion binding을 임의로 채우지 않는다. 새 복구 PR3–PR5는 [PLAN-2026-0003](PLAN-2026-0003-complete-authority-taxonomy-recovery-pr3-pr5.md)에서 추적한다. 해당 작업 승인 자체를 REVIEW 수용 사유로 해석하지 않는다.
 
 ## Context and Orientation
 
@@ -556,7 +560,7 @@ The first full post-document suite exposed one ownership-parity omission: packag
 
 #### State
 
-complete
+blocked
 
 #### Task type
 
@@ -730,6 +734,8 @@ Run commands from the repository root with `PYTHON=/Users/hakseong/.local/bin/py
 - Raw logs: `.harness/runs/` and not committed
 
 ## Outcomes and Retrospective
+
+2026-09-07 정정: 아래는 이전 후보에 관한 역사적 설명이다. 현재 종료 상태는 blocked이며 T9의 close-plan 완료 주장은 성립하지 않는다. 최신 blocker와 복구 계획 연결은 Progress의 기록을 따른다.
 
 T1-T9 delivered the requested repository-native lifecycle, deterministic evidence model, current/generated documentation, bilingual generated-structure and context-rationale guidance, local `0.2.0` packaging boundary, corrected root-symlink safety, and exact independent candidate verification without publication, release, deployment, or former-repository operations. The plan is ready for its one canonical Gate-bound `close-plan` transition after the final documentation-only candidate receives exact-SHA confirmation; closure will bind the run, manifest, verdict, verified SHA, criterion rows, and any person-supplied REVIEW reason.
 
