@@ -836,10 +836,21 @@ Main이 Python 3.13.15 대조 환경도 준비했다. 보수 전 cddd15f archive
 
 검증 한계: Darwin arm64/Python3.12.14·3.13.15의 local offline 환경이다. Linux/Windows-native/Python3.11, 외부 CI, publication/deployment, 장기간 authority retirement는 이번에 신규 확인하지 않았다. source detector는 명시 범위의 empty-command guard이며 arbitrary source inventory가 아니다. OS-level race/process isolation도 보장하지 않는다.
 
+## 사용자 항목별 검토 — 두 structural guard
+
+사용자는 T10/T11 결과를 항목별로 설명받은 뒤 다음 두 보수를 수락했다.
+
+- Task type: 지원하는 세 값의 membership 검사를 유지하고, 기존에 허용하던 legacy 필드 생략은 유지한다. legacy는 예전 형식이지 완료 상태가 아니며, 끝난 계획만 정식 종료 절차로 completed에 이동한다는 설명에 “ㅇㅋㅇㅋ그래 그렇게가자”라고 답했다. legacy 계획의 일괄 이동·주석 처리·소급 수정은 승인 내용이 아니다.
+- Core authority: expected id/kind가 잘못된 문서는 context에서도 authority 출력 전에 거부하고 정상 active/draft/include-drafts·legacy 흐름은 유지한다는 설명에 “ㅇㅇ 그래 sonnet 작업시켜”라고 답했다. 구현은 이미 T10에서 완료했으므로 중복 보수 대신 Sonnet에 현재 후보와 기존 검증 근거의 bounded 최종 대조를 맡긴다.
+
+Sonnet 후속 대조 완료: 현재 HEAD `d70a7a038c25a22a46aaa9dc29c942c178c4aaa3`와 제품 후보 `78b935e9d71e58d9084ade788bccf777bdcecaa5`의 차이는 이 계획 기록뿐이다. 두 runtime guard 및 회귀가 유지되며 기존 canonical run의 target/actual/intended/base와 manifest hash가 기록에 일치한다. 추가 코드 수정이나 전체 suite 반복은 불필요하다는 recommendation을 Main이 수락했다. 원본 쓰기는 없었다.
+
+이 기록은 두 보수 내용에 대한 사람의 수락이다. 누적 Gate 전체의 REVIEW 사유, 미검증 환경 수락, 계획 공식 종료 또는 release/deployment 승인으로 확대하지 않는다. Main은 계획만 기록하고 Sonnet의 후속 대조는 원본 읽기 및 자기 임시 로그 쓰기에 한정한다. 신규 규칙·코드 변경·전체 suite 반복은 범위 밖이다.
+
 ## Follow-ups
 
 - 해결됨: 사용자 권고 채택 지시에 따라 Sonnet이 SECURITY:34 설명을 fenced 예시 보존/비ownership 및 actual malformed 거부로 정정했다. 기존 코드·테스트는 바꾸지 않았고 별도 Sonnet이 정확성을 확인했다.
 - 해결됨 / Task type P2: T9에서 확인한 strict plan-check의 unsupported type 허용은 T10의 membership guard와 회귀로 보수했다. T11 exact 후보에서 malformed rc2, 지원 type 및 비traceable legacy 필드 부재 허용을 독립 확인했다. 참조 task Acceptance 검증도 유지한다. 보수 전 재현과 영향 한정은 T9 Result에 보존한다.
 - 해결됨 / core authority P2: T9에서 확인한 wrong core id/kind의 context authority 노출은 T10에서 기존 CORE_DOCUMENT_SCHEMAS를 재사용해 보수했다. T11 exact 후보에서 wrong kind/id 각각 context와 docs-check rc2 및 authority 미노출을 확인했고 정상 active/draft/include-drafts·기존 legacy 흐름을 유지했다. 문서 보장을 약화하거나 전체 completion gate를 context에 추가하지 않았다.
-- Main/사람 판단 필요: canonical Gate REVIEW는 wide/protected runtime 변경에 따른 결과다. 현재 검증 내용·영향·복구 경로를 검토한 genuine human rationale가 없으므로 close-plan은 실행하지 않는다. 이전 계획의 REVIEW 수락을 재사용하지 않는다.
+- Main/사람 판단 필요: canonical Gate REVIEW는 누적 wide/protected 변경에 따른 결과다. 두 structural guard에 대한 사용자 수락은 위에 기록했다. 이를 누적 변경 전체와 미검증 범위에 대한 REVIEW 수락으로 확대하지 않으며 close-plan은 실행하지 않는다. 이전 계획의 REVIEW 수락도 재사용하지 않는다.
 - 보수와 검증은 local commits에 한정했다. push/release/deployment 또는 사용자 저장소 upgrade는 수행하지 않았다.
