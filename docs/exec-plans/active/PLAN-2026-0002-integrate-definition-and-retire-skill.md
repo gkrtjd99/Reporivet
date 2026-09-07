@@ -616,7 +616,7 @@ Before push, the user explicitly requested matching Korean and English README ex
 
 종료 기록 권한: Main은 이 계획과 PLAN-0003의 현재 상태·근거를 편집하고 `docs/references/harness-engineering-skill-migration.md`의 active 전용 참조 한 곳만 lifecycle 이동에 안전한 ExecPlan 기록 링크로 정정한다. reason/scope: 순차 close-plan 동안 active/completed 위치가 달라져 strict link 검사와 rollback이 발생하는 것을 방지한다. 문서 내용·요구사항은 바꾸지 않는다. 각 close-plan이 성공한 역사적 파일은 이후 재작성하지 않으며 완료 기록을 별도 commit한다.
 
-종료 준비 독립 검토: exact `9a22d27d56c02f37d3a4ae3ea50b35a61db3ee63`의 격리 archive에서 verifier가 기존 runtime의 metadata/criterion binder를 사용해 종료 후 구조 검사를 재현했다. AC-14의 Task 셀 `T2-T9`가 범위가 아닌 존재하지 않는 단일 Task ID로 해석되어 post-move plan-check가 실패하는 결함을 확인했다. Main은 이 한 셀을 실제 T2/T3/T4/T5/T6/T7/T8/T9 목록으로 풀어 썼다. 요구사항·acceptance·validator는 변경하지 않는다. 새 exact 후보의 같은 종료 후 fixture를 재검증한 뒤 실제 close-plan을 실행한다.
+종료 준비 독립 검토: exact `9a22d27d56c02f37d3a4ae3ea50b35a61db3ee63`의 격리 archive에서 verifier가 기존 runtime의 metadata/criterion binder를 사용해 종료 후 구조 검사를 재현했다. AC-14의 Task 셀 `T2-T9`가 범위가 아닌 존재하지 않는 단일 Task ID로 해석되어 post-move plan-check가 실패하는 결함을 확인했다. Main은 이 한 셀을 실제 T2/T3/T4/T5/T6/T7/T8/T9 목록으로 풀어 썼다. 요구사항·acceptance·validator는 변경하지 않는다. 독립 verifier는 수정 exact `6a2c36fc1085dc51aa00d5483bf3e6e79112df5f`를 git archive로 분리해 같은 fixture를 재검증했다. Darwin/Python 3.12.14에서 초기 상태, PLAN2의 15개 criterion binding/move, PLAN3 binding/move 각각 strict docs/plan/catalog PASS, diff check PASS, 두 base의 ancestor 관계와 구현 bytes 불변을 확인했다. 새 confirmed defect 없음으로 PASS recommendation을 반환했다. Main은 이 종료 준비 근거를 수락한다. 이 결과는 실제 canonical/close-plan이 아니라 synthetic fixture 검증임을 구분하며, 뒤따르는 이 evidence-only 기록은 코드와 criterion cells를 변경하지 않는다.
 
 ## Architecture Impact
 
