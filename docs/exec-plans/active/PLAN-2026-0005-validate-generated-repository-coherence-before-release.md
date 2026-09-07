@@ -654,7 +654,7 @@ Main canonical은 exact clean d57fc5f에서 `REPORIVET_BASE_SHA=58665a897b891b0a
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -706,13 +706,15 @@ AC-10, AC-11, AC-12
 
 #### Result
 
-구현 대기. 후보 수락과 최종 승인은 Main 소유다.
+Sonnet 단일 Implementer가 두 guard와 회귀를 구현했다. 명시 Task type은 기존 지원 집합으로 검사하고 필드 없는 legacy 계약은 유지한다. context는 CORE_DOCUMENT_SCHEMAS의 expected id/kind를 authority 출력 전에 검사한다. package/source runtime 본문을 동기화했고 변경은 두 runtime 및 tests/test_traceability.py, tests/test_authority_lifecycle.py에 한정했다.
+
+보수 전 두 malformed 회귀의 잘못된 성공을 확인했고 보수 후 거부를 확인했다. 최종 후보 전체 suite는 178 tests/80.117s OK(`/private/tmp/t10-full-suite-final.log`), ./dev/check는 178 tests/98.912s OK, run `20260907T144052929375Z-check`(`/private/tmp/t10-check-final.log`)다. 앞선 177 보고는 마지막 대조 테스트 추가 전 결과이며 최종 근거로 사용하지 않는다. git diff --check 통과, writer 종료 확인. Main은 범위와 테스트 비약화를 검토해 독립 검증 대상으로 통합한다. 최종 수락은 T11 이후다.
 
 ### T11 — Sonnet 독립 반증과 Main 최종 수락
 
 #### State
 
-blocked
+in-progress
 
 #### Task type
 

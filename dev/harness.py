@@ -354,6 +354,7 @@ TASK_REQUIRED_LABELS = (
     "Stop conditions",
     "Result",
 )
+SUPPORTED_TASK_TYPES = frozenset({"support", "implementation", "verification"})
 PRODUCT_TRACE_HEADERS = (
     "Product spec",
     "Journey",
@@ -2981,9 +2982,16 @@ def core_context_documents(errors: list[str]) -> list[DurableDocument]:
         if missing:
             errors.append(f"{relative}: missing frontmatter fields: {', '.join(missing)}")
             continue
+        expected_id, expected_kind = CORE_DOCUMENT_SCHEMAS[relative]
+        if str(metadata["id"]) != expected_id:
+            errors.append(f"{relative}: id must be '{expected_id}'")
+        if str(metadata["kind"]) != expected_kind:
+            errors.append(f"{relative}: kind must be '{expected_kind}'")
         status = str(metadata["status"]).lower()
         if status not in {"draft", "active"}:
             errors.append(f"{relative}: current-state status must be 'draft' or 'active'")
+        if str(metadata["id"]) != expected_id or str(metadata["kind"]) != expected_kind:
+            continue
         documents.append(
             DurableDocument(
                 path=path,
@@ -4047,6 +4055,11 @@ def validate_task_packets(plan: Plan, errors: list[str], *, strict: bool) -> Non
                 errors.append(f"{plan.path.relative_to(ROOT)} {task_id}: missing '{label}' field")
             else:
                 fields[label] = value
+        task_type_value = task_field(block, "Task type")
+        if task_type_value is not None:
+            task_type = task_type_value.splitlines()[0].strip().lower()
+            if task_type not in SUPPORTED_TASK_TYPES:
+                errors.append(f"{plan.path.relative_to(ROOT)} {task_id}: unsupported task type '{task_type}'")
         state = fields.get("State", "").splitlines()[0].strip().lower()
         valid_states = {"ready", "blocked", "in-progress", "complete", "failed", "cancelled"}
         if state and state not in valid_states:

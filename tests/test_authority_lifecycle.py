@@ -300,6 +300,35 @@ Established architecture authority.
             self.assertIn("`ARCHITECTURE.md`", drafts.stdout)
             self.assertIn("`docs/PRODUCT.md`", drafts.stdout)
 
+    def test_context_rejects_core_authority_with_wrong_id_or_kind(self) -> None:
+        for field, replacement, expected in (
+            ("kind", "decision", "kind must be 'product'"),
+            ("id", "PRODUCT-WRONG", "id must be 'PRODUCT'"),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                result = self.init(root)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                product = root / "docs/PRODUCT.md"
+                original = product.read_text(encoding="utf-8")
+                product.write_text(
+                    original.replace(
+                        f"{field}: {'product' if field == 'kind' else 'PRODUCT'}",
+                        f"{field}: {replacement}",
+                        1,
+                    ),
+                    encoding="utf-8",
+                )
+
+                context = self.run_harness(root, "context", "--include-drafts")
+                self.assertNotEqual(context.returncode, 0)
+                self.assertIn(expected, context.stderr)
+                self.assertNotIn("PRODUCT [", context.stdout)
+
+                docs_check = self.run_harness(root, "docs-check")
+                self.assertNotEqual(docs_check.returncode, 0)
+                self.assertIn(expected, docs_check.stderr)
+
     def test_context_exposes_only_explicitly_selected_active_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()

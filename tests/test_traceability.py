@@ -394,6 +394,12 @@ The bounded behavior and evidence chain are recorded.
                     "traceability task is missing 'Task type' field",
                 ),
                 (
+                    "unsupported task type",
+                    valid_spec,
+                    valid_plan.replace("#### Task type\n\nimplementation\n\n", "#### Task type\n\nnot-a-task-type\n\n", 1),
+                    "unsupported task type 'not-a-task-type'",
+                ),
+                (
                     "implementation task without criterion",
                     valid_spec,
                     valid_plan.replace(
@@ -419,6 +425,31 @@ The bounded behavior and evidence chain are recorded.
                     check = self.run_plan_check(root)
                     self.assertNotEqual(check.returncode, 0)
                     self.assertIn(expected, check.stderr)
+
+    def test_supported_task_type_passes_and_unreferenced_unknown_type_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            _, plan = self.install_traceable_plan(root)
+            supported = self.plan_text().replace(
+                "#### Task type\n\nimplementation\n\n",
+                "#### Task type\n\nsupport\n\n",
+                1,
+            )
+            plan.write_text(supported, encoding="utf-8")
+            accepted = self.run_plan_check(root)
+            self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+
+            unreferenced_unknown = supported.replace(
+                "#### Task type\n\nsupport\n\n",
+                "#### Task type\n\nnot-a-task-type\n\n",
+                1,
+            ).replace("`T1` | `T2`", "`T2` | `T2`").replace("`T1/T2`", "`T2`")
+            plan.write_text(unreferenced_unknown, encoding="utf-8")
+            rejected = self.run_plan_check(root)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("unsupported task type 'not-a-task-type'", rejected.stderr)
 
     def test_complete_traceable_plan_requires_bound_evidence_and_review_reason(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
