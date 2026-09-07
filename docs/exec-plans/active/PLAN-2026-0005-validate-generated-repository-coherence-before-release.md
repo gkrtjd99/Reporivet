@@ -1,18 +1,18 @@
 ---
 id: PLAN-2026-0005
 kind: exec-plan
-status: in-progress
+status: blocked
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "58665a897b891b0abc721e159593725c0b71af6d"
-integrated_commit: "HEAD"
-verified_commit: "6ccade1f9fbf512dfcd2b2e24a847dc67f46f3a8"
+integrated_commit: "d57fc5fe9aa10e8ea137d34565724025f9e40f24"
+verified_commit: "d57fc5fe9aa10e8ea137d34565724025f9e40f24"
 traceability: 0
 product_spec: ""
-verification_run: "20260907T123724045668Z-verify"
-manifest_sha256: "5171ca080c3e221b444e77a3350a6d16aef0a6622b9a4ddb8bb3fb38c68d85c7"
+verification_run: "20260907T135921536448Z-verify"
+manifest_sha256: "f1c789db7aac3254e1c4d0489d53707269ee7953b02283071b784a73279301c5"
 gate_verdict: "REVIEW"
 gate_review_reason: ""
 ---
@@ -33,7 +33,9 @@ gate_review_reason: ""
 - [x] T5: 세 결함 및 raw-path 안전 보수, missing-parent 안내와 greenfield baseline 안내 정정.
 - [x] Main: exact `6ccade1` canonical 필수 6 checks 및 Python 3.12/3.13 각각 176 tests PASS.
 - [x] T6: 독립 코드 반증과 actual wheel/standalone 검증 완료. Main은 보수 범위의 코드 결과를 수락하며 아래 문서 충돌을 별도 보류한다.
-- [ ] 공식 종료·배포 판단: Gate REVIEW 및 fenced marker 현행 문서 충돌은 사람의 판단을 발명하지 않는다.
+- [x] T7: 승인된 fenced marker 설명 정정 및 관련 회귀·독립 검토 완료.
+- [x] T8/T9: 다른 현행 계약 조사와 별도 Sonnet 반증 완료. structural guard 불일치 두 건 확정.
+- [ ] 공식 종료·배포 판단: 새 confirmed 두 건은 조사만 요청받아 미보수다. Gate REVIEW 수락·배포 승인은 발명하지 않는다.
 
 ## Context and Orientation
 
@@ -518,7 +520,7 @@ Sonnet을 명시 배정해 exact base `f249f1bdd444279e4a6ab534baf4fabc29f0dd70`
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -570,13 +572,15 @@ AC-9
 
 #### Result
 
-읽기 전용 조사 대기.
+명시적 model=sonnet 두 leaf가 exact `f6cea2186a4f3d807619b4d42ab6b6f0064ed943`의 별도 archive에서 조사했다. A는 AGENTS/CLAUDE, map/PRODUCT/PLANS/QUALITY/SECURITY/SPEC-001/002/ARCHITECTURE/core-beliefs/ADR-0001/module contract와 해당 templates/runtime/tests를 대조해 후보 두 건을 보고했다. (1) PLANS:45/SPEC-002:72의 Task type 제한·검증 주장과 달리 임의 not-a-task-type이 strict plan-check rc0으로 통과한다. (2) malformed authority fail-closed 주장과 달리 PRODUCT kind=decision이 context에 active authority로 출력되지만 같은 fixture docs-check는 rc2다. A의 재현은 `/private/tmp/reporivet-t8a-role/{reproduce.sh,plan-check.log,docs-check.log}`, `/private/tmp/reporivet-t8a-core/{reproduce.sh,context.log,docs-check.log}`에 보존했다. 이후 T9가 별도 문맥과 새 exact fixture에서 두 후보를 재검증해 확정했다. A의 추가 dev/check는 Python3.9/tomllib 환경 오류였으므로 finding 근거로 쓰지 않는다.
+
+B는 lifecycle/파일 소유권/검증·Gate/배포 관련 current source와 generated contract/code/tests를 대조했다. six-kind init, generated docs/plan/architecture checks, 빈 프로젝트 verify, missing executable의 명시 오류, version-normalized runtime bytes 일치, distribution test 및 upgrade dry-run을 확인했으며 새 confirmed 충돌은 보고하지 않았다. 생성 CI의 pinned actions/contents read/explicit target/full history/HEAD 확인/verify once/evidence upload도 문서와 대조했다. 근거 `/private/tmp/reporivet-t8b-f6cea21`, `/private/tmp/reporivet-t8b-fixture/{distribution-test.log,missing-tool-check.log,upgrade-dry.log,ci/.github/workflows/}`. 비-Darwin/Python3.11/실제 외부 CI·배포/OS concurrency/human REVIEW는 미검증이다. 모든 원본 tracked 파일은 읽기 전용이었고 다른 계약을 수정하지 않았다.
 
 ### T9 — Sonnet 독립 검토 및 Main 통합 검증
 
 #### State
 
-blocked
+complete
 
 #### Task type
 
@@ -628,7 +632,13 @@ exact commit 독립 반증, Main explicit-target canonical verify 및 docs/plan/
 
 #### Result
 
-T7/T8 후보 대기.
+별도 model=sonnet Independent Verifier가 exact `d57fc5fe9aa10e8ea137d34565724025f9e40f24`의 새 Git archive `/private/tmp/t9-work/exact-d57`에서 직접 반증했다. SECURITY 정정은 initializer/ARCHITECTURE/기존 회귀와 일치하며 fenced 보존·actual malformed 거부 focused2 tests PASS(`/private/tmp/t9-work/security-focused-exact.log`)로 수락 추천했다. runtime/tests는 이전 코드 후보와 동일하며 Main은 승인된 문구 정정 결과를 수락한다.
+
+T8-A 후보 두 건은 별도 새 fixture에서도 확인됐다. A: traceable plan의 not-a-task-type이 strict plan-check rc0을 통과했다(`/private/tmp/t9-work/role-malformed-exact.log`). 참조된 malformed task의 Acceptance를 없애면 Product Trace가 rc2로 거부하므로 전체 traceability/evidence-link 우회라고 확대하지 않는다(`/private/tmp/t9-work/role-referenced-noaccept-exact.log`). 참조되지 않은 malformed packet도 허용되는 대조를 확인했다(`/private/tmp/t9-work/role-unreferenced-exact.log`). B: PRODUCT의 wrong kind와 wrong id 각각 context rc0/authority 노출, 같은 fixture docs-check rc2를 확인했다(`/private/tmp/t9-work/core-exact-root-wrongkind-context.log`, `core-exact-root-wrongkind-docs-check.log`, `core-exact-root-wrongid-context.log`, `core-exact-root-wrongid-docs-check.log`). Main은 두 건을 요구된 structural guard가 구현되지 않은 confirmed P2로 수락한다. 코드 보수는 승인된 다른 계약 조사 범위에 포함하지 않아 수행하지 않는다.
+
+Main canonical은 exact clean d57fc5f에서 `REPORIVET_BASE_SHA=58665a897b891b0abc721e159593725c0b71af6d REPORIVET_HEAD_SHA=d57fc5fe9aa10e8ea137d34565724025f9e40f24 REPORIVET_TARGET=PLAN-2026-0005 ./dev/verify`를 Python3.12.14 환경으로 실행했다. required6 checks PASS, optional smoke skipped, 전체176 tests PASS/106.232초. run `20260907T135921536448Z-verify`, manifest SHA256 `f1c789db7aac3254e1c4d0489d53707269ee7953b02283071b784a73279301c5`, Gate REVIEW(RISK_WIDE/PROTECTED_PATH_MATCH: dev/harness.py, docs/SECURITY.md). Main은 실제 manifest hash와 exact target/clean HEAD 바인딩을 assert로 확인했다. 기존 suite 통과가 새 두 실패 경로를 검증했다는 뜻은 아니다.
+
+이번 문서 수정·조사·독립 검토의 네 agent 호출은 모두 model=sonnet이었다. Main은 계획과 범위·통합·canonical 검증만 담당했으며 새 portable 모델 종속 규칙을 추가하지 않았다. 최종 verdict는 문구 정정 수락 및 두 추가 결함 확인이고 release 승인/계획 공식 종료가 아니다.
 
 ## Architecture Impact
 
@@ -681,18 +691,20 @@ Main은 세 읽기 전용 task의 관심사를 분리하고 결과 중복을 제
 
 ## 보수 단계의 현재 상태
 
-T5 구현 및 T6 독립 재검증을 완료했다. Main은 보수 전 실패/후 성공, 새 exact 후보의 독립 반증·actual wheel/standalone·두 Python 버전 및 canonical 증거를 수락한다. 아래 Outcomes/Follow-ups는 보수 후 현재 상태다. T1–T4의 당시 평가는 각 Task Result에 보존한다. fenced marker 정책의 현행 source 충돌과 genuine REVIEW 판단은 해결하지 않고 보고했다. source presence는 configured 경로, conventional source directory, 알려진 audit manifest, 지원 root regular source file을 확인한다. 비표준 중첩 경로·미지원 확장자는 운영자가 경로/명령을 설정해야 하며 새 재귀 scanner는 도입하지 않는다.
+T5/T6 보수·독립 재검증에 이어 T7의 승인된 SECURITY 문구 정정과 T8/T9의 Sonnet 계약 조사·반증까지 완료했다. 원래 fenced marker 설명 충돌은 해결했다. 현재 미해결 사항은 새로 확인한 Task type membership 검사와 context core id/kind 검사의 누락 두 건이다. 다른 계약은 조사 범위였으므로 수정하지 않았다. 아래 Outcomes/Follow-ups는 이 최신 상태이며 T1–T6의 당시 평가는 각 Task Result에 보존한다. genuine REVIEW 판단과 배포 승인은 자동 처리하지 않는다. source presence는 configured 경로, conventional source directory, 알려진 audit manifest, 지원 root regular source file을 확인한다. 비표준 중첩 경로·미지원 확장자는 운영자가 경로/명령을 설정해야 하며 새 재귀 scanner는 도입하지 않는다.
 
 Main이 Python 3.13.15 대조 환경도 준비했다. 보수 전 cddd15f archive는 최초 168 중 distribution test만 setuptools.build_meta 부재로 실패했다. 기존 로컬 setuptools84 파일을 전용 `/private/tmp/reporivet-py313-venv-EANM2w`에 복사한 뒤 전체168 tests PASS. 외부 설치나 시스템 Python 변경은 없으며 최종 보수 후보는 별도로 검사한다. 근거 `/private/tmp/reporivet-baseline-py313-QspbWb/baseline-py313-equipped.log`.
 
 ## Outcomes and Retrospective
 
-확인된 세 P2 및 추가 raw-path wrong-root 쓰기 결함은 보수했고 독립 재검증에서도 잔존 코드 결함은 발견되지 않았다. missing-parent는 안전한 사전 거부와 안내로 명확히 했고 greenfield baseline 안내도 정정했다. 원후보168 tests에서 놓친 경로를 새 회귀8개로 고정해 최종176 tests가 두 Python 버전에서 통과했다. 생성 taxonomy/authority/actual wheel/package 없는 runtime 경계도 유지했다. 코드 보수 결과는 Main이 수락하되 아래 문서 충돌 및 REVIEW 때문에 전체 release-ready 또는 공식 종료 완료를 선언하지 않는다.
+확인된 세 P2 및 추가 raw-path wrong-root 쓰기 결함은 보수했고 독립 재검증에서도 잔존 코드 결함은 발견되지 않았다. missing-parent는 안전한 사전 거부와 안내로 명확히 했고 greenfield baseline 안내도 정정했다. 원후보168 tests에서 놓친 경로를 새 회귀8개로 고정해 최종176 tests가 두 Python 버전에서 통과했다. 생성 taxonomy/authority/actual wheel/package 없는 runtime 경계도 유지했다. 기존 코드 보수 및 승인된 fenced marker 문구 정정은 Main이 수락했다. T8/T9에서 새로 확인한 아래 structural guard 결함 두 건 및 REVIEW 때문에 전체 release-ready 또는 공식 종료 완료를 선언하지 않는다.
 
 검증 한계: Darwin arm64/Python3.12.14·3.13.15의 local offline 환경이다. Linux/Windows-native/Python3.11, 외부 CI, publication/deployment, 장기간 authority retirement는 이번에 신규 확인하지 않았다. source detector는 명시 범위의 empty-command guard이며 arbitrary source inventory가 아니다. OS-level race/process isolation도 보장하지 않는다.
 
 ## Follow-ups
 
-- Main/사람 판단 필요: `docs/SECURITY.md:34`의 “malformed or fenced lookalikes fail”과 `tests/test_audit_adoption.py:884–928` 및 `initializer.py:536–581`의 fenced 예시 보존/별도 actual block append 동작이 충돌한다. Main은 두 소스를 직접 확인했다. 이번 보수 이전부터 존재한 정책 해석 문제이며, 임의의 문구 변경이나 기존 테스트 완화를 하지 않았다. 권고는 예시를 ownership으로 인정하지 않는 기존 동작을 유지하고 SECURITY 설명을 명확히 하는 것이지만, 현행 source 충돌 해결 판단 없이 적용하지 않는다. 해당 항목 acceptance는 중지 상태다.
+- 해결됨: 사용자 권고 채택 지시에 따라 Sonnet이 SECURITY:34 설명을 fenced 예시 보존/비ownership 및 actual malformed 거부로 정정했다. 기존 코드·테스트는 바꾸지 않았고 별도 Sonnet이 정확성을 확인했다.
+- Main 소유 / 미보수 P2: `docs/PLANS.md:45`와 SPEC-002:72는 지원 Task type과 parser 검증을 약속하지만 packaged/source runtime의 `validate_traceable_plan` 및 `validate_task_packets`(`dev/harness.py:3951–3968,4027–4065`)은 임의 값을 거부하지 않는다. traceable plan의 `not-a-task-type`도 strict plan-check rc0이다. 영향을 task-packet schema/일부 packet acceptance enforcement에 한정하며 참조된 task의 Product Trace 전체 우회를 주장하지 않는다. T9의 새 fixture/대조 근거가 있다. 권고는 문서의 유한 집합을 유지하고 runtime membership guard를 회귀와 함께 보수하는 것이다. 이번에는 다른 계약 조사만 요청받아 구현하지 않았다.
+- Main 소유 / 미보수 P2: SPEC-002:70–72의 malformed explicit authority fail-closed와 달리 `core_context_documents`/`command_context`(`dev/harness.py:2969–2999,6127–6139`)는 PRODUCT의 expected id/kind를 확인하지 않는다. wrong kind/id 각각 context rc0·authority 노출, 같은 fixture docs-check rc2가 재현됐다. 권고는 docs-check의 core schema와 context 진입 검증을 일치시키는 것이며 검증 약속을 문서에서 약화하지 않는다. 이번에는 코드 변경 없이 결과를 보고한다.
 - Main/사람 판단 필요: canonical Gate REVIEW는 wide/protected runtime 변경에 따른 결과다. 현재 검증 내용·영향·복구 경로를 검토한 genuine human rationale가 없으므로 close-plan은 실행하지 않는다. 이전 계획의 REVIEW 수락을 재사용하지 않는다.
 - 보수와 검증은 local commits에 한정했다. push/release/deployment 또는 사용자 저장소 upgrade는 수행하지 않았다.
