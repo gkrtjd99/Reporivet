@@ -1,13 +1,13 @@
 ---
 id: PLAN-2026-0005
 kind: exec-plan
-status: in-progress
+status: verifying
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-08
 base_commit: "58665a897b891b0abc721e159593725c0b71af6d"
-integrated_commit: "78b935e9d71e58d9084ade788bccf777bdcecaa5"
+integrated_commit: HEAD
 verified_commit: "78b935e9d71e58d9084ade788bccf777bdcecaa5"
 traceability: 0
 product_spec: ""
@@ -37,7 +37,7 @@ gate_review_reason: ""
 - [x] T8/T9: 다른 현행 계약 조사와 별도 Sonnet 반증 완료. structural guard 불일치 두 건 확정.
 - [x] T10: 사용자 지정 두 structural guard 누락 보수 및 회귀 추가, 최종178 tests PASS.
 - [x] T11: Sonnet 독립 반증·distribution/전체178 tests 및 Main exact `78b935e` canonical 필수6 checks/Python3.12·3.13 각각178 tests PASS. Main이 두 누락 보수 결과 수락.
-- [ ] 공식 종료·배포 판단: 두 누락은 해결했지만 Gate REVIEW 수락·배포 승인은 발명하지 않는다.
+- [x] 공식 종료 준비: 두 보수의 사용자 수락과 후속 종료 지시를 기록하고 모든 Task·Documentation Impact를 정리했다. 실제 종료는 clean 후보의 close-plan 검증 결과와 completion 기록에 결속하며 외부 배포는 제외한다.
 
 ## Context and Orientation
 
@@ -832,7 +832,7 @@ Main이 Python 3.13.15 대조 환경도 준비했다. 보수 전 cddd15f archive
 
 ## Outcomes and Retrospective
 
-확인된 세 P2 및 추가 raw-path wrong-root 쓰기 결함은 보수했고 독립 재검증에서도 잔존 코드 결함은 발견되지 않았다. missing-parent는 안전한 사전 거부와 안내로 명확히 했고 greenfield baseline 안내도 정정했다. 원후보168 tests에서 놓친 경로를 새 회귀8개로 고정해 최종176 tests가 두 Python 버전에서 통과했다. 생성 taxonomy/authority/actual wheel/package 없는 runtime 경계도 유지했다. 기존 코드 보수 및 승인된 fenced marker 문구 정정은 Main이 수락했다. T8/T9에서 추가 확인한 structural guard 결함 두 건도 사용자 승인 후 T10/T11에서 보수·독립 재검증했다. 새 후보 전체178 tests가 Python3.12·3.13에서 통과했고 Main이 두 보수 결과를 수락했다. Gate REVIEW와 아래 미검증 범위는 남아 있으므로 전체 release-ready 또는 공식 종료 완료를 선언하지 않는다.
+확인된 세 P2 및 추가 raw-path wrong-root 쓰기 결함은 보수했고 독립 재검증에서도 잔존 코드 결함은 발견되지 않았다. missing-parent는 안전한 사전 거부와 안내로 명확히 했고 greenfield baseline 안내도 정정했다. 원후보168 tests에서 놓친 경로를 새 회귀8개로 고정해 최종176 tests가 두 Python 버전에서 통과했다. 생성 taxonomy/authority/actual wheel/package 없는 runtime 경계도 유지했다. 기존 코드 보수 및 승인된 fenced marker 문구 정정은 Main이 수락했다. T8/T9에서 추가 확인한 structural guard 결함 두 건도 사용자 승인 후 T10/T11에서 보수·독립 재검증했다. 새 후보 전체178 tests가 Python3.12·3.13에서 통과했고 Main이 두 보수 결과를 수락했다. Gate REVIEW의 사람 수락 및 계획 종료는 아래 후속 지시에 따라 정식 절차로 처리한다. 아래 미검증 범위는 그대로 남으며 계획 종료를 전체 release-ready 또는 배포 승인으로 해석하지 않는다.
 
 검증 한계: Darwin arm64/Python3.12.14·3.13.15의 local offline 환경이다. Linux/Windows-native/Python3.11, 외부 CI, publication/deployment, 장기간 authority retirement는 이번에 신규 확인하지 않았다. source detector는 명시 범위의 empty-command guard이며 arbitrary source inventory가 아니다. OS-level race/process isolation도 보장하지 않는다.
 
@@ -847,10 +847,16 @@ Sonnet 후속 대조 완료: 현재 HEAD `d70a7a038c25a22a46aaa9dc29c942c178c4aa
 
 이 기록은 두 보수 내용에 대한 사람의 수락이다. 누적 Gate 전체의 REVIEW 사유, 미검증 환경 수락, 계획 공식 종료 또는 release/deployment 승인으로 확대하지 않는다. Main은 계획만 기록하고 Sonnet의 후속 대조는 원본 읽기 및 자기 임시 로그 쓰기에 한정한다. 신규 규칙·코드 변경·전체 suite 반복은 범위 밖이다.
 
+## 최종 종료 지시
+
+사용자는 두 보수를 항목별로 수락한 뒤, Main이 승인 기록만 남기고 공식 종료를 하지 않았다는 보고에 “야 다해야지”라고 지시했다. Main은 이를 이 계획의 남은 최종 검증·REVIEW 수락 기록·정식 종료까지 진행하라는 지시로 적용한다. 앞 절의 공식 종료 보류는 이 후속 지시로 해제한다. 외부 push/release/deployment는 기존 비목표로 유지하며 미실행 플랫폼 검증을 통과했다고 주장하지 않는다.
+
+REVIEW 수락 근거는 알려진 결함의 bounded 보수, 승인된 SECURITY 설명 정정, 두 structural guard의 사용자 항목별 수락, 별도 Sonnet 검증 및 Python3.12/3.13 각178 tests의 통과다. 누적 wide/protected 변경은 기존 계약을 복원하며 새 의존성이나 사용자 데이터 변환을 도입하지 않는다. 복구는 해당 bounded 변경의 정상 revert로 가능하다. Main은 같은 제품 코드의 clean 최종 후보에서 close-plan의 canonical 검증을 새로 실행하고 그 결과에 종료를 결속한다. 이 절차는 새 기능·추가 보수나 배포 승인이 아니다.
+
 ## Follow-ups
 
 - 해결됨: 사용자 권고 채택 지시에 따라 Sonnet이 SECURITY:34 설명을 fenced 예시 보존/비ownership 및 actual malformed 거부로 정정했다. 기존 코드·테스트는 바꾸지 않았고 별도 Sonnet이 정확성을 확인했다.
 - 해결됨 / Task type P2: T9에서 확인한 strict plan-check의 unsupported type 허용은 T10의 membership guard와 회귀로 보수했다. T11 exact 후보에서 malformed rc2, 지원 type 및 비traceable legacy 필드 부재 허용을 독립 확인했다. 참조 task Acceptance 검증도 유지한다. 보수 전 재현과 영향 한정은 T9 Result에 보존한다.
 - 해결됨 / core authority P2: T9에서 확인한 wrong core id/kind의 context authority 노출은 T10에서 기존 CORE_DOCUMENT_SCHEMAS를 재사용해 보수했다. T11 exact 후보에서 wrong kind/id 각각 context와 docs-check rc2 및 authority 미노출을 확인했고 정상 active/draft/include-drafts·기존 legacy 흐름을 유지했다. 문서 보장을 약화하거나 전체 completion gate를 context에 추가하지 않았다.
-- Main/사람 판단 필요: canonical Gate REVIEW는 누적 wide/protected 변경에 따른 결과다. 두 structural guard에 대한 사용자 수락은 위에 기록했다. 이를 누적 변경 전체와 미검증 범위에 대한 REVIEW 수락으로 확대하지 않으며 close-plan은 실행하지 않는다. 이전 계획의 REVIEW 수락도 재사용하지 않는다.
+- 종료 처리: 사용자 항목별 수락 및 후속 “야 다해야지” 지시에 따라 이 계획의 REVIEW 근거를 기록하고 정식 close-plan을 진행한다. 미검증 환경과 실제 배포는 별도이며 이전 계획의 REVIEW 수락을 재사용하지 않는다. 실제 종료 여부와 새 검증 근거는 frontmatter 및 종료 명령의 completion 기록을 따른다.
 - 보수와 검증은 local commits에 한정했다. push/release/deployment 또는 사용자 저장소 upgrade는 수행하지 않았다.
