@@ -1,13 +1,13 @@
 ---
 id: PLAN-2026-0006
 kind: exec-plan
-status: in-progress
+status: verifying
 owner: main
 area: harness
 created: 2026-09-08
 updated: 2026-09-08
 base_commit: "364a77346d542042307bdcc3f5a84602ec105c08"
-integrated_commit: ""
+integrated_commit: HEAD
 verified_commit: ""
 traceability: 0
 product_spec: ""
@@ -26,9 +26,9 @@ gate_review_reason: ""
 ## Progress
 
 - [x] exact merge 후보·기존 절차·main CI 확인.
-- [ ] offline wheel 빌드와 Sonnet의 실제 산출물 검증.
-- [ ] GitHub release 게시 및 원격 tag/download hash 확인.
-- [ ] 근거 기록과 계획 완료.
+- [x] offline wheel 빌드와 Sonnet의 실제 산출물 검증.
+- [x] GitHub release 게시 및 원격 tag/download hash 확인.
+- [x] 근거·Documentation Impact 정리 및 정식 계획 종료 후보 준비.
 
 ## Context and Orientation
 
@@ -60,7 +60,7 @@ M1은 exact artifact 검증, M2는 게시 및 read-back 검증이다. 검증 실
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -108,13 +108,13 @@ source/버전 불일치, build 실패, 기존 release/tag 충돌.
 
 #### Result
 
-main CI run 34146538306은 merge 364a773에서 Ubuntu/Python3.11.16 전체178 tests PASS, Gate REVIEW(shadow). 기존 제품 후보의 독립 검증 및 Python3.12/3.13 결과는 PLAN-0005 기록에 있다. artifact 준비 중.
+main CI run 34146538306은 merge 364a773에서 Ubuntu/Python3.11.16 전체178 tests PASS, Gate REVIEW(shadow). 기존 제품 후보의 독립 검증 및 Python3.12/3.13 결과는 PLAN-0005 기록에 있다. `/private/tmp/reporivet-release-020-H7ZI4J/source`를 exact merge의 git archive로 생성하고 offline pip wheel rc0을 확인했다. 실제 후보 `dist/reporivet-0.2.0-py3-none-any.whl`, SHA256 `b8fdfee1f2667dc9c8edb2204cb5cabeec753df8682a56ab384735bdff67dc6c`, metadata name/version/Python>=3.11 및 runtime dependency 없음 확인. build.log는 같은 stage에 보존한다.
 
 ### T2 — Sonnet actual wheel 검증
 
 #### State
 
-blocked
+complete
 
 #### Task type
 
@@ -162,13 +162,13 @@ candidate 불일치, 외부 설치 필요, 제품 결함, scope 확장.
 
 #### Result
 
-artifact 대기.
+Sonnet이 실제 wheel hash를 재확인하고 Python3.12.14 fresh venv no-index/no-deps 설치·실제 uninstall을 검증했다. wheel48 entries, source/wheel asset38개 bytes 일치, dependency/cache/bytecode/금지경로0개. CLI help/init/doctor, generated check/verify, uninstall 후 context/check/verify 성공 및 isolated import의 ModuleNotFoundError 확인. Git 없는 fixture Gate REVIEW는 한계로 구분한다. exact source distribution test1개는 기존 Python3.13 build 환경에서 PASS(7.515s). 최초 Python3.12 fresh venv의 source rebuild는 backend 부재로 환경 실패했으며 실제 wheel 실행 성공과 구분했다. /tmp symlink 거부 후 realpath 대조 정상. 로그 `/private/tmp/reporivet-pr3-fixture/logs/`. Main은 추천 PASS를 수락했다. 공개 요약은 artifact의 VERIFICATION.md다.
 
 ### T3 — Main 게시 및 read-back
 
 #### State
 
-blocked
+complete
 
 #### Task type
 
@@ -216,7 +216,7 @@ AC-3
 
 #### Result
 
-독립 검증 대기.
+https://github.com/gkrtjd99/Reporivet/releases/tag/v0.2.0 공개 완료. --target으로 merge364a773을 지정했고 git ls-remote의 실제 tag SHA도 일치했다. isDraft=false/isPrerelease=false 및 wheel/SHA256SUMS/VERIFICATION.md uploaded 상태 확인. gh release download로 세 파일을 새 경로에 내려받아 로컬 후보와 bytewise 일치 확인. wheel SHA256 b8fdfee1f2667dc9c8edb2204cb5cabeec753df8682a56ab384735bdff67dc6c, SHA256SUMS b210563fd55a220053e61be73ea7623d98df52f41937503cdca08721fa384ee8, VERIFICATION.md 52c864065ae60a17fbf1282847842a9bdd7d75eabb69dde41f83aa446937644f. Main은 AC-3을 수락했다. PyPI 및 서비스 배포는 수행하지 않았다.
 
 ## Architecture Impact
 
@@ -227,7 +227,7 @@ AC-3
 | Document | Action | Reason | Owner | Status |
 |---|---|---|---|---|
 | 이 계획 | create/update | 사용자 게시 권한·exact artifact·원격 결과 보존 | Main | resolved |
-| GitHub release notes | create | 설치 방법·검증·기존 local gate와 수동 게시 구분 | Main | pending |
+| GitHub release notes | create | 설치 방법·검증·기존 local gate와 수동 게시 구분 | Main | resolved |
 | PRODUCT/ARCHITECTURE/QUALITY/README | none | 제품 기능 및 local gate는 여전히 게시하지 않으며 수동 릴리즈는 외부 운영 기록으로 구분 | Main | resolved |
 
 ## Interfaces and Dependencies
@@ -259,7 +259,7 @@ Main CI: https://github.com/gkrtjd99/Reporivet/actions/runs/34146538306. artifac
 
 ## Outcomes and Retrospective
 
-실행 중. PyPI 게시와 서비스 배포는 수행하지 않는다.
+사용자가 승인한 GitHub 0.2.0 수동 릴리즈를 게시했고 actual wheel의 독립 검증 및 공개 asset 다운로드 일치를 확인했다. 새 코드·workflow·dependency 없이 기존 merge 후보를 배포했다. Main이 AC-1/2/3 근거를 수락한다. PyPI 인증/게시 및 서비스 배포는 수행하지 않았다. 계획 기록은 release tag의 source를 변경하지 않는다.
 
 ## Follow-ups
 
