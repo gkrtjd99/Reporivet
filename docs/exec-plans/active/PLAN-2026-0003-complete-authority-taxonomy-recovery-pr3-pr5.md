@@ -7,7 +7,7 @@ area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "16e6a477eaefc41ca374fd77f35f9ec61a3191a0"
-integrated_commit: ""
+integrated_commit: "7ad0c9c247759016660616fa6d876d7044375261"
 verified_commit: ""
 traceability: 0
 product_spec: ""
@@ -304,7 +304,9 @@ source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 
 
 2026-09-07 구현 후보 `17a684fff07d834ae0dcb30f25e8d63d3975e072` (base `31fe5ebf8e7c73f22862ce773f8522b90f27e264`): 정확한 18개 허용 경로만 변경, clean local commit. PLAN-0004 역할/분해/반증 및 PLANS delegation/result 절은 시작 후보와 byte-for-byte 보존했다. source DESIGN 의도/최소 구현→core-beliefs, ownership/argv/fail-closed/markers/Gate→ARCHITECTURE, lifecycle→README/PLANS, CLI UX/Unicode/non-goals→PRODUCT, agent 역할→기존 AGENTS/PLANS로 매핑하고 live source 링크를 교체한 뒤 retire했다. target optional visual DESIGN과 runtime/Gate/config/initializer/history는 변경하지 않았다. source CLAUDE portable payload→AGENTS exact-byte sync와 source wrapper/helper, 조사 의무·source template 정합성을 구현했다. catalog는 이미 current라 수동/자동 쓰기가 불필요했다.
 
-구현자 검증 환경: Darwin/Python 3.12.14 `/tmp/reporivet-pr3-venv`, 신규 테스트 first-red, focused 18/18 PASS, 최종 staged bytes의 `./dev/check` 166 tests/74.894초 PASS(distribution/offline install-uninstall/copied runtime 포함). sync --check/docs-index --check/docs-check/plan-check/diff-check 통과, commit 후 sync check PASS. run `.harness/runs/20260907T092143952903Z-check`, `/tmp/pr5-implementer-focused.log`, `/tmp/pr5-implementer-check-final.log`. 이 결과는 후보 evidence이며 독립 검토와 Main canonical 검증은 아직 진행 중이다.
+구현자 검증 환경: Darwin/Python 3.12.14 `/tmp/reporivet-pr3-venv`, 신규 테스트 first-red, focused 18/18 PASS, 최종 staged bytes의 `./dev/check` 166 tests/74.894초 PASS(distribution/offline install-uninstall/copied runtime 포함). sync --check/docs-index --check/docs-check/plan-check/diff-check 통과, commit 후 sync check PASS. run `.harness/runs/20260907T092143952903Z-check`, `/tmp/pr5-implementer-focused.log`, `/tmp/pr5-implementer-check-final.log`. 초기 Main canonical은 clean `278e9d0cc70708b6ffb6f8669c0cd18b45b118ed`에서 `20260907T092719288373Z-verify`, 166 tests/82.460초 pass 및 Gate REVIEW였다. 그러나 독립 verifier가 helper `abspath`의 symlink/.. lexical collapse에 의한 deterministic wrong-root AGENTS write를 재현했다. `/tmp/pr5-independent-path-repro.py`는 fixture의 link→other/child 뒤 `link/../source/dev/agent-contract-sync` 실행 시 실제 B helper가 A AGENTS를 변경하는 것을 검출한다. focused/distribution/matrix 55 tests와 추가 43 failure scenarios는 통과했고 문서 내용 보존/기존 역할 byte parity도 확인했지만 AC-5 path 계약 위반으로 이 후보는 미수락이다.
+
+보수 packet: dev/agent_contract_sync.py와 tests/test_agent_contract_sync.py만 수정한다. unsafe ancestor evidence를 잃는 abspath/lexical normalization 전에 원래 실행·root 경로의 prefix를 검사하고 symlink/..를 쓰기 전 거부한다. direct helper sync(root) 및 wrapper 실제 invocation 모두에 재현 회귀를 먼저 추가해 A/B의 bytes/mode/mtime이 보존되는지 확인한다. 안전한 일반 상대경로·다른 cwd/PYTHON override·no-op 및 기존 path/marker/partial-write 검사는 유지한다. 새 CLI/config/target support/일반 filesystem abstraction 금지. 구현 leaf 최대 10분·재위임 금지, 동일 접근 두 번 실패 중지. 보수 후보 `7ad0c9c247759016660616fa6d876d7044375261`에서 helper와 tests 두 경로만 변경했다. abspath 선행 정규화를 제거하고 상대 root는 cwd와 연결하되 원래 .. prefix를 보존하여 검사한다. 독립 repro 및 신규 direct/wrapper 각각 first-red 확인(`/tmp/pr5-path-repair-first-red.log`) 뒤 focused sync/operating 20/20 PASS(`/tmp/pr5-path-repair-focused.log`). 원 repro는 unsafe symlink를 exit 1로 거부하고 A/B 원본 bytes/mode/mtime 보존을 확인했다. 정상 relative/.. 및 wrapper no-op도 통과했다. Main은 이 diff가 허용 경계 안인지 확인했다. 보수 후 독립 verifier가 새 exact 후보로 원 reproducer와 adjacent 검사를 재실행 중이며 Main이 canonical을 다시 실행한다.
 
 ### T5 — 독립 통합 검증과 종료
 
