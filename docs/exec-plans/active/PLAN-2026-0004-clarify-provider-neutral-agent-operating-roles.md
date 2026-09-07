@@ -1,19 +1,19 @@
 ---
 id: PLAN-2026-0004
 kind: exec-plan
-status: in-progress
+status: blocked
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "1d064217da738ebc3ed593ce4aeccf365fb0cd16"
-integrated_commit: "72ce34901e8473139691a73f42b919709adaafa0"
-verified_commit: ""
+integrated_commit: "ea051d74dbfd662dabda04363b15fedd06531909"
+verified_commit: "ea051d74dbfd662dabda04363b15fedd06531909"
 traceability: 0
 product_spec: ""
-verification_run: ""
-manifest_sha256: ""
-gate_verdict: ""
+verification_run: "20260907T075423870569Z-verify"
+manifest_sha256: "0aa6c48fc28f9d4c5ac89a344f0ff98cb0f6e0b500ac88e1dbe7b6e28b26277c"
+gate_verdict: "REVIEW"
 gate_review_reason: ""
 ---
 
@@ -29,7 +29,7 @@ gate_review_reason: ""
 - [x] source 및 generated-target 운영 계약과 회귀 테스트 업데이트.
 - [x] 잘못된 메모리를 제거하고 사용자 선호를 모델 중립적으로 정리.
 - [x] 독립 검토와 clean exact-target canonical verification.
-- [ ] T4 추가 승인: Main·Lead 분해 책임과 Verifier의 적극적인 반증 의무 보강 및 새 후보 검증.
+- [x] T4 추가 승인: Main·Lead 분해 책임과 Verifier의 적극적인 반증 의무 보강, 독립 finding 보수·재검증 및 clean 후보 canonical 검증.
 - [ ] 공식 close-plan: 이번 추가 요청은 구현 승인이다. 이전 REVIEW 승인이나 공식 closure로 자동 처리하지 않는다.
 
 ## Context and Orientation
@@ -229,7 +229,7 @@ Main의 canonical run `20260907T060621364377Z-verify`는 base `1d064217da738ebc3
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -273,7 +273,11 @@ Python 3.12 venv `/tmp/reporivet-pr3-venv`에서 focused contract tests 및 diff
 
 #### Result
 
-구현 후보: `72ce34901e8473139691a73f42b919709adaafa0` (base `7b018cfceaec7598d7221ef4b6d14f463101c4b4`). 허용된 7개 경로만 변경했다. Python 3.12.14 venv에서 operating-contract focused 6 tests와 diff check 통과. Main은 변경 경로와 diff를 확인했고 별도 context의 read-only verifier에 exact 후보를 전달했다. 초기 canonical run `20260907T075130834597Z-verify`는 clean `604b366b44b4a642ca5d0085ad5e4b2f841adae1`에서 pass/REVIEW였지만, 독립 verifier는 active DESIGN의 예전 Lead 제한과 새 경계 설계 책임 간 충돌 1건을 확인했다 (focused/adjacent 46 tests 통과에도 발견). Main은 이 후보를 수락하지 않았다. DESIGN 기존 문장만 정정하고 canonical 역할 문서 링크를 추가했다. 새 회귀 테스트는 수정 전 1 fail, 수정 후 focused 7 tests PASS이며 docs-check와 diff check도 통과했다. 보수 후보를 독립 재검증하고 canonical을 다시 실행한다. 기존 Gate/closure 회귀 9 tests 및 계획 형식 검사도 통과했다. 이전 T1–T3의 증거는 이전 후보에만 적용되며 이번 추가 변경의 검증을 대신하지 않는다.
+구현 후보: `72ce34901e8473139691a73f42b919709adaafa0` (base `7b018cfceaec7598d7221ef4b6d14f463101c4b4`). 허용된 7개 경로만 변경했다. Python 3.12.14 venv에서 operating-contract focused 6 tests와 diff check 통과. Main은 변경 경로와 diff를 확인했고 별도 context의 read-only verifier에 exact 후보를 전달했다. 초기 canonical run `20260907T075130834597Z-verify`는 clean `604b366b44b4a642ca5d0085ad5e4b2f841adae1`에서 pass/REVIEW였지만, 독립 verifier는 active DESIGN의 예전 Lead 제한과 새 경계 설계 책임 간 충돌 1건을 확인했다 (focused/adjacent 46 tests 통과에도 발견). Main은 이 후보를 수락하지 않았다. DESIGN 기존 문장만 정정하고 canonical 역할 문서 링크를 추가했다. 새 회귀 테스트는 수정 전 1 fail, 수정 후 focused 7 tests PASS이며 docs-check와 diff check도 통과했다. 보수 후보 `ea051d74dbfd662dabda04363b15fedd06531909`에서 독립 verifier는 기존 finding 해결 및 새로 입증된 인접 결함 없음을 확인해 PASS recommendation을 반환했다. 독립 실행은 contract 7 + initializer 36 + traceability 4 = 47 tests PASS이며 Git blob 기반 재현으로 새 guard가 이전 DESIGN에서는 실패하고 보수본에서는 통과함을 확인했다.
+
+Main의 최종 canonical run `20260907T075423870569Z-verify`는 base `1d064217da738ebc3ed593ce4aeccf365fb0cd16`, clean actual/intended HEAD `ea051d74dbfd662dabda04363b15fedd06531909`, target `local:decomposition-falsification-contract`, TARGET_CONFIRMED다. Python 3.12.14 venv에서 필수 보안/catalog/문서/계획/architecture/project 모두 pass, 전체 155 tests/69.668초 OK, optional smoke 미설정 skipped. Gate shadow REVIEW (RISK_WIDE, PROTECTED_PATH_MATCH)는 누적 계획 범위의 AGENTS.md/dev/harness.py 변경 때문이며 이번 T4는 runtime을 수정하지 않았다. 보고서 `.harness/runs/20260907T075423870569Z-verify/report.md`, Gate `gate.json`, manifest SHA-256 `0aa6c48fc28f9d4c5ac89a344f0ff98cb0f6e0b500ac88e1dbe7b6e28b26277c`. 로그 요약용 Python 명령의 괄호 오류는 요약 명령만 수정해 기존 성공 run에서 결과를 추출했으며 canonical 검증 실패가 아니다.
+
+Main은 exact 후보의 bounded 구현 evidence를 수락한다. 사용자 구현 지시를 formal REVIEW/closure 승인으로 확대하지 않았으며 close-plan/push는 실행하지 않았다. 실제 agent 준수를 강제하는 runtime 검증은 아니고 문서 계약·parity·회귀 검증이라는 한계를 유지한다. 기존 Gate/closure 회귀 9 tests 및 계획 형식 검사도 통과했다. 이전 T1–T3의 증거는 이전 후보에만 적용되며 이번 추가 변경의 검증을 대신하지 않는다.
 
 ## Architecture Impact
 
@@ -328,7 +332,7 @@ Python 3.12 venv `/tmp/reporivet-pr3-venv`에서 focused contract tests 및 diff
 
 ## Outcomes and Retrospective
 
-T1–T3의 운영 계약·메모리·context 선택 안내 업데이트와 독립/canonical 검증은 완료했고 Main이 해당 후보의 evidence를 수락했다. 사용자 추가 승인으로 T4를 재개하여 분해 책임과 적극적 반증 의무를 구현했다. 현재 추가 후보의 독립/canonical 검증은 진행 중이며 이전 검증 metadata를 재사용하지 않는다. 기존 parser/schema·Gate·target 소유권·PR4/PR5 경계와 공식 closure 구분을 유지한다.
+T1–T3에 이어 T4의 분해 책임과 적극적 반증 의무를 구현했다. 독립 verifier가 초기 테스트 통과에도 활성 DESIGN의 잔존 계약 충돌을 찾아냈고, Main 보수 뒤 별도 재검증과 clean exact 후보의 canonical 155 tests를 통과했다. Main은 이 증거로 T4 bounded acceptance를 승인했다. 기존 parser/schema·Gate·target 소유권·PR4/PR5 경계는 유지했다. 계획의 blocked 상태는 구현 실패가 아니라 공식 REVIEW/close-plan 미처리를 뜻한다. 이 최종 증거 기록은 검증 후 plan-only 변경이며, 코드 후보를 변경하지 않는다.
 
 ## Follow-ups
 
