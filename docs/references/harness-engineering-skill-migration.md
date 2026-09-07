@@ -16,7 +16,7 @@ updated: 2026-08-29
 - Pinned commit: `dd5989d4f9de5646349b3bceec4e19806262d14d`
 - Commit timestamp: `2026-07-14T06:09:25Z`
 - Inspection mode: public, read-only GitHub API reads; no clone, fetch, checkout, write, backup, archive, or deletion
-- Reporivet plan: [`PLAN-2026-0002`](../exec-plans/active/PLAN-2026-0002-integrate-definition-and-retire-skill.md)
+- Reporivet plan: `PLAN-2026-0002` — [ExecPlan 기록](../exec-plans/)의 `active/` 또는 `completed/`에서 lifecycle 상태에 따라 확인한다.
 
 This reference records migration input, not current Reporivet behavior. Current behavior remains authoritative in Reporivet product, architecture, quality, security, and design documents.
 

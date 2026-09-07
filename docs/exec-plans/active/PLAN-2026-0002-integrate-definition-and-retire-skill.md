@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-0002
 kind: exec-plan
-status: blocked
+status: verifying
 owner: main
 area: harness
 created: 2026-08-29
@@ -35,11 +35,13 @@ Observable completion requires all acceptance criteria below, current-state docu
 - [x] Deliver one Verification Run, Gate policy, evidence-bound close-plan, and CI evidence.
 - [x] Resolve runtime parity, documentation, deterministic regression, and release packaging.
 - [x] Integrate and independently verify the clean candidate.
-- [ ] Prepare evidence-bound closure and resolve all follow-ups without external old-repository actions.
+- [x] Prepare evidence-bound closure and resolve all follow-ups without external old-repository actions.
+
+2026-09-07 종료 준비: 사용자는 두 계획의 변경 범위·검증 결과 및 REVIEW 종료 조건을 설명받은 뒤 `close plan 실행은 안되나`라고 물었고, PLAN-0002/0003을 실제 REVIEW 사유와 함께 종료하는 절차 설명에 `resume`으로 진행을 지시했다. Main은 이 직전 설명에 대한 진행 지시를 두 계획의 종료 수락으로 적용한다. 과거 PLAN-0004 승인이나 단순 개발 재개 승인을 재사용하지 않는다. 상태를 verifying으로 준비하며 실제 종료 성공 여부와 새 run/hash/SHA/criterion binding은 close-plan이 결정한다.
 
 2026-09-07 복구 상태: 위 구현 체크는 과거 milestone 기록이며 현재 계획의 종료 증거가 아니다. 기준선 `84d7b73`의 `20260904T072252466210Z-verify`는 95 tests와 구조적 base `5df73f7`에서 PASS였다. 하지만 이 계획의 실제 base는 `9d6d660`이며, 해당 base를 사용한 `20260904T050546323863Z-verify`는 필수 검사를 통과하고도 wide/protected 변경으로 REVIEW였다. 현재 복구 HEAD `16e6a477eaefc41ca374fd77f35f9ec61a3191a0`의 `20260904T085920448058Z-verify`도 모든 필수 검사와 110 tests를 통과했지만 protected runtime 변경으로 REVIEW였다. 이 결과들은 close-plan이 생성한 이 계획의 종료 증거가 아니다.
 
-현재 blocker는 미실행 close-plan 및 사용자 제공 REVIEW 사유 부재다. `verified_commit`, run, manifest, criterion binding을 임의로 채우지 않는다. 새 복구 PR3–PR5는 [PLAN-2026-0003](PLAN-2026-0003-complete-authority-taxonomy-recovery-pr3-pr5.md)에서 추적한다. 해당 작업 승인 자체를 REVIEW 수용 사유로 해석하지 않는다.
+이전 blocker는 미실행 close-plan 및 사용자 REVIEW 사유 부재였다. 위 종료 진행 지시로 REVIEW 판단을 기록하되 `verified_commit`, run, manifest, criterion binding은 여전히 close-plan 실행 전 임의로 채우지 않는다. 복구 PR3–PR5는 `PLAN-2026-0003`에서 별도로 추적하며 두 계획은 [ExecPlan 기록](../)에 유지한다. 구현 완료와 각 계획의 공식 종료 증거는 구분한다.
 
 ## Context and Orientation
 
@@ -560,7 +562,7 @@ The first full post-document suite exposed one ownership-parity omission: packag
 
 #### State
 
-blocked
+complete
 
 #### Task type
 
@@ -609,6 +611,10 @@ Preliminary candidate `f5de7ac4e8d42f16ac62f55c5edddb887b11647c` passed the inde
 Corrected clean candidate `2d5cce3589800999f823add6d68abc7d15980516` received independent `PASS_FOR_FINAL_GATE` across AC-1 through AC-15. The verifier reproduced all four former root/parent symlink cases with return code 2 and no target writes, ran the focused regression, complete offline suite 95/95, in-memory compile, security over 113 tracked paths, catalogs, strict docs/plan, architecture, package doctor, managed runtime parity, wheel/install/uninstall/package-removal coverage, and `git diff --check`, and found no remaining release-blocking defect. Plan-only terminal candidate `03a161778c504240eb1665f4f02cf1ae96022244` then received `PASS_FINAL_EXACT_SHA`, with source and test trees byte-identical to the corrected candidate.
 
 Before push, the user explicitly requested matching Korean and English README explanations of the generated directory/document structure, ownership model, selective context flow, architectural rationale, conditional surfaces, and the fact that infrastructure configuration is not generated. This documentation-only refinement remains part of the same release candidate and must retain bilingual semantic parity and exact-SHA read-only confirmation. Candidate-tree `./dev/verify` and `close-plan` remain deliberately reserved; the one canonical Verification Run, manifest binding, Gate verdict, verified SHA, criterion rows, and any human REVIEW reason remain exclusively owned by `close-plan`.
+
+2026-09-07 최종 종료 준비: 후속 PLAN-0003에서 PR3 authority, PR4 file-safety, PR5 source migration을 보수하고 각 exact 후보의 독립 검증 및 Main 수락을 기록했다. clean `1dd9b18ebdfac162d7759c2fe29410f64cde7226`의 canonical `20260907T093652505490Z-verify`는 168 tests와 필수 6 checks PASS, optional smoke 미설정 skipped였다. 이후 `75106ecdf94fc24953a243b24b7a80e68ff9bd95`까지 구현 bytes는 같고 계획 기록만 바뀌었다. 이전 T9 milestone 및 후속 독립 근거를 Main이 수락하고 task를 종료 준비 완료로 기록한다. 이는 아직 공식 close-plan 성공을 뜻하지 않는다. 이번 후보는 두 계획의 상태/사유와 이동에 필요한 참조만 수정하며 코드·테스트·Gate·CI·config는 변경하지 않는다. 종료 준비 후보의 별도 read-only 검토 후 이 계획의 실제 base `9d6d6600c54d29f7bb67dcb65eb5bffed56e337c`로 close-plan을 실행하고 criterion 15개를 새 run에 바인딩한다. 새로운 CI 실행·push·publication 또는 외부 저장소 작업은 하지 않는다.
+
+종료 기록 권한: Main은 이 계획과 PLAN-0003의 현재 상태·근거를 편집하고 `docs/references/harness-engineering-skill-migration.md`의 active 전용 참조 한 곳만 lifecycle 이동에 안전한 ExecPlan 기록 링크로 정정한다. reason/scope: 순차 close-plan 동안 active/completed 위치가 달라져 strict link 검사와 rollback이 발생하는 것을 방지한다. 문서 내용·요구사항은 바꾸지 않는다. 각 close-plan이 성공한 역사적 파일은 이후 재작성하지 않으며 완료 기록을 별도 commit한다.
 
 ## Architecture Impact
 
@@ -735,7 +741,7 @@ Run commands from the repository root with `PYTHON=/Users/hakseong/.local/bin/py
 
 ## Outcomes and Retrospective
 
-2026-09-07 정정: 아래는 이전 후보에 관한 역사적 설명이다. 현재 종료 상태는 blocked이며 T9의 close-plan 완료 주장은 성립하지 않는다. 최신 blocker와 복구 계획 연결은 Progress의 기록을 따른다.
+2026-09-07 종료 준비: 아래는 이전 후보에 관한 역사적 설명이다. 현재 상태는 verifying이며 구현·독립 검증·Main 수락과 사용자의 종료 진행 판단을 반영했다. 새 canonical run과 공식 종료는 close-plan이 수행하고 frontmatter 및 criterion table에 결과를 바인딩한다. 과거 후보의 근거를 새 종료 증거로 대체하지 않는다.
 
 T1-T9 delivered the requested repository-native lifecycle, deterministic evidence model, current/generated documentation, bilingual generated-structure and context-rationale guidance, local `0.2.0` packaging boundary, corrected root-symlink safety, and exact independent candidate verification without publication, release, deployment, or former-repository operations. The plan is ready for its one canonical Gate-bound `close-plan` transition after the final documentation-only candidate receives exact-SHA confirmation; closure will bind the run, manifest, verdict, verified SHA, criterion rows, and any person-supplied REVIEW reason.
 

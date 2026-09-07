@@ -1,13 +1,13 @@
 ---
 id: PLAN-2026-0003
 kind: exec-plan
-status: blocked
+status: verifying
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "16e6a477eaefc41ca374fd77f35f9ec61a3191a0"
-integrated_commit: "1dd9b18ebdfac162d7759c2fe29410f64cde7226"
+integrated_commit: "HEAD"
 verified_commit: "1dd9b18ebdfac162d7759c2fe29410f64cde7226"
 traceability: 0
 product_spec: ""
@@ -30,7 +30,7 @@ gate_review_reason: ""
 - [x] PR4: 현행 계약에 필요한 file-safety 보수 및 exact 후보의 독립 재검증, Main bounded acceptance.
 - [x] PR5: 자체 문서 migration, portable contract projection, release fixture 검증 및 독립 재검증, Main bounded acceptance.
 - [x] 통합 후보의 canonical verification과 두 계획의 실제 종료 상태 정리.
-- [ ] PLAN-0003의 genuine human REVIEW 사유 확보 후 공식 close-plan. PLAN-0002의 별도 종료 요건은 해당 계획에 유지한다.
+- [x] 두 계획의 종료 절차 설명에 대한 사용자 `resume` 지시를 기록하고 REVIEW 사유와 clean-candidate 종료 준비 완료. 공식 close-plan의 실행 결과는 frontmatter에 바인딩하며 PLAN-0002도 자체 base/run으로 별도 검증한다.
 
 ## Context and Orientation
 
@@ -315,7 +315,7 @@ source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 
 
 #### State
 
-blocked
+complete
 
 #### Task type
 
@@ -361,7 +361,9 @@ HEAD 불일치, 누락 evidence, BLOCK/INCONCLUSIVE 또는 사람 사유 없는 
 
 PR3/PR4/PR5의 독립 검증 및 Main bounded acceptance 완료. Main은 clean exact `1dd9b18ebdfac162d7759c2fe29410f64cde7226`에 base `16e6a477eaefc41ca374fd77f35f9ec61a3191a0`, target `local:authority-taxonomy-recovery-pr3-pr5`를 지정해 canonical `./dev/verify`를 실행했다. Darwin arm64/Python 3.12.14 환경에서 전체 168 tests/74.395초 및 필수 security/docs-index/documentation/plan/architecture/project 검사 모두 PASS, optional smoke는 미설정으로 skipped다. run `20260907T093652505490Z-verify`의 report.md/gate.json을 Main이 직접 확인했고 actual/intended HEAD 일치, clean true, TARGET_CONFIRMED를 확인했다. manifest SHA-256은 `a2de330711824b3559219e13d6e05177fced1308a215d6ece815de9fadbc6d72`다.
 
-Gate는 shadow REVIEW이며 사유는 RISK_WIDE와 PROTECTED_PATH_MATCH(AGENTS.md, dev/harness.py, docs/SECURITY.md)다. 구현·검증 acceptance는 수락하지만 이 전체 복구 변경에 대한 genuine human REVIEW 사유는 미확보이므로 T5와 계획을 blocked로 기록하고 close-plan은 실행하지 않는다. frontmatter의 evidence는 수행한 canonical 검증을 가리키며 공식 closure 증거를 주장하지 않는다. PLAN-0002도 별도 blocked/T9 및 빈 closure evidence를 유지한다. PLAN-0004 승인이나 사용자의 개발 재개 요청을 이 계획의 REVIEW 승인으로 확대하지 않는다. 이후 종료는 실제 사람 판단을 기록하고 docs/PLANS.md의 verifying/clean-candidate/close-plan 절차를 따른다. 이 마지막 변경은 계획 evidence만 기록하며 검증된 구현을 변경하지 않는다.
+위 canonical Gate는 shadow REVIEW이며 사유는 RISK_WIDE와 PROTECTED_PATH_MATCH(AGENTS.md, dev/harness.py, docs/SECURITY.md)였다. 당시에는 사람 REVIEW 사유가 없어 blocked로 기록했다. 이후 사용자는 구현·독립 재검증·168개 테스트 통과, repository-local runtime과 target project-owned bytes/provider-neutral 경계 보존, 공식 종료 조건을 설명받고 `close plan 실행은 안되나`라고 물었다. Main이 PLAN-0002/0003을 실제 REVIEW 사유와 함께 종료하는 절차를 설명하자 사용자는 `resume`으로 진행을 지시했다. Main은 이 직전 설명에 대한 수락·진행 판단을 기록하며 과거 PLAN-0004 승인이나 단순 개발 재개 지시를 재사용하지 않는다.
+
+T5는 기술 수락과 종료 준비 완료로 기록하고 계획은 verifying, integrated_commit은 HEAD로 준비한다. 변경은 두 active 계획의 상태·증거와 순차 이동에 필요한 migration reference 한 곳뿐이며 구현·테스트·Gate·CI·config는 그대로다. 종료 준비 exact 후보를 별도 read-only context에서 검토하고 PLAN-0002를 자체 base/run으로 먼저 종료한 뒤 그 완료 기록만 추가된 clean 후보에서 PLAN-0003을 자체 base/run으로 종료한다. 각 close-plan의 BLOCK/INCONCLUSIVE는 override하지 않는다. 성공 시 도구가 기존 frontmatter evidence를 새 공식 run/hash/SHA로 교체하고 completed로 이동한다. 이 준비 기록 자체는 아직 종료 성공을 주장하지 않는다.
 
 ## Architecture Impact
 
@@ -418,7 +420,7 @@ initializer와 copied stdlib runtime의 두 수명을 유지한다. 관찰 artif
 
 ## Outcomes and Retrospective
 
-PR3–PR5 구현과 독립 검증, 통합 canonical 검증은 완료했고 Main이 기술적 acceptance를 수락했다. 독립 반증은 기존 suite가 놓친 PR3 authority 경계, PR4 mutation 안전성, PR5 symlink/.. wrong-root 결함을 찾아냈으며 각각 보수 후 exact 후보를 다시 검증했다. repository-local runtime, target project-owned bytes 및 provider-neutral target 계약은 유지했다. 외부 push/CI 실행/release/deployment는 수행하지 않았다. 남은 blocker는 전체 복구 변경에 대한 genuine human REVIEW 사유와 공식 close-plan이다. PLAN-0002의 별도 종료 요건과 PLAN-0004의 이미 완료된 종료는 이 계획과 구분한다.
+PR3–PR5 구현과 독립 검증, 통합 canonical 검증은 완료했고 Main이 기술적 acceptance를 수락했다. 독립 반증은 기존 suite가 놓친 PR3 authority 경계, PR4 mutation 안전성, PR5 symlink/.. wrong-root 결함을 찾아냈으며 각각 보수 후 exact 후보를 다시 검증했다. repository-local runtime, target project-owned bytes 및 provider-neutral target 계약은 유지했다. 외부 push/CI 실행/release/deployment는 수행하지 않았다. 사용자의 두 계획 종료 절차에 대한 `resume` 지시를 반영해 verifying으로 준비했다. 공식 종료 여부는 close-plan이 새 검증 결과에 따라 결정하며 성공한 경우 frontmatter에 완료 상태와 run/hash/SHA/REVIEW 사유를 바인딩한다. PLAN-0002의 별도 종료 검증과 PLAN-0004의 이미 완료된 종료는 이 계획과 구분한다.
 
 ## Follow-ups
 
