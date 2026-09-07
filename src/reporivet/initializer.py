@@ -915,7 +915,24 @@ def command_evidence_path(root: Path, command: Sequence[str]) -> str | None:
             "package-lock.json",
         )
     elif executable in {"python", "python3", "uv", "poetry"}:
-        candidates = ("pyproject.toml", "requirements.txt", "uv.lock", "poetry.lock", "tests")
+        modules = tuple(command[index + 1] for index, value in enumerate(command[:-1]) if value == "-m")
+        module = modules[0] if modules else ""
+        if module == "ruff":
+            candidates = ("ruff.toml", "pyproject.toml")
+        elif module == "mypy":
+            candidates = ("mypy.ini", "pyproject.toml")
+        elif module == "pytest":
+            candidates = ("pytest.ini", "pyproject.toml", "tests")
+        elif module == "unittest":
+            candidates = ("tests",)
+        elif module == "pip":
+            candidates = ("pyproject.toml", "requirements.txt")
+        elif executable == "uv":
+            candidates = ("uv.lock", "pyproject.toml")
+        elif executable == "poetry":
+            candidates = ("poetry.lock", "pyproject.toml")
+        else:
+            candidates = ("pyproject.toml", "requirements.txt", "tests")
     elif executable == "go":
         candidates = ("go.mod",)
     elif executable == "cargo":

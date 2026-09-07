@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -47,6 +48,7 @@ class AuthorityLifecycleTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=10,
         )
 
     def write_decision(
@@ -297,6 +299,126 @@ Established architecture authority.
             self.assertEqual(drafts.returncode, 0, drafts.stdout + drafts.stderr)
             self.assertIn("`ARCHITECTURE.md`", drafts.stdout)
             self.assertIn("`docs/PRODUCT.md`", drafts.stdout)
+
+    def test_context_exposes_only_explicitly_selected_active_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            first = self.run_harness(root, "new-plan", "First", "authority", "--area", "fixture")
+            second = self.run_harness(root, "new-plan", "Second", "authority", "--area", "fixture")
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            first_path = first.stdout.strip()
+            second_path = second.stdout.strip()
+            first_id = Path(first_path).name.split("-first-authority.md", 1)[0]
+
+            default = self.run_harness(root, "context")
+            self.assertEqual(default.returncode, 0, default.stdout + default.stderr)
+            self.assertNotIn(first_path, default.stdout)
+            self.assertNotIn(second_path, default.stdout)
+
+            selected = self.run_harness(root, "context", "--plan", first_id)
+            self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
+            self.assertIn(first_path, selected.stdout)
+            self.assertNotIn(second_path, selected.stdout)
+
+    def test_ruff_command_candidate_uses_ruff_config_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            (root / "ruff.toml").write_text("line-length = 100\n", encoding="utf-8")
+            (root / "tests").mkdir()
+            (root / "tests/test_sample.py").write_text("# fixture\n", encoding="utf-8")
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            facts = (root / "docs/generated/repository-facts.md").read_text(encoding="utf-8")
+            ruff_rows = [line for line in facts.splitlines() if '"ruff","check"' in line]
+            unittest_rows = [line for line in facts.splitlines() if '"unittest","discover"' in line]
+            self.assertGreaterEqual(len(ruff_rows), 1)
+            self.assertTrue(all("`ruff.toml`" in line for line in ruff_rows), ruff_rows)
+            self.assertGreaterEqual(len(unittest_rows), 1)
+            self.assertTrue(all("`tests`" in line for line in unittest_rows), unittest_rows)
+
+    def test_context_rejects_incomplete_accepted_decision_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.write_decision(
+                root,
+                filename="ADR-0042-incomplete-context.md",
+                decision_id="ADR-0042",
+                status="accepted",
+                body="""## Context
+
+A choice exists.
+
+## Decision
+
+Use one option.
+""",
+            )
+
+            context = self.run_harness(root, "context")
+            self.assertNotEqual(context.returncode, 0)
+            self.assertIn("accepted decision requires at least two substantive alternatives", context.stderr)
+            self.assertIn("accepted decision requires concrete verification or enforcement", context.stderr)
+            self.assertNotIn("ADR-0042 [accepted]", context.stdout)
+
+    def test_legacy_notes_without_frontmatter_warn_and_do_not_become_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            note = root / "docs/design-docs/legacy-notes.md"
+            note.write_text("# Legacy notes\n\nNo authority metadata.\n", encoding="utf-8")
+
+            context = self.run_harness(root, "context", "--include-drafts")
+            self.assertEqual(context.returncode, 0, context.stdout + context.stderr)
+            self.assertIn("WARNING: docs/design-docs/legacy-notes.md", context.stdout)
+            self.assertIn("excluded from authority", context.stdout)
+            self.assertNotIn("`docs/design-docs/legacy-notes.md` —", context.stdout)
+
+            note.write_text("---\nid: DESIGN-BROKEN-001\nkind: design-doc\n", encoding="utf-8")
+            malformed = self.run_harness(root, "context", "--include-drafts")
+            self.assertNotEqual(malformed.returncode, 0)
+            self.assertIn("malformed frontmatter", malformed.stderr)
+
+    def test_core_context_rejects_symlink_and_nonregular_authority_without_disclosure(self) -> None:
+        for case in ("external", "dangling", "parent", "fifo"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp).resolve()
+                root = base / "root"
+                result = self.init(root)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                product = root / "docs/PRODUCT.md"
+                sentinel = "EXTERNAL-AUTHORITY-SENTINEL"
+                if case == "external":
+                    outside = base / "outside-product.md"
+                    outside.write_text(sentinel + "\n", encoding="utf-8")
+                    product.unlink()
+                    product.symlink_to(outside)
+                elif case == "dangling":
+                    product.unlink()
+                    product.symlink_to(base / "missing-product.md")
+                elif case == "parent":
+                    outside_docs = base / "outside-docs"
+                    (root / "docs").rename(outside_docs)
+                    (root / "docs").symlink_to(outside_docs, target_is_directory=True)
+                    (outside_docs / "PRODUCT.md").write_text(sentinel + "\n", encoding="utf-8")
+                else:
+                    product.unlink()
+                    os.mkfifo(product)
+
+                context = self.run_harness(root, "context", "--include-drafts")
+                self.assertNotEqual(context.returncode, 0)
+                self.assertTrue(
+                    "symlink" in context.stderr.casefold()
+                    or "not a regular file" in context.stderr.casefold(),
+                    context.stdout + context.stderr,
+                )
+                self.assertNotIn(sentinel, context.stdout)
+                self.assertNotIn(sentinel, context.stderr)
 
     def test_accepted_decision_is_included_in_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

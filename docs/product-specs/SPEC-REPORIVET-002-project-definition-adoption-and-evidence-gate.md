@@ -65,11 +65,11 @@ supersedes: []
 
 ## Authority draft and lifecycle contract
 
-- Repository scans produce path-bound evidence only: directly observed facts and mechanically derived candidates stay visibly distinct and cannot become normative authority without project-owned review.
+- Repository scans produce path-bound evidence only: directly observed facts and mechanically derived candidates stay visibly distinct, each candidate cites the configuration or repository path that actually supports it, and no candidate becomes normative authority without project-owned review.
 - Generated `PRODUCT.md` and `ARCHITECTURE.md` describe the target rather than Reporivet's harness philosophy. They remain drafts, cite generated evidence through one-line provenance, and require structural evidence-review records before baseline establishment.
-- Default context includes only active current-state/product/design/runbook authority and accepted decisions. Draft/proposed and historical authority require `--include-drafts` or `--include-history` respectively.
-- Conflict detection is deterministic and structural. Duplicate authority IDs and inconsistent explicit supersession fail; same-scope documents with different IDs are not rejected merely for overlap, and no natural-language or model-based conflict judgment is performed.
-- Accepted durable decisions require concrete reason/context, substantive alternatives and rejection rationale, and verification/enforcement. Templates also carry the investigation and revisit contract without introducing a second persisted state system.
+- Default context includes only active current-state/product/design/runbook authority, structurally valid accepted decisions, and an active plan explicitly selected with `--plan`. Draft/proposed and historical authority require `--include-drafts` or `--include-history` respectively.
+- Conflict detection is deterministic and structural. Duplicate authority IDs and inconsistent explicit supersession fail; same-scope documents with different IDs are not rejected merely for overlap, and no natural-language or model-based conflict judgment is performed. Frontmatter-free legacy notes warn and remain non-authoritative; malformed explicit authority and unsafe, symlinked, or nonregular core paths fail closed before content is read.
+- Accepted durable decisions require concrete reason/context, substantive alternatives and rejection rationale, and verification/enforcement. Context reuses the same structural validation as `docs-check` before exposing them as authority. Templates also carry the investigation and revisit contract without introducing a second persisted state system.
 
 ## Non-goals
 

@@ -2910,8 +2910,12 @@ def optional_metadata_list(metadata: dict[str, object], field: str) -> tuple[str
     return ()
 
 
-def durable_documents(errors: list[str] | None = None) -> list[DurableDocument]:
+def durable_documents(
+    errors: list[str] | None = None,
+    warnings: list[str] | None = None,
+) -> list[DurableDocument]:
     sink = errors if errors is not None else []
+    warning_sink = warnings if warnings is not None else []
     documents: list[DurableDocument] = []
     seen_ids: dict[str, Path] = {}
     for directory, expected_kind in CATALOG_AREAS.items():
@@ -2921,7 +2925,16 @@ def durable_documents(errors: list[str] | None = None) -> list[DurableDocument]:
         for path in sorted(base.rglob("*.md")):
             if path.name in {"README.md", "index.md", "_template.md"} or path.relative_to(ROOT) == DEFINITION_DRAFT:
                 continue
-            metadata, _, _ = read_frontmatter(path)
+            metadata, _, text = read_frontmatter(path)
+            if not metadata:
+                relative = path.relative_to(ROOT)
+                if text.lstrip().startswith("---"):
+                    sink.append(f"{relative}: malformed frontmatter for explicit authority document")
+                else:
+                    warning_sink.append(
+                        f"{relative}: no frontmatter; excluded from authority"
+                    )
+                continue
             required = ("id", "kind", "status", "area", "summary")
             missing = [name for name in required if not str(metadata.get(name, "")).strip()]
             if missing:
@@ -2968,8 +2981,11 @@ def core_context_documents(errors: list[str]) -> list[DurableDocument]:
     documents: list[DurableDocument] = []
     for relative in CONTEXT_CORE_DOCUMENTS:
         path = ROOT / relative
+        ensure_safe_repository_path(path)
         if not path.exists():
             continue
+        if not path.is_file():
+            raise HarnessError(f"core authority path is not a regular file: {relative}")
         metadata, _, _ = read_frontmatter(path)
         required = ("id", "kind", "status", "area", "summary")
         missing = [name for name in required if not str(metadata.get(name, "")).strip()]
@@ -4306,8 +4322,8 @@ def command_docs_check(args: argparse.Namespace) -> int:
         if not (ROOT / relative).exists():
             errors.append(f"missing required file: {relative}")
 
-    documents = durable_documents(errors)
     core_documents = core_context_documents(errors)
+    documents = durable_documents(errors, warnings)
     errors.extend(authority_conflict_errors([*core_documents, *documents]))
     validate_durable_decisions(documents, errors)
     validate_generated_baseline_review(errors, strict=strict)
@@ -6071,9 +6087,13 @@ def code_map_relevance(entry: CodeMapEntry, *, path: str, area: str) -> bool:
 def command_context(args: argparse.Namespace) -> int:
     config = load_config()
     document_errors: list[str] = []
-    durable = durable_documents(document_errors)
+    document_warnings: list[str] = []
     core = core_context_documents(document_errors)
+    durable = durable_documents(document_errors, document_warnings)
+    validate_durable_decisions(durable, document_errors)
     document_errors.extend(authority_conflict_errors([*core, *durable]))
+    for warning in document_warnings:
+        print(f"WARNING: {warning}")
     if document_errors:
         unique_errors = list(dict.fromkeys(document_errors))
         for error in unique_errors:
@@ -6187,11 +6207,13 @@ def command_context(args: argparse.Namespace) -> int:
 
     all_plans = plan_files()
     print("\n## Active plans")
-    active = [
-        plan
-        for plan in all_plans
-        if "active" in plan.path.relative_to(ROOT).parts and plan.status in ACTIVE_PLAN_STATES
-    ]
+    active = []
+    if (
+        selected_plan is not None
+        and "active" in selected_plan.path.relative_to(ROOT).parts
+        and selected_plan.status in ACTIVE_PLAN_STATES
+    ):
+        active.append(selected_plan)
     if area_filter:
         active = [plan for plan in active if str(plan.metadata.get("area", "")).casefold() == area_filter.casefold()]
     if not active:
