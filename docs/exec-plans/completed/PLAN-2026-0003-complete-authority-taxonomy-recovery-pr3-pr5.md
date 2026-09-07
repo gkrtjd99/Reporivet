@@ -1,20 +1,20 @@
 ---
 id: PLAN-2026-0003
 kind: exec-plan
-status: verifying
+status: complete
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "16e6a477eaefc41ca374fd77f35f9ec61a3191a0"
-integrated_commit: "HEAD"
-verified_commit: "1dd9b18ebdfac162d7759c2fe29410f64cde7226"
+integrated_commit: f1fa3b98d96698f2c274fe9e201f426e1210fc89
+verified_commit: f1fa3b98d96698f2c274fe9e201f426e1210fc89
 traceability: 0
 product_spec: ""
-verification_run: "20260907T093652505490Z-verify"
-manifest_sha256: "a2de330711824b3559219e13d6e05177fced1308a215d6ece815de9fadbc6d72"
+verification_run: "20260907T110032336123Z-verify"
+manifest_sha256: "7e98978f0b434c3abb72f6898992319cbe4af0c2fa1164201a7f1016c463e005"
 gate_verdict: "REVIEW"
-gate_review_reason: ""
+gate_review_reason: "사용자는 PR3 authority 분리, PR4 사용자 변경 보존과 안전한 파일 교체, PR5 source DESIGN migration 및 CLAUDE portable block에서 AGENTS로의 source-only 동기화 범위와 독립 보수 재검증·168개 테스트 통과를 설명받았다. repository-local runtime과 target project-owned bytes 및 provider-neutral 계약을 유지한 복구 변경의 REVIEW 종료 절차 설명에 resume으로 두 계획의 진행을 지시했으므로, 설명된 변경 범위와 검증 결과에 대한 수락을 이 계획의 종료 사유로 기록한다. 외부 push·release·배포는 제외하고 BLOCK 또는 INCONCLUSIVE는 종료하지 않는다."
 ---
 
 # Authority taxonomy 복구 PR3–PR5 완료
