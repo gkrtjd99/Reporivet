@@ -45,12 +45,13 @@ The repository, not a hidden conversation or external control plane, is the oper
 - Active ExecPlans are living execution state; completed plans and accepted decisions are history.
 - Structured Verification Run artifacts are inspectable evidence. Raw command logs remain ignored and disposable.
 
-## Main and Sub conventions
+## Agent role conventions
 
-- Main defines intent, acceptance, non-goals, allowed writes, protected paths, integration order, verification target, and completion.
-- Sub Agents receive one bounded Task Packet and cannot broaden scope, delegate again, change acceptance, or approve their own work.
-- Read-heavy work may be parallelized; mutable work is sequential unless paths, interfaces, and worktrees are isolated.
-- Implementation explanation is not verification evidence. REVIEW acceptance remains human-owned.
+- Main owns intent, scope, acceptance, permissions, plan state, final integration, the canonical verification target, evidence acceptance, and completion approval.
+- Small tasks omit hierarchy. Only a Task Lead explicitly designated by Main may create bounded leaf packets inside its parent packet; child writes are subsets, protected paths, acceptance, and stop conditions remain fixed, execution stays within the parent budget, and scope changes return to Main.
+- Leaf Implementers and Independent Verifiers cannot delegate or approve their own work. Delegation cannot exceed parent or host execution permissions or bypass a denied action. Beyond composing leaf packets, a Lead only schedules work, coordinates repairs, and consolidates results; it does not edit the ExecPlan or integrate and approve the candidate.
+- Read-heavy work may be parallelized. Parallel writes require disjoint paths, frozen interfaces, separate worktrees, Main integration, and fresh integrated verification.
+- Implementation explanation is not verification evidence. When an independent context is unavailable, record that verification was not performed; REVIEW acceptance remains human-owned.
 
 ## Implementation conventions
 

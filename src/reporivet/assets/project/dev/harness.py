@@ -6233,7 +6233,13 @@ def command_context(args: argparse.Namespace) -> int:
     if area_filter:
         active = [plan for plan in active if str(plan.metadata.get("area", "")).casefold() == area_filter.casefold()]
     if not active:
-        print("- None")
+        if selected_plan is None:
+            print(
+                "- No plan selected. Inspect `docs/exec-plans/active/` and rerun with "
+                "`--plan PLAN-...` when a matching plan exists. No active plan is selected automatically."
+            )
+        else:
+            print("- The selected plan is not active.")
     else:
         for plan in active:
             print(f"- `{plan.path.relative_to(ROOT)}` — {plan.title} [{plan.status}]")

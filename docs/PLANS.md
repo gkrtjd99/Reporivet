@@ -37,15 +37,33 @@ Traceability is opt-in. A plan that declares `traceability: 1` must name exactly
 - A verifying or complete traceable plan contains no unresolved placeholder in trace, task, or closure evidence.
 - Historical plans without traceability metadata remain valid and are not rewritten.
 
-## Task Packet contract
+## Operating roles and delegation
 
-Task types are `support`, `implementation`, or `verification`. Every packet records state, dependencies, outcome, non-goals, exact reads, allowed writes, protected paths, acceptance IDs, verification commands, stop conditions, and a result.
+Task types remain `support`, `implementation`, or `verification`. Every Task Packet records state, dependencies, outcome, non-goals, exact reads, allowed writes, protected paths, acceptance IDs, required capabilities and tool access, concurrency, retry and time budget, verification commands, stop conditions, and a result.
 
-Main owns plan state, acceptance, decomposition, and integration. A Sub Agent receives one bounded packet, cannot broaden its scope or delegate again, and cannot approve its own implementation. Tasks live inside the ExecPlan; do not create another durable task registry or orchestration database.
+Main owns intent, scope, non-goals, acceptance, permissions, plan writing and lifecycle, decomposition, delegation, integration order, the exact verification target, final integration, evidence acceptance, and completion approval. Small tasks omit unnecessary hierarchy; delegated work has a maximum depth of Main → Task Lead → leaf.
 
-## Main and Sub write policy
+Only an explicitly designated Task Lead may delegate within the assigned parent packet. Without new approval for each leaf, the Lead may compose and assign bounded leaf packets whose allowed writes are a subset of the parent, whose protected paths, acceptance criteria, and stop conditions are inherited unchanged, and whose execution stays within the parent budget. Beyond composing those packets, the Lead role is limited to scheduling, repair coordination, and consolidating leaf results and status for Main to record in the same ExecPlan. Scope changes return to Main; the Lead cannot change acceptance, permissions, or plan state, edit the durable ExecPlan, perform final integration, or approve completion.
 
-The Main Agent owns the plan file. Sub Agents return structured results; they do not concurrently edit shared plan state. Mutable parallelism requires separate worktrees, disjoint write paths, frozen shared interfaces, and Main-owned serialized integration.
+Leaf agents cannot delegate, broaden scope, change acceptance, or approve their own work. Delegation cannot expand authority beyond the parent packet or host execution permissions and must not be used to bypass a denied action. Implementers and Independent Verifiers are leaf roles. An Implementer owns assigned writes and focused verification. An Independent Verifier judges an exact candidate in a separate context without relying on implementer explanation. If the host cannot provide a separate context, record that independent verification was not performed rather than treating self-checks as independent evidence.
+
+Read-only work may run in parallel. Mutable work is sequential unless every parallel write has separate worktrees, disjoint write paths, frozen shared interfaces, Main-owned serialized integration, and fresh verification of the integrated commit. Focused verification belongs to the bounded task; Main owns final canonical verification of the integrated candidate and the acceptance decision.
+
+Tasks live inside the ExecPlan; do not create another durable task registry or orchestration database. Main owns the plan file, and delegated agents return concise results instead of concurrently editing shared plan state.
+
+## Result prose contract
+
+Keep the existing task states, task types, and Markdown `Result` field. Write Result prose that distinguishes candidate work, independent verification, integration, and acceptance, and includes:
+
+- status and exact target commit SHA;
+- changed paths or read-only scope;
+- execution environment, including relevant capabilities and tool access;
+- commands run and their results;
+- verification scope, results, and evidence locations;
+- blockers, unresolved issues, and residual limitations;
+- the verifier's recommendation separately from Main or human approval.
+
+When an independent context is unavailable, state that independent verification was not performed and identify the focused checks that were performed. Raw transcripts and polling history are not Result evidence.
 
 ## Documentation impact
 

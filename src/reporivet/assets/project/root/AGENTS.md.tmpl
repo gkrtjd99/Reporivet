@@ -36,15 +36,19 @@ Small, local, reversible changes may proceed without a durable plan. Create an E
 
 Use `./dev/new-plan "<title>" --area <area>`. Tasks live inside that plan; do not create a second task registry, state database, packet directory, or orchestration layer.
 
-## Main and Sub Agents
+## Agent operating roles
 
-The Main Agent owns intent, scope, non-goals, acceptance criteria, decomposition, delegation, integration order, document lifecycle, verification target, and completion.
+Roles are defined by responsibility, not runtime identity. Each Task Packet states the required capabilities, tool access, concurrency, retry, and time budget for that task.
 
-A Sub Agent receives one bounded Task Packet containing outcome, non-goals, exact reads, allowed writes, protected paths, acceptance criteria, verification commands, stop conditions, and return schema. A Sub Agent must not broaden scope, change acceptance, create durable work systems, delegate again, or approve its own work.
+- Main owns intent, scope, non-goals, acceptance criteria, permissions (allowed writes and protected paths), decomposition, delegation, plan writing and lifecycle, integration order, the verification target, final integration, evidence acceptance, and completion approval.
+- Small tasks should omit unnecessary hierarchy. When delegation is useful, the maximum depth is Main → Task Lead → leaf.
+- Only an explicitly designated Task Lead may delegate within its assigned parent Task Packet. Without further approval for each leaf, it may compose and assign bounded leaf packets whose allowed writes are a subset of the parent, whose protected paths, acceptance criteria, and stop conditions are inherited unchanged, and whose execution stays within the parent budget. Beyond composing those packets, the Lead role is limited to scheduling leaf work, coordinating repairs, and consolidating results. Scope changes return to Main; the Lead cannot change permissions or plan state, edit the durable ExecPlan, perform final integration, or approve acceptance.
+- Every leaf receives one bounded Task Packet. A leaf must not delegate, broaden scope, change acceptance, write outside allowed paths, create durable work systems, or approve its own work. Delegation cannot expand authority beyond the parent packet or host execution permissions and must not be used to bypass a denied action.
+- An Implementer owns only the assigned writes and focused verification. An Independent Verifier judges an exact candidate in a separate context without relying on implementer explanation; when the host cannot provide that separation, report that independent verification was not performed.
+- Read-only exploration, review, test analysis, and log analysis may run in parallel. Parallel writes require all of: disjoint write paths, separate Git worktrees, frozen shared interfaces, Main-owned integration, and fresh verification of the integrated commit.
+- Focused task checks provide fast feedback; Main owns the final canonical verification target and acceptance decision. Results stay concise and identify the exact target, environment, commands, verification scope, evidence, blockers, and whether a verdict is a recommendation or approval.
 
-Read-only exploration, review, test analysis, and log analysis may run in parallel. Mutable work is sequential by default. Parallel writes require disjoint paths, frozen shared interfaces, separate Git worktrees, Main-owned integration, and fresh verification of the integrated commit.
-
-Meaningful behavior changes should use separate implementation and verification contexts. Explanations are not evidence.
+Memory is auxiliary context and never overrides current project sources of truth or higher-priority execution instructions.
 
 ## Engineering invariants
 

@@ -76,6 +76,14 @@ support
 
 none
 
+#### Execution constraints
+
+- Required capabilities: TODO
+- Tool access: TODO
+- Concurrency: TODO
+- Retry budget: TODO
+- Time budget: TODO
+
 #### Outcome
 
 TODO
@@ -110,7 +118,7 @@ Conflicting sources, public-contract or data-migration impact, missing authority
 
 #### Result
 
-TODO: status, findings, evidence, proposed boundary, risks, and exact follow-ups.
+TODO: status; exact target commit SHA; changed paths or read-only scope; execution environment; commands run; verification scope; results and evidence; blockers, unresolved issues, and residual limitations; verifier recommendation when applicable; Main or human approval recorded separately.
 
 ### T2 — Implement the smallest working slice
 
@@ -125,6 +133,14 @@ implementation
 #### Depends on
 
 T1
+
+#### Execution constraints
+
+- Required capabilities: TODO
+- Tool access: TODO
+- Concurrency: TODO
+- Retry budget: TODO
+- Time budget: TODO
 
 #### Outcome
 
@@ -160,7 +176,7 @@ Allowed writes are insufficient, acceptance must change, a protected contract ch
 
 #### Result
 
-TODO: status, changed files, commit, acceptance results, commands and results, risks, and documentation proposal.
+TODO: status; exact target commit SHA; changed paths or read-only scope; execution environment; commands run; verification scope; results and evidence; blockers, unresolved issues, and residual limitations; verifier recommendation when applicable; Main or human approval recorded separately.
 
 ### T3 — Independently verify the integrated candidate
 
@@ -176,9 +192,17 @@ verification
 
 T2
 
+#### Execution constraints
+
+- Required capabilities: TODO
+- Tool access: TODO
+- Concurrency: TODO
+- Retry budget: TODO
+- Time budget: TODO
+
 #### Outcome
 
-Judge the integrated candidate against observable acceptance without relying on implementer explanation.
+Judge the exact integrated candidate in an independent context against observable acceptance without relying on implementer explanation. If the host cannot provide that context, report verification as not performed.
 
 #### Non-goals
 
@@ -210,7 +234,7 @@ The candidate commit differs from the integrated target, evidence is unavailable
 
 #### Result
 
-TODO: verified target, criterion-by-criterion pass/fail, commands, observable evidence, residual risks, and recommendation.
+TODO: status; exact target commit SHA; changed paths or read-only scope; execution environment; commands run; verification scope; results and evidence; blockers, unresolved issues, and residual limitations; verifier recommendation; Main or human approval recorded separately. If an independent context was unavailable, state that independent verification was not performed.
 
 ## Architecture Impact
 

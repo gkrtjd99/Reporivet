@@ -10,6 +10,8 @@ This directory is the version-controlled record system for product intent, archi
 4. Follow the selected plan's context and Task Packet rather than scanning all documents.
 5. Expand the search only when evidence shows the current context is insufficient.
 
+With no `--plan`, context reports that no plan is selected; inspect [`exec-plans/active/`](exec-plans/active/) and rerun with `--plan PLAN-...` when a matching plan exists. It does not select or reveal an active plan automatically.
+
 ## Stable entry points
 
 | Need | Read |

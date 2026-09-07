@@ -315,13 +315,47 @@ Established architecture authority.
 
             default = self.run_harness(root, "context")
             self.assertEqual(default.returncode, 0, default.stdout + default.stderr)
+            self.assertIn("No plan selected.", default.stdout)
+            self.assertIn("`docs/exec-plans/active/`", default.stdout)
+            self.assertIn("`--plan PLAN-...`", default.stdout)
             self.assertNotIn(first_path, default.stdout)
             self.assertNotIn(second_path, default.stdout)
+            self.assertNotIn("First authority", default.stdout)
+            self.assertNotIn("Second authority", default.stdout)
 
             selected = self.run_harness(root, "context", "--plan", first_id)
             self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
+            self.assertNotIn("No plan selected.", selected.stdout)
             self.assertIn(first_path, selected.stdout)
             self.assertNotIn(second_path, selected.stdout)
+            self.assertNotIn("Second authority", selected.stdout)
+
+    def test_context_history_listing_remains_explicit_and_separate_from_plan_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            created = self.run_harness(root, "new-plan", "Historical", "fixture", "--area", "fixture")
+            self.assertEqual(created.returncode, 0, created.stdout + created.stderr)
+            active_path = root / created.stdout.strip()
+            historical_path = root / "docs/exec-plans/completed" / active_path.name
+            historical_path.write_text(
+                active_path.read_text(encoding="utf-8").replace("status: proposed", "status: cancelled", 1),
+                encoding="utf-8",
+            )
+            active_path.unlink()
+
+            default = self.run_harness(root, "context")
+            self.assertEqual(default.returncode, 0, default.stdout + default.stderr)
+            self.assertIn("No plan selected.", default.stdout)
+            self.assertNotIn(historical_path.name, default.stdout)
+            self.assertNotIn("Historical fixture", default.stdout)
+
+            history = self.run_harness(root, "context", "--include-history")
+            self.assertEqual(history.returncode, 0, history.stdout + history.stderr)
+            self.assertIn("No plan selected.", history.stdout)
+            self.assertIn(str(historical_path.relative_to(root)), history.stdout)
+            self.assertIn("Historical fixture", history.stdout)
 
     def test_ruff_command_candidate_uses_ruff_config_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
