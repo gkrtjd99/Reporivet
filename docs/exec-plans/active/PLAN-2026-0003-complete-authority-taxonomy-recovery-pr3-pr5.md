@@ -1,19 +1,19 @@
 ---
 id: PLAN-2026-0003
 kind: exec-plan
-status: in-progress
+status: blocked
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "16e6a477eaefc41ca374fd77f35f9ec61a3191a0"
-integrated_commit: "7ad0c9c247759016660616fa6d876d7044375261"
-verified_commit: ""
+integrated_commit: "1dd9b18ebdfac162d7759c2fe29410f64cde7226"
+verified_commit: "1dd9b18ebdfac162d7759c2fe29410f64cde7226"
 traceability: 0
 product_spec: ""
-verification_run: ""
-manifest_sha256: ""
-gate_verdict: ""
+verification_run: "20260907T093652505490Z-verify"
+manifest_sha256: "a2de330711824b3559219e13d6e05177fced1308a215d6ece815de9fadbc6d72"
+gate_verdict: "REVIEW"
 gate_review_reason: ""
 ---
 
@@ -28,8 +28,9 @@ gate_review_reason: ""
 - [x] 복구 원문과 현재 HEAD, 기존 계획의 종료 요건 확인.
 - [x] PR3: 관찰 facts, baseline questions, authority drafts와 context lifecycle 구현 및 독립 검증.
 - [x] PR4: 현행 계약에 필요한 file-safety 보수 및 exact 후보의 독립 재검증, Main bounded acceptance.
-- [ ] PR5: 자체 문서 migration, portable contract projection, release fixture 검증.
-- [ ] 통합 후보의 canonical verification과 두 계획의 종료 상태 정리.
+- [x] PR5: 자체 문서 migration, portable contract projection, release fixture 검증 및 독립 재검증, Main bounded acceptance.
+- [x] 통합 후보의 canonical verification과 두 계획의 실제 종료 상태 정리.
+- [ ] PLAN-0003의 genuine human REVIEW 사유 확보 후 공식 close-plan. PLAN-0002의 별도 종료 요건은 해당 계획에 유지한다.
 
 ## Context and Orientation
 
@@ -248,7 +249,7 @@ Main 계약: 기존 init/upgrade --dry-run은 canonical 상대경로/action/prei
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -308,11 +309,13 @@ source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 
 
 보수 packet: dev/agent_contract_sync.py와 tests/test_agent_contract_sync.py만 수정한다. unsafe ancestor evidence를 잃는 abspath/lexical normalization 전에 원래 실행·root 경로의 prefix를 검사하고 symlink/..를 쓰기 전 거부한다. direct helper sync(root) 및 wrapper 실제 invocation 모두에 재현 회귀를 먼저 추가해 A/B의 bytes/mode/mtime이 보존되는지 확인한다. 안전한 일반 상대경로·다른 cwd/PYTHON override·no-op 및 기존 path/marker/partial-write 검사는 유지한다. 새 CLI/config/target support/일반 filesystem abstraction 금지. 구현 leaf 최대 10분·재위임 금지, 동일 접근 두 번 실패 중지. 보수 후보 `7ad0c9c247759016660616fa6d876d7044375261`에서 helper와 tests 두 경로만 변경했다. abspath 선행 정규화를 제거하고 상대 root는 cwd와 연결하되 원래 .. prefix를 보존하여 검사한다. 독립 repro 및 신규 direct/wrapper 각각 first-red 확인(`/tmp/pr5-path-repair-first-red.log`) 뒤 focused sync/operating 20/20 PASS(`/tmp/pr5-path-repair-focused.log`). 원 repro는 unsafe symlink를 exit 1로 거부하고 A/B 원본 bytes/mode/mtime 보존을 확인했다. 정상 relative/.. 및 wrapper no-op도 통과했다. Main은 이 diff가 허용 경계 안인지 확인했다. 보수 후 독립 verifier가 새 exact 후보로 원 reproducer와 adjacent 검사를 재실행 중이며 Main이 canonical을 다시 실행한다.
 
+2026-09-07 보수 후 독립 재검증 완료: 별도 context verifier가 exact `7ad0c9c247759016660616fa6d876d7044375261`을 검토했고 Main canonical 후보 `1dd9b18ebdfac162d7759c2fe29410f64cde7226`와 구현 bytes가 같고 계획만 다름을 확인했다. macOS arm64/Python 3.12.14 환경에서 기존 `/tmp/pr5-independent-path-repro.py`를 수정 없이 실행하여 exit 1 및 A/B contract 보존을 확인했다. `test_agent_contract_sync`, `test_agent_operating_contract`, `test_distribution`, `test_reporivet`의 57 tests/20.190초 PASS, 기존 독립 failure 43 scenarios 및 추가 root/parent/entrypoint 84 scenarios PASS, diff check PASS다. 추가 matrix는 absolute/relative, root/parent symlink, 단일·복수 `..`, wrapper/helper/API, check/write를 교차 검증했다. distribution·service/web/library/CLI·offline install/uninstall·package 제거 후 copied runtime이 포함되며 로그는 `/tmp/pr5-independent-repair-focused.log`다. tracked 쓰기·재위임 없음, 새 verified finding 없음. verifier는 AC-5/해당 AC-6 PASS를 권고했고 Main은 원 결함 해결, 기존 문서 migration·역할 보존 및 canonical 결과를 근거로 PR5 bounded acceptance를 수락한다. 이는 human REVIEW 승인이나 공식 계획 종료가 아니다.
+
 ### T5 — 독립 통합 검증과 종료
 
 #### State
 
-in-progress
+blocked
 
 #### Task type
 
@@ -356,7 +359,9 @@ HEAD 불일치, 누락 evidence, BLOCK/INCONCLUSIVE 또는 사람 사유 없는 
 
 #### Result
 
-PR3와 PR4 bounded acceptance 완료, PR5 exact 구현 후보 `17a684fff07d834ae0dcb30f25e8d63d3975e072`의 별도 context 독립 검토 진행 중이다. Main은 이 후보와 계획 기록만 포함한 clean Git 대상에 계획 base를 지정해 canonical 검증한다. PLAN-0002의 현행 blocked/T9 및 빈 closure evidence를 확인했으며 기존 기록이 미종료 상태를 정확히 표현하므로 완료로 바꾸지 않는다. PLAN-0004에 받은 REVIEW 종료 승인을 다른 계획으로 확대하지 않는다.
+PR3/PR4/PR5의 독립 검증 및 Main bounded acceptance 완료. Main은 clean exact `1dd9b18ebdfac162d7759c2fe29410f64cde7226`에 base `16e6a477eaefc41ca374fd77f35f9ec61a3191a0`, target `local:authority-taxonomy-recovery-pr3-pr5`를 지정해 canonical `./dev/verify`를 실행했다. Darwin arm64/Python 3.12.14 환경에서 전체 168 tests/74.395초 및 필수 security/docs-index/documentation/plan/architecture/project 검사 모두 PASS, optional smoke는 미설정으로 skipped다. run `20260907T093652505490Z-verify`의 report.md/gate.json을 Main이 직접 확인했고 actual/intended HEAD 일치, clean true, TARGET_CONFIRMED를 확인했다. manifest SHA-256은 `a2de330711824b3559219e13d6e05177fced1308a215d6ece815de9fadbc6d72`다.
+
+Gate는 shadow REVIEW이며 사유는 RISK_WIDE와 PROTECTED_PATH_MATCH(AGENTS.md, dev/harness.py, docs/SECURITY.md)다. 구현·검증 acceptance는 수락하지만 이 전체 복구 변경에 대한 genuine human REVIEW 사유는 미확보이므로 T5와 계획을 blocked로 기록하고 close-plan은 실행하지 않는다. frontmatter의 evidence는 수행한 canonical 검증을 가리키며 공식 closure 증거를 주장하지 않는다. PLAN-0002도 별도 blocked/T9 및 빈 closure evidence를 유지한다. PLAN-0004 승인이나 사용자의 개발 재개 요청을 이 계획의 REVIEW 승인으로 확대하지 않는다. 이후 종료는 실제 사람 판단을 기록하고 docs/PLANS.md의 verifying/clean-candidate/close-plan 절차를 따른다. 이 마지막 변경은 계획 evidence만 기록하며 검증된 구현을 변경하지 않는다.
 
 ## Architecture Impact
 
@@ -404,12 +409,16 @@ initializer와 copied stdlib runtime의 두 수명을 유지한다. 관찰 artif
 
 - 기준 SHA: `16e6a477eaefc41ca374fd77f35f9ec61a3191a0`.
 - 이전 PR2: 직접 110 tests 및 canonical verify pass, protected dev/harness.py로 REVIEW. 독립 exact-target 110 tests 및 6-kind matrix pass.
-- 이 계획의 새 구현/검증 evidence: 아직 없음.
-- raw logs는 `.harness/runs/`에 유지하며 commit하지 않는다.
+- PR3 exact `e69ecebc89846a5add8448e7b0b1006ddf2a5453`: 독립 authority 18 및 adjacent 14 tests PASS, 추가 fixture PASS; T2 근거로 AC-1/AC-2/AC-3 수락.
+- PR4 exact `24a98fc658a015f5b143a92881a0f0ba8cd5be76`: 독립 전체 155 tests, 원 결함 5 scenarios 및 추가 4 tests/5 scenarios PASS; T3 근거로 AC-4 수락.
+- PR5 exact `7ad0c9c247759016660616fa6d876d7044375261`: 독립 57 tests, 43+84 scenarios 및 원 wrong-root reproducer PASS; T4 근거로 AC-5 수락.
+- 통합 exact `1dd9b18ebdfac162d7759c2fe29410f64cde7226`: Main canonical 전체 168 tests와 필수 6 checks PASS, optional smoke skipped. AC-6의 matrix/distribution/package-removal 및 독립 검증 충족, human REVIEW 기반 종료는 별도 미충족.
+- canonical evidence: `.harness/runs/20260907T093652505490Z-verify/report.md`, 같은 run의 `gate.json`, manifest SHA-256 `a2de330711824b3559219e13d6e05177fced1308a215d6ece815de9fadbc6d72`.
+- raw logs는 `.harness/runs/` 또는 Result에 명시한 임시 경로에 유지하며 commit하지 않는다.
 
 ## Outcomes and Retrospective
 
-진행 중. 구현 완료와 Gate-bound 종료를 구분한다.
+PR3–PR5 구현과 독립 검증, 통합 canonical 검증은 완료했고 Main이 기술적 acceptance를 수락했다. 독립 반증은 기존 suite가 놓친 PR3 authority 경계, PR4 mutation 안전성, PR5 symlink/.. wrong-root 결함을 찾아냈으며 각각 보수 후 exact 후보를 다시 검증했다. repository-local runtime, target project-owned bytes 및 provider-neutral target 계약은 유지했다. 외부 push/CI 실행/release/deployment는 수행하지 않았다. 남은 blocker는 전체 복구 변경에 대한 genuine human REVIEW 사유와 공식 close-plan이다. PLAN-0002의 별도 종료 요건과 PLAN-0004의 이미 완료된 종료는 이 계획과 구분한다.
 
 ## Follow-ups
 
