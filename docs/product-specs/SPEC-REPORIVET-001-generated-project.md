@@ -79,8 +79,9 @@ Service and application profiles select `RELIABILITY.md` by default; web profile
 ## New empty repository lifecycle
 
 - Starts with `baseline = "draft"` and `configuration = "ready"` because no implementation command is being claimed.
-- Can run documentation-only `./dev/verify` while configured source paths do not exist.
-- Must add and review canonical command arrays when implementation appears.
+- Can run documentation-only `./dev/verify` while neither configured source paths nor recognized implementation evidence exist.
+- The empty-command guard also recognizes conventional source directories, known audit manifests, and supported root-level source files. It does not recursively scan arbitrary directories or turn observations into configured paths or commands. Documentation examples under `docs/` alone do not require project commands.
+- Must add and review canonical command arrays when implementation appears, including nonstandard layouts or file types the guard cannot recognize.
 - Does not receive a definition draft unless `reporivet define` is explicitly invoked.
 
 ## Existing implementation lifecycle

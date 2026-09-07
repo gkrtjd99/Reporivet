@@ -146,7 +146,7 @@ PYTHONPATH=src python3 -m reporivet --help
 
 ## 초기화
 
-새 경로도 생성할 수 있습니다.
+새 프로젝트 디렉터리를 생성할 수 있습니다. 부모 디렉터리는 먼저 만들어 두어야 하며, 대상 경로와 부모 경로의 symlink는 허용하지 않습니다. `symlink/..` 형태도 정규화 전에 거부합니다.
 
 ```bash
 reporivet init \

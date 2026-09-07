@@ -359,16 +359,20 @@ class AuditReport:
 
 def validate_root(root: Path, *, create: bool = False, dry_run: bool = False) -> Path:
     expanded = root.expanduser()
-    absolute = Path(os.path.abspath(expanded))
-    component = symlink_component(absolute)
+    raw_absolute = expanded if expanded.is_absolute() else Path.cwd() / expanded
+    # abspath가 symlink/.. 탐색을 숨기기 전에 원래 경로의 prefix를 검사한다.
+    component = symlink_component(raw_absolute)
     if component is not None:
         raise InitError(
             f"refusing to use a symlinked project root or parent: {root} "
             f"(via {component})"
         )
+    absolute = Path(os.path.abspath(raw_absolute))
     if not absolute.exists():
         if not create:
             raise InitError(f"project root does not exist: {root}")
+        if not absolute.parent.is_dir():
+            raise InitError(f"project root parent is unavailable: {absolute.parent}; create the parent directory first")
         if not dry_run:
             absolute.mkdir(parents=True, exist_ok=False)
         return absolute
@@ -561,7 +565,8 @@ def marker_line_spans(text: str, marker: str) -> list[tuple[int, int]]:
             and probe.strip(" \t") == marker
             and (not markdown_marker or indentation <= 3)
         ):
-            spans.append((offset, offset + len(content)))
+            # 줄바꿈 bytes 전체를 managed marker 범위 밖에 남긴다.
+            spans.append((offset, offset + len(probe)))
         offset += len(line)
     return spans
 
@@ -584,18 +589,6 @@ def extract_block(text: str, start: str, end: str) -> str:
     if span is None:
         raise InitError(f"template is missing managed markers: {start} / {end}")
     return text[span[0] : span[1]]
-
-
-def upsert_block_text(original: str, block: str, start: str, end: str) -> str:
-    span = managed_block_span(original, start, end)
-    if span is not None:
-        before = original[: span[0]].rstrip()
-        after = original[span[1] :].lstrip("\n")
-        pieces = [piece for piece in (before, block.rstrip(), after.rstrip()) if piece]
-        return "\n\n".join(pieces) + "\n"
-    if not original.strip():
-        return block.rstrip() + "\n"
-    return original.rstrip() + "\n\n" + block.rstrip() + "\n"
 
 
 def _write(path: Path, content: str, changes: ChangeSet, *, dry_run: bool, allow_update: bool) -> None:
@@ -621,21 +614,6 @@ def _write(path: Path, content: str, changes: ChangeSet, *, dry_run: bool, allow
 
 def write_if_missing(path: Path, content: str, changes: ChangeSet, *, dry_run: bool) -> None:
     _write(path, content, changes, dry_run=dry_run, allow_update=False)
-
-
-def upsert_block(
-    path: Path,
-    block: str,
-    changes: ChangeSet,
-    *,
-    start: str,
-    end: str,
-    dry_run: bool,
-) -> None:
-    ensure_safe_write_path(path)
-    original = path.read_text(encoding="utf-8") if path.exists() else ""
-    updated = upsert_block_text(original, block, start, end)
-    _write(path, updated, changes, dry_run=dry_run, allow_update=True)
 
 
 def upsert_block_text_preserving(original: str, block: str, start: str, end: str) -> str:
@@ -1154,7 +1132,7 @@ def build_config(
         f"kind = {toml_string(kind)}",
         f"primary_language = {toml_string(language)}",
         f"runtime = {toml_string(runtime)}",
-        'baseline = "draft" # change to "established" after PLAN-0000 is complete',
+        'baseline = "draft" # establish after reviewing current-state documents and confirming canonical commands',
         f'configuration = "{configuration}"',
         'default_branch = "main"',
         "",
@@ -1313,13 +1291,15 @@ def managed_files(with_ci: bool) -> dict[str, str]:
 
 def validate_audit_root(root: Path) -> Path:
     expanded = root.expanduser()
-    absolute = Path(os.path.abspath(expanded))
-    component = symlink_component(absolute)
+    raw_absolute = expanded if expanded.is_absolute() else Path.cwd() / expanded
+    # abspath가 symlink/.. 탐색을 숨기기 전에 원래 경로의 prefix를 검사한다.
+    component = symlink_component(raw_absolute)
     if component is not None:
         raise InitError(
             f"refusing to audit a symlinked project root or parent: {root} "
             f"(via {component})"
         )
+    absolute = Path(os.path.abspath(raw_absolute))
     canonical = absolute.resolve(strict=False)
     if not canonical.exists():
         raise InitError(f"project root does not exist: {root}")
@@ -2425,10 +2405,13 @@ def _apply_harness_files(
         requested=capabilities,
         existing_config=existing_config,
     )
+    project = existing_config.get("project", {}) if existing_config is not None else {}
+    if not isinstance(project, dict):
+        project = {}
     values = config_values(
         root=root,
-        name=name.strip() or root.name,
-        summary=summary.strip() or "TODO: define the project purpose during baseline establishment.",
+        name=str(project.get("name", name.strip() or root.name)),
+        summary=str(project.get("summary", summary.strip() or "TODO: define the project purpose during baseline establishment.")),
         kind=kind_value,
         primary_language=primary_language,
         runtime=runtime,
@@ -2449,8 +2432,7 @@ def _apply_harness_files(
 
     agents_template = read_asset("root/AGENTS.md.tmpl", values)
     agents_block = extract_block(agents_template, AGENTS_START, AGENTS_END)
-    agents_upsert = upsert_block_preserving if mode == "adopt" else upsert_block
-    agents_upsert(
+    upsert_block_preserving(
         root / "AGENTS.md",
         agents_block,
         changes,
@@ -2460,8 +2442,7 @@ def _apply_harness_files(
     )
 
     gitignore_block = read_asset("root/gitignore.block.tmpl", values).strip()
-    gitignore_upsert = upsert_block_preserving if mode == "adopt" else upsert_block
-    gitignore_upsert(
+    upsert_block_preserving(
         root / ".gitignore",
         gitignore_block,
         changes,

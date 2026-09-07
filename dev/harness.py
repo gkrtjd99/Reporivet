@@ -4759,6 +4759,28 @@ def command_security_check(_: argparse.Namespace) -> int:
     return 0
 
 
+def project_source_exists(config: Config) -> bool:
+    """빈 명령의 보수적 guard이며 경로나 실행의 authority가 아니다."""
+    if any((ROOT / path).exists() for path in config.list_value("paths", "source")):
+        return True
+    if any((ROOT / name).is_dir() for name in AUDIT_SOURCE_DIRECTORIES):
+        return True
+    if any((ROOT / name).is_file() for name in AUDIT_MANIFEST_NAMES):
+        return True
+    # root만 검사하여 새 entry point를 찾는다. 별도 재귀 inventory를 만들거나
+    # 탐지한 경로를 프로젝트 configuration의 authority로 승격하지 않는다.
+    return any(
+        path.suffix.lower() in {
+            ".py", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx",
+            ".go", ".rs", ".java", ".kt", ".kts", ".swift", ".rb", ".php",
+            ".c", ".h", ".cc", ".cpp", ".hpp", ".cs",
+        }
+        and not path.is_symlink()
+        and path.is_file()
+        for path in ROOT.iterdir()
+    )
+
+
 def command_check(_: argparse.Namespace) -> int:
     config = load_config()
     command_security_check(argparse.Namespace())
@@ -4768,7 +4790,7 @@ def command_check(_: argparse.Namespace) -> int:
     if config.configuration != "ready":
         raise HarnessError("dev/harness.toml is still marked configuration = 'review'; confirm canonical commands first")
     commands = config.command_group("check")
-    source_exists = any((ROOT / path).exists() for path in config.list_value("paths", "source"))
+    source_exists = project_source_exists(config)
     return require_group_success(execute_group("check", commands, allow_empty=not source_exists))
 
 
@@ -4946,9 +4968,7 @@ def verification_project_check(run: VerificationRun) -> CheckResult:
         commands = config.command_group("verify")
         validate_nonrecursive_commands(commands)
         state["commands"] = commands
-        state["source_exists"] = any(
-            (ROOT / path).exists() for path in config.list_value("paths", "source")
-        )
+        state["source_exists"] = project_source_exists(config)
         print("Project verification configuration passed preflight.")
 
     preflight_result = execute_builtin_check(run, "project", required=True, action=preflight)

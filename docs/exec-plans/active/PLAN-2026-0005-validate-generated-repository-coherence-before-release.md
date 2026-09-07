@@ -7,7 +7,7 @@ area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "58665a897b891b0abc721e159593725c0b71af6d"
-integrated_commit: "58665a897b891b0abc721e159593725c0b71af6d"
+integrated_commit: "HEAD"
 verified_commit: ""
 traceability: 0
 product_spec: ""
@@ -324,7 +324,7 @@ Main은 독립 T1/T3 결과와 T2 중간 findings를 검토하고 세 P2를 exac
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -376,13 +376,15 @@ AC-5, AC-6, AC-7
 
 #### Result
 
-보수 진행 중. Implementer 결과는 후보이며 수락이 아니다.
+제품 원후보 `58665a8`/계획 commit `cddd15f`에서 시작해 허용된 다섯 경로(initializer, package/source runtime, test_reporivet, test_verification_run)를 순차 보수했다. 기존 config metadata를 AGENTS 렌더링에 사용하고, shared block updater를 preserving 경로로 통합했다. 강화한 end-marker CRLF 회귀가 발견한 CR 손실도 보수했다. check/verify는 공통 source presence guard를 사용한다. raw symlink/..는 init/define의 wrong-root 실제 쓰기로 확인돼 정규화 전 prefix 검사로 거부한다. missing-parent는 mutation 전 안내 오류로 거부하며 transaction 밖 부모를 만들지 않는다. greenfield config의 미생성 PLAN-0000 완료 지시는 baseline 검토 안내로 교체했다.
+
+보수 전 최초 네 회귀 12 failures, 강화 CRLF 세 failures, greenfield 안내 한 failure, parent preflight 네 failures를 확인했다. Main이 `/private/tmp/reporivet-t5-before.log`, `reporivet-t5-crlf-boundary-before.log`를 확인했다. 최종 Python 3.12.14 전체 176 tests OK/76.870초, `/private/tmp/reporivet-t5-final-fullsuite.log`; diff check PASS. version token 정규화 runtime SHA256 `2d0cba04c3cf7375dd36d47c4733aa783dde9369aa0312679c4ac7482248aee6`. Main은 diff와 회귀 조건을 검토해 독립 검증 후보로 수락했으며 최종 acceptance는 T6/canonical 이후다. Implementer는 commit/계획/문서/외부 쓰기를 하지 않았다.
 
 ### T6 — 독립 후보 반증과 배포 산출물 재검증
 
 #### State
 
-blocked
+in-progress
 
 #### Task type
 
@@ -445,7 +447,9 @@ exact target 불일치, 외부 설치 필요, 허용 경계 변경 필요.
 | Document | Action | Reason | Owner | Status |
 |---|---|---|---|---|
 | 이 ExecPlan | create/update | 고정 후보·검증 범위·재현 근거·후속 보수 판단 보존 | Main | resolved |
-| 제품·설계·template·completed 계획 | none | 검증만 요청받았으므로 수정하지 않음 | Main | resolved |
+| README.md / README.en.md | update | missing-parent 사전 조건과 raw symlink 경로 거부 안내 | Main | resolved |
+| SPEC-REPORIVET-001 | update | configured source 외 empty-command guard의 관찰 범위와 비권위·비재귀 한계 명시 | Main | resolved |
+| 설계·template·completed 계획 | none | 기존 경계 복원이며 새 구조나 역사 변경 없음 | Main | resolved |
 
 ## Interfaces and Dependencies
 
@@ -481,6 +485,12 @@ Main은 세 읽기 전용 task의 관심사를 분리하고 결과 중복을 제
 - 환경: Darwin arm64, Python 3.12.14 `/tmp/reporivet-pr3-venv`.
 - 이전 canonical 168 tests 통과는 기존 근거이며 이번 신규 실험과 구분한다.
 - 신규 명령/fixture/검증 결과는 각 Task Result에 기록한다.
+
+## 보수 단계의 현재 상태
+
+T5 구현은 완료했으며 Main이 후보 diff와 보수 전 실패/후 성공 근거를 검토했다. 아래 Outcomes/Follow-ups는 T1–T4 평가 당시 상태로, 확인된 세 결함 및 후속 경로 후보는 T5에서 회귀·보수했다. T6 독립 검증 및 Main 최종 canonical 수락은 아직 진행 중이다. source presence는 configured 경로, conventional source directory, 알려진 audit manifest, 지원 root regular source file을 확인한다. 비표준 중첩 경로·미지원 확장자는 운영자가 경로/명령을 설정해야 하며 새 재귀 scanner는 도입하지 않는다.
+
+Main이 Python 3.13.15 대조 환경도 준비했다. 보수 전 cddd15f archive는 최초 168 중 distribution test만 setuptools.build_meta 부재로 실패했다. 기존 로컬 setuptools84 파일을 전용 `/private/tmp/reporivet-py313-venv-EANM2w`에 복사한 뒤 전체168 tests PASS. 외부 설치나 시스템 Python 변경은 없으며 최종 보수 후보는 별도로 검사한다. 근거 `/private/tmp/reporivet-baseline-py313-QspbWb/baseline-py313-equipped.log`.
 
 ## Outcomes and Retrospective
 

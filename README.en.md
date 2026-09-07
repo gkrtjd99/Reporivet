@@ -146,7 +146,7 @@ PYTHONPATH=src python3 -m reporivet --help
 
 ## Initialization
 
-Reporivet can create a new path.
+Reporivet can create a new project directory. Create its parent directory first; symlinks in the target or its parents are not allowed. Paths containing `symlink/..` are rejected before normalization.
 
 ```bash
 reporivet init \

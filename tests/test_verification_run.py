@@ -159,6 +159,69 @@ class VerificationRunTests(unittest.TestCase):
             check=False,
         )
 
+    def test_root_source_requires_commands_without_promoting_config_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            result = self.run_cli("init", "--root", str(root), "--project-kind", "cli")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            config = root / "dev/harness.toml"
+            original = config.read_bytes()
+            # 실제 생성된 docs-only 저장소는 정상이며 project check를 건너뛴다.
+            for command in ("check", "verify"):
+                empty = self.run_harness(root, command)
+                self.assertEqual(empty.returncode, 0, empty.stdout + empty.stderr)
+            project = json.loads((self.verification_runs(root)[-1] / "checks/06-project.json").read_text())
+            self.assertEqual(project["status"], "skipped")
+            (root / "main.py").write_text("def broken(:\n", encoding="utf-8")
+            for command in ("check", "verify"):
+                with self.subTest(command=command):
+                    rejected = self.run_harness(root, command)
+                    self.assertNotEqual(rejected.returncode, 0, rejected.stdout + rejected.stderr)
+                    if command == "check":
+                        self.assertIn("no deterministic commands configured", rejected.stdout + rejected.stderr)
+            project = json.loads((self.verification_runs(root)[-1] / "checks/06-project.json").read_text())
+            self.assertEqual(project["status"], "error")
+            self.assertIn("no deterministic commands configured", project["detail"])
+            self.assertEqual(config.read_bytes(), original)
+            # 탐지 결과가 아닌 명시된 명령을 실행 authority로 유지한다.
+            for exit_code in (0, 7):
+                argv = json.dumps([[sys.executable, "-c", f"raise SystemExit({exit_code})"]])
+                text = original.decode("utf-8").replace("check = []", f"check = {argv}")
+                text = text.replace("verify = []", f"verify = {argv}")
+                config.write_text(text, encoding="utf-8")
+                for command in ("check", "verify"):
+                    explicit = self.run_harness(root, command)
+                    self.assertEqual(explicit.returncode == 0, exit_code == 0, explicit.stdout + explicit.stderr)
+
+    def test_empty_command_guard_uses_conventional_evidence_but_not_doc_examples(self) -> None:
+        for relative in ("src", "lib", "package.json", "entry.ts"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                self.init(root)
+                config = root / "dev/harness.toml"
+                original = config.read_bytes()
+                if relative in {"src", "lib"}:
+                    (root / relative).mkdir()
+                else:
+                    (root / relative).write_text("{}\n", encoding="utf-8")
+                generated = self.run_harness(root, "code-map")
+                self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+                for command in ("check", "verify"):
+                    result = self.run_harness(root, command)
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                project = json.loads((self.verification_runs(root)[-1] / "checks/06-project.json").read_text())
+                self.assertEqual(project["status"], "error")
+                self.assertIn("no deterministic commands configured", project["detail"])
+                self.assertEqual(config.read_bytes(), original)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            self.init(root)
+            (root / "docs/example.py").write_text("# Documentation example, not a project entry point.\n")
+            (root / "notes.txt").write_text("Documentation only.\n")
+            for command in ("check", "verify"):
+                result = self.run_harness(root, command)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def verification_runs(self, root: Path) -> list[Path]:
         runs = root / ".harness/runs"
         return sorted(path for path in runs.glob("*-verify") if path.is_dir()) if runs.exists() else []

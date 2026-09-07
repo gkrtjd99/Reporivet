@@ -529,6 +529,113 @@ class ReporivetTests(unittest.TestCase):
             )
             self.assertIn("# user-owned", config.read_text(encoding="utf-8"))
 
+    def test_missing_root_parent_is_rejected_before_mutation_with_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            root = base / "missing/parent/project"
+            for operation in ("init", "define"):
+                for dry_run in (False, True):
+                    with self.subTest(operation=operation, dry_run=dry_run):
+                        extra = ("--dry-run",) if dry_run else ()
+                        result = self.run_cli(operation, "--root", str(root), *extra)
+                        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                        self.assertIn("create the parent directory first", result.stderr)
+                        self.assertEqual(list(base.iterdir()), [])
+            root.parent.mkdir(parents=True)
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((root / "dev/harness.toml").is_file())
+
+    def test_ordinary_dotdot_root_uses_existing_real_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            (base / "child").mkdir()
+            root = base / "child/../project"
+            result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue((base / "project/dev/harness.toml").is_file())
+
+    def test_greenfield_baseline_guidance_does_not_require_absent_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            self.assertEqual(self.init(root).returncode, 0)
+            config = (root / "dev/harness.toml").read_text(encoding="utf-8")
+            self.assertNotIn("after PLAN-0000 is complete", config)
+            self.assertEqual(list((root / "docs/exec-plans/active").glob("PLAN-0000*")), [])
+
+    def test_existing_config_metadata_is_authoritative_across_lifecycle(self) -> None:
+        for operation in ("define", "init", "upgrade"):
+            with self.subTest(operation=operation), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                self.assertEqual(self.init(root).returncode, 0)
+                config = root / "dev/harness.toml"
+                text = config.read_text(encoding="utf-8")
+                text = text.replace('name = "Test Project"', 'name = "Operator Project"')
+                text = text.replace(
+                    'summary = "A test project with an agent-readable repository harness."',
+                    'summary = "Operator-owned purpose."',
+                )
+                config.write_text(text, encoding="utf-8")
+                before = config.read_bytes()
+                for _ in range(2):
+                    result = self.run_cli(operation, "--root", str(root))
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(config.read_bytes(), before)
+                    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+                    self.assertIn("Operator Project", agents)
+                    self.assertIn("Operator-owned purpose.", agents)
+
+    def test_shared_blocks_preserve_exact_user_bytes_across_lifecycle(self) -> None:
+        for operation in ("init", "upgrade", "define"):
+            with self.subTest(operation=operation), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                self.assertEqual(self.init(root).returncode, 0)
+                expected = {}
+                for relative, start, end in (
+                    ("AGENTS.md", initializer.AGENTS_START, initializer.AGENTS_END),
+                    (".gitignore", initializer.GITIGNORE_START, initializer.GITIGNORE_END),
+                ):
+                    path = root / relative
+                    block = initializer.extract_block(path.read_text(encoding="utf-8"), start, end)
+                    prefix = "# 사용자 note  \t\r\n\r\n \t\r\n".encode("utf-8")
+                    suffix = b"\r\n\r\n# user suffix  \t\r\n \t"
+                    path.write_bytes(prefix + block.replace("\n", "\r\n").encode("utf-8") + suffix)
+                    expected[relative] = (prefix, suffix)
+                for _ in range(2):
+                    result = self.run_cli(operation, "--root", str(root))
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    for relative, (prefix, suffix) in expected.items():
+                        data = (root / relative).read_bytes()
+                        self.assertTrue(data.startswith(prefix), (operation, relative, data))
+                        self.assertTrue(data.endswith(suffix), (operation, relative, data))
+
+    @unittest.skipIf(os.name == "nt", "requires POSIX symlink traversal semantics")
+    def test_raw_symlink_dotdot_root_is_rejected_before_wrong_root_writes(self) -> None:
+        for operation in ("init", "define", "upgrade", "doctor", "audit"):
+            with self.subTest(operation=operation), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp).resolve()
+                lexical = base / "source"
+                physical = base / "other/source"
+                lexical.mkdir()
+                physical.mkdir(parents=True)
+                (base / "other/child").mkdir()
+                (base / "link").symlink_to(base / "other/child", target_is_directory=True)
+                raw = base / "link/../source"
+                self.assertEqual(raw.resolve(), physical)
+                if operation in {"upgrade", "doctor"}:
+                    self.assertEqual(self.init(lexical).returncode, 0)
+                before = self.filesystem_snapshot(lexical)
+                result = self.run_cli(operation, "--root", str(raw))
+                after = self.filesystem_snapshot(lexical)
+                self.assertNotEqual(
+                    result.returncode, 0,
+                    f"raw root accepted; lexical root mutated={before != after}; "
+                    f"physical root untouched={not any(physical.iterdir())}",
+                )
+                self.assertIn("symlinked project root or parent", result.stderr)
+                self.assertEqual(before, after)
+                self.assertEqual(list(physical.iterdir()), [])
+
     def test_agents_managed_block_is_idempotent_and_preserves_user_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
