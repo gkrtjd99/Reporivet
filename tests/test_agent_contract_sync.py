@@ -146,6 +146,41 @@ class AgentContractSyncTests(unittest.TestCase):
             with self.assertRaises((ValueError, OSError)):
                 helper.sync(invalid_root, check=False)
 
+    def test_symlink_dotdot_rejects_direct_and_wrapper_without_touching_either_root(self) -> None:
+        other = self.root.parent / "other"
+        (other / "child").mkdir(parents=True)
+        physical = other / "source"
+        shutil.copytree(self.root, physical)
+        (physical / "CLAUDE.md").write_bytes(self.document(b"physical new\n"))
+        (physical / "AGENTS.md").write_bytes(b"physical old\n")
+        link = self.root.parent / "link"
+        link.symlink_to(other / "child", target_is_directory=True)
+        unsafe = link / ".." / "source"
+        paths = [root / name for root in (self.root, physical) for name in ("CLAUDE.md", "AGENTS.md")]
+        before = [self.snapshot(path) for path in paths]
+        helper = self.load_helper()
+        for entry in ("direct", "wrapper"):
+            with self.subTest(entry=entry):
+                if entry == "direct":
+                    with self.assertRaisesRegex(ValueError, "unsafe directory"):
+                        helper.sync(unsafe, check=False)
+                else:
+                    result = self.run_sync(root=unsafe)
+                    self.assertNotEqual(result.returncode, 0, result.stderr)
+                self.assertEqual([self.snapshot(path) for path in paths], before)
+
+    def test_safe_relative_paths_and_dotdot_remain_supported(self) -> None:
+        helper = self.load_helper()
+        with mock.patch.object(helper.Path, "cwd", return_value=self.root.parent):
+            self.assertTrue(helper.sync(Path("source/dev/.."), check=False))
+        before = self.snapshot(self.target)
+        result = subprocess.run(
+            ["./source/dev/../dev/agent-contract-sync"], cwd=self.root.parent,
+            env={**os.environ, "PYTHON": sys.executable}, capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.snapshot(self.target), before)
+
     def test_preimage_divergence_preserves_user_edit(self) -> None:
         helper = self.load_helper()
         original = helper.tempfile.mkstemp

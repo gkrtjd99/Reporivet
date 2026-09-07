@@ -71,7 +71,10 @@ def sync(root: Path, *, check: bool) -> bool:
 
     Preimage checks are not OS-level isolation against arbitrary concurrent writers.
     """
-    root = Path(os.path.abspath(root))  # Do not resolve away symlink evidence.
+    root = Path(root)
+    if not root.is_absolute():
+        root = Path.cwd() / root
+    # Inspect every original prefix before any symlink/.. traversal can be hidden.
     safe_directories(root)
     source, target = root / "CLAUDE.md", root / "AGENTS.md"
     # Check both file types before either can be opened (notably FIFO inputs).
@@ -113,7 +116,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="report drift without writing")
     args = parser.parse_args()
     try:
-        if not sync(Path(os.path.abspath(__file__)).parent.parent, check=args.check):
+        if not sync(Path(__file__).parent.parent, check=args.check):
             print("AGENTS.md drift: run ./dev/agent-contract-sync", file=sys.stderr)
             return 1
     except (OSError, ValueError) as error:
