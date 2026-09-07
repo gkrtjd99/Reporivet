@@ -253,7 +253,7 @@ AGENTS.md, docs/PLANS.md, source/packaged ExecPlan templates, 대응 AGENTS/PLAN
 
 #### Allowed writes
 
-AGENTS.md; docs/PLANS.md; docs/exec-plans/_template.md; src/reporivet/assets/project/root/AGENTS.md.tmpl; src/reporivet/assets/project/docs/PLANS.md.tmpl; src/reporivet/assets/project/docs/exec-plans/_template.md.tmpl; tests/test_agent_operating_contract.py. Main만 이 계획을 수정한다.
+AGENTS.md; docs/PLANS.md; docs/exec-plans/_template.md; src/reporivet/assets/project/root/AGENTS.md.tmpl; src/reporivet/assets/project/docs/PLANS.md.tmpl; src/reporivet/assets/project/docs/exec-plans/_template.md.tmpl; tests/test_agent_operating_contract.py. 독립 검토가 확인한 잔존 계약 충돌 해소를 위해 Main이 docs/DESIGN.md의 기존 Lead 제한 문장만 수정한다. 이는 T1에서 이미 승인한 역할 참조 정합성 유지이며 DESIGN migration/retirement가 아니다. Main만 이 계획을 수정한다.
 
 #### Protected paths
 
@@ -273,7 +273,7 @@ Python 3.12 venv `/tmp/reporivet-pr3-venv`에서 focused contract tests 및 diff
 
 #### Result
 
-구현 후보: `72ce34901e8473139691a73f42b919709adaafa0` (base `7b018cfceaec7598d7221ef4b6d14f463101c4b4`). 허용된 7개 경로만 변경했다. Python 3.12.14 venv에서 operating-contract focused 6 tests와 diff check 통과. Main은 변경 경로와 diff를 확인했고 별도 context의 read-only verifier에 exact 후보를 전달했다. 독립 평가 및 canonical 결과는 대기 중이며 후보 통합을 acceptance로 간주하지 않는다. 기존 Gate/closure 회귀 9 tests 및 계획 형식 검사도 통과했다. 이전 T1–T3의 증거는 이전 후보에만 적용되며 이번 추가 변경의 검증을 대신하지 않는다.
+구현 후보: `72ce34901e8473139691a73f42b919709adaafa0` (base `7b018cfceaec7598d7221ef4b6d14f463101c4b4`). 허용된 7개 경로만 변경했다. Python 3.12.14 venv에서 operating-contract focused 6 tests와 diff check 통과. Main은 변경 경로와 diff를 확인했고 별도 context의 read-only verifier에 exact 후보를 전달했다. 초기 canonical run `20260907T075130834597Z-verify`는 clean `604b366b44b4a642ca5d0085ad5e4b2f841adae1`에서 pass/REVIEW였지만, 독립 verifier는 active DESIGN의 예전 Lead 제한과 새 경계 설계 책임 간 충돌 1건을 확인했다 (focused/adjacent 46 tests 통과에도 발견). Main은 이 후보를 수락하지 않았다. DESIGN 기존 문장만 정정하고 canonical 역할 문서 링크를 추가했다. 새 회귀 테스트는 수정 전 1 fail, 수정 후 focused 7 tests PASS이며 docs-check와 diff check도 통과했다. 보수 후보를 독립 재검증하고 canonical을 다시 실행한다. 기존 Gate/closure 회귀 9 tests 및 계획 형식 검사도 통과했다. 이전 T1–T3의 증거는 이전 후보에만 적용되며 이번 추가 변경의 검증을 대신하지 않는다.
 
 ## Architecture Impact
 

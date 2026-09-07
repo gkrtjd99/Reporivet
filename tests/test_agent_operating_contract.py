@@ -184,6 +184,15 @@ class AgentOperatingContractTests(unittest.TestCase):
                     self.assertIn(required, contract)
                 self.assertNotIn("Beyond composing those packets", contract)
 
+    def test_design_role_summary_defers_boundary_rules_to_canonical_contracts(self) -> None:
+        roles = section(self.read("docs/DESIGN.md"), "Agent role conventions")
+        self.assertIn("상위 계약 안의 leaf 분해·경계 설계", roles)
+        self.assertIn("[AGENTS.md](../AGENTS.md)", roles)
+        self.assertIn("[PLANS.md](PLANS.md)", roles)
+        self.assertNotIn("Beyond composing leaf packets", roles)
+        self.assertNotIn("a Lead only schedules", roles)
+        self.assertIn("does not edit the ExecPlan or integrate and approve the candidate", roles)
+
     def test_verifier_falsification_and_evidence_based_findings(self) -> None:
         plans = self.read("docs/PLANS.md")
         verifier = task_blocks(self.read("docs/exec-plans/_template.md"))["T3"]

@@ -49,7 +49,7 @@ The repository, not a hidden conversation or external control plane, is the oper
 
 - Main owns intent, scope, acceptance, permissions, plan state, final integration, the canonical verification target, evidence acceptance, and completion approval.
 - Small tasks omit hierarchy. Only a Task Lead explicitly designated by Main may create bounded leaf packets inside its parent packet; child writes are subsets, protected paths, acceptance, and stop conditions remain fixed, execution stays within the parent budget, and scope changes return to Main.
-- Leaf Implementers and Independent Verifiers cannot delegate or approve their own work. Delegation cannot exceed parent or host execution permissions or bypass a denied action. Beyond composing leaf packets, a Lead only schedules work, coordinates repairs, and consolidates results; it does not edit the ExecPlan or integrate and approve the candidate.
+- Leaf Implementers and Independent Verifiers cannot delegate or approve their own work. Delegation cannot exceed parent or host execution permissions or bypass a denied action. Lead는 상위 계약 안의 leaf 분해·경계 설계·packet 구성과 배정, 일정·보수 조정·결과 취합을 담당한다. 경계 소유권과 공유 계약 변경 절차는 [AGENTS.md](../AGENTS.md)와 [PLANS.md](PLANS.md)를 따른다. A Lead does not edit the ExecPlan or integrate and approve the candidate.
 - Read-heavy work may be parallelized. Parallel writes require disjoint paths, frozen interfaces, separate worktrees, Main integration, and fresh integrated verification.
 - Implementation explanation is not verification evidence. When an independent context is unavailable, record that verification was not performed; REVIEW acceptance remains human-owned.
 
