@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
@@ -1040,6 +1041,120 @@ class DefinitionTests(unittest.TestCase):
             self.assertEqual(docs_readme.read_bytes(), docs_before)
             self.assertEqual(product_index.read_bytes(), index_before)
 
+    def test_finalize_preserves_spec_created_after_missing_preimage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            self.assertEqual(self.define(root).returncode, 0)
+            self.write_draft(root)
+            module = self.load_runtime_module(root)
+            spec = root / module.DEFINITION_SPEC
+            original = module.capture_runtime_path
+            injected = False
+            user_bytes = b"concurrent specification\n"
+
+            def capture(path):
+                nonlocal injected
+                image = original(path)
+                if path == spec and image.kind == "missing" and not injected:
+                    spec.write_bytes(user_bytes)
+                    injected = True
+                return image
+
+            with mock.patch.object(module, "capture_runtime_path", side_effect=capture):
+                with self.assertRaisesRegex(module.HarnessError, "preimage changed before mutation"):
+                    module.command_define_finalize(module.argparse.Namespace())
+            self.assertTrue(injected)
+            self.assertEqual(spec.read_bytes(), user_bytes)
+            self.assertEqual(list((root / "docs/exec-plans/active").glob("*.md")), [])
+
+    def test_finalize_exclusively_creates_target_after_last_preimage_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            self.assertEqual(self.define(root).returncode, 0)
+            self.write_draft(root)
+            module = self.load_runtime_module(root)
+            spec = root / module.DEFINITION_SPEC
+            original = os.open
+            user_bytes = b"user won exclusive creation\n"
+            injected = False
+
+            def open_after_edit(path, flags, *args, **kwargs):
+                nonlocal injected
+                if Path(path) == spec and flags & os.O_CREAT and not injected:
+                    spec.write_bytes(user_bytes)
+                    injected = True
+                return original(path, flags, *args, **kwargs)
+
+            with mock.patch.object(module.os, "open", side_effect=open_after_edit):
+                with self.assertRaises(FileExistsError):
+                    module.command_define_finalize(module.argparse.Namespace())
+            self.assertTrue(injected)
+            self.assertEqual(spec.read_bytes(), user_bytes)
+            self.assertEqual(list((root / "docs/exec-plans/active").glob("*.md")), [])
+
+    def test_finalize_rechecks_each_catalog_before_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            self.assertEqual(self.define(root).returncode, 0)
+            self.write_draft(root)
+            module = self.load_runtime_module(root)
+            catalog = root / "docs/product-specs/index.md"
+            original = module.restore_runtime_file
+            user_bytes = b"concurrent catalog before replacement\n"
+            injected = False
+
+            def edit_before_catalog(path, expected, restored):
+                nonlocal injected
+                if path == catalog:
+                    catalog.write_bytes(user_bytes)
+                    injected = True
+                return original(path, expected, restored)
+
+            with mock.patch.object(module, "restore_runtime_file", side_effect=edit_before_catalog):
+                with self.assertRaisesRegex(module.HarnessError, "preimage changed before write"):
+                    module.command_define_finalize(module.argparse.Namespace())
+            self.assertTrue(injected)
+            self.assertEqual(catalog.read_bytes(), user_bytes)
+            self.assertFalse((root / module.DEFINITION_SPEC).exists())
+            self.assertEqual(list((root / "docs/exec-plans/active").glob("*.md")), [])
+
+    def test_finalize_does_not_adopt_immediate_user_edit_as_postimage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            self.assertEqual(self.define(root).returncode, 0)
+            self.write_draft(root)
+            module = self.load_runtime_module(root)
+            spec = root / module.DEFINITION_SPEC
+            original_text = Path.write_text
+            original_bytes = module.write_runtime_bytes
+            user_bytes = b"concurrent specification edit\n"
+            injected = False
+
+            def edit_after_text(path, text, *args, **kwargs):
+                nonlocal injected
+                result = original_text(path, text, *args, **kwargs)
+                if path == spec:
+                    spec.write_bytes(user_bytes)
+                    injected = True
+                return result
+
+            def edit_after_bytes(descriptor, content):
+                nonlocal injected
+                original_bytes(descriptor, content)
+                if spec.exists() and os.fstat(descriptor).st_ino == spec.stat().st_ino:
+                    spec.write_bytes(user_bytes)
+                    injected = True
+
+            with mock.patch.object(Path, "write_text", new=edit_after_text), mock.patch.object(
+                module, "write_runtime_bytes", side_effect=edit_after_bytes
+            ), mock.patch.object(module, "command_docs_index", side_effect=module.HarnessError("forced index failure")):
+                with self.assertRaisesRegex(module.HarnessError, "rollback incomplete") as caught:
+                    module.command_define_finalize(module.argparse.Namespace())
+            self.assertTrue(injected)
+            self.assertEqual(spec.read_bytes(), user_bytes)
+            self.assertIn(str(spec.relative_to(root)), str(caught.exception))
+            self.assertEqual(list((root / "docs/exec-plans/active").glob("*.md")), [])
+
     def test_finalize_rollback_preserves_concurrent_catalog_edit_and_reports_incomplete(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
@@ -1050,8 +1165,8 @@ class DefinitionTests(unittest.TestCase):
             catalog = root / "docs/README.md"
             user_bytes = b"concurrent catalog edit\n"
 
-            def edit_catalog_after_index(args):
-                original_docs_index(args)
+            def edit_catalog_after_index(args, **kwargs):
+                original_docs_index(args, **kwargs)
                 catalog.write_bytes(user_bytes)
                 raise module.HarnessError("forced failure after catalog edit")
 
@@ -1074,7 +1189,7 @@ class DefinitionTests(unittest.TestCase):
                 user_bytes = f"concurrent {target_kind} edit\n".encode("utf-8")
                 edited_path: Path | None = None
 
-                def edit_created_path(_args):
+                def edit_created_path(_args, **_kwargs):
                     nonlocal edited_path
                     if target_kind == "spec":
                         edited_path = root / "docs/product-specs/SPEC-PROJECT-001-product-definition.md"

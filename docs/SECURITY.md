@@ -42,7 +42,9 @@ applies_to:
 
 - Resolve the target root and reject non-directory, symlinked, out-of-root, or nonregular paths before reading or writing sensitive entries.
 - Refuse partial managed markers, unmarked canonical command collisions, FIFO/nonregular inputs, and expected file/directory type mismatches before any adoption or initialization write.
-- Render preview and apply from the same canonical repository-relative mutation entries. Validate every type/mode/content-hash preimage before mutation and revalidate each target immediately before its write.
+- Render preview and apply from the same canonical repository-relative mutation entries, comparing rendered output only with immutable initial staging images, never later live state. Validate every type/mode/content-hash preimage before mutation and revalidate each target immediately before its write. Prepare complete temporary bytes and modes before replacing an existing transaction file; never truncate that original in place.
+- Invoke initializer-managed runtime subprocesses with Python `-I` so target-directory and environment Python import paths cannot execute modules during staging, including dry-run. This is import-path hardening, not a process sandbox.
+- Definition finalization checks all preimages and each write, creates missing specification/plan paths exclusively, and derives postimages from rendered bytes and intended creation modes before writing. Post-write user state is never adopted as transaction-owned content.
 - Include generated code-map and catalog postimages in the transaction rather than leaving follow-up writes outside rollback. Restore a touched path only while it still matches the transaction postimage; preserve and report concurrent divergence.
 - Keep audit deterministic and byte-stable; do not run configured or detected project commands during inventory.
 - Preserve existing README, instruction, architecture, CI, and configuration authority during adoption.

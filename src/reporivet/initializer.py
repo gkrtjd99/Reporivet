@@ -2107,7 +2107,7 @@ def run_generated(root: Path, command: str, *args: str, quiet: bool = False) -> 
     if not harness.exists():
         raise InitError("generated dev/harness.py is missing")
     completed = subprocess.run(
-        [sys.executable, str(harness), command, *args],
+        [sys.executable, "-I", str(harness), command, *args],
         cwd=root,
         check=False,
         stdout=subprocess.DEVNULL if quiet else None,
@@ -2160,8 +2160,10 @@ def preflight_adoption_blocks(
         upsert_block_text_preserving(original, block, start, end)
 
 
-def _copy_repository_for_plan(source: Path, destination: Path) -> None:
-    destination.mkdir(mode=stat.S_IMODE(source.lstat().st_mode), parents=True)
+def _copy_repository_for_plan(source: Path, destination: Path) -> dict[str, MutationImage]:
+    # Keep the exact images copied into staging, not later live target state.
+    initial = {".": capture_mutation_image(source, root=source)}
+    destination.mkdir(mode=initial["."].mode, parents=True)
 
     def copy_directory(current_source: Path, current_destination: Path) -> None:
         try:
@@ -2172,7 +2174,21 @@ def _copy_repository_for_plan(source: Path, destination: Path) -> None:
             source_path = Path(directory_entry.path)
             destination_path = current_destination / directory_entry.name
             relative = source_path.relative_to(source).as_posix()
-            if relative in {".git", ".harness"}:
+            if relative == ".git":
+                continue
+            if relative == ".harness":
+                # Stage only the initializer-owned state scaffolding, not runs
+                # or logs. Its existing images still belong to the snapshot.
+                for state_relative in (".harness", ".harness/runs", ".harness/runs/.gitkeep"):
+                    image = capture_mutation_image(source / state_relative, root=source)
+                    initial[state_relative] = image
+                    staged_state = destination / state_relative
+                    if image.kind == "directory":
+                        staged_state.mkdir(mode=image.mode)
+                        os.chmod(staged_state, image.mode)
+                    elif image.kind == "file":
+                        staged_state.write_bytes(image.content)
+                        os.chmod(staged_state, image.mode)
                 continue
             try:
                 metadata = source_path.lstat()
@@ -2182,14 +2198,16 @@ def _copy_repository_for_plan(source: Path, destination: Path) -> None:
             if stat.S_ISLNK(metadata.st_mode):
                 os.symlink(os.readlink(source_path), destination_path)
             elif stat.S_ISDIR(metadata.st_mode):
+                initial[relative] = MutationImage("directory", mode, None)
                 destination_path.mkdir(mode=mode)
                 if directory_entry.name not in AUDIT_IGNORED_DIRECTORIES:
                     copy_directory(source_path, destination_path)
                 os.chmod(destination_path, mode)
             elif stat.S_ISREG(metadata.st_mode):
                 image = capture_mutation_image(source_path, root=source)
+                initial[relative] = image
                 destination_path.write_bytes(image.content or b"")
-                os.chmod(destination_path, mode)
+                os.chmod(destination_path, image.mode)
             elif stat.S_ISFIFO(metadata.st_mode) and hasattr(os, "mkfifo"):
                 os.mkfifo(destination_path, mode)
             else:
@@ -2198,7 +2216,8 @@ def _copy_repository_for_plan(source: Path, destination: Path) -> None:
                 )
 
     copy_directory(source, destination)
-    os.chmod(destination, stat.S_IMODE(source.lstat().st_mode))
+    os.chmod(destination, initial["."].mode)
+    return initial
 
 
 def _remap_changes(changes: ChangeSet, source_root: Path, target_root: Path) -> ChangeSet:
@@ -2212,7 +2231,9 @@ def _remap_changes(changes: ChangeSet, source_root: Path, target_root: Path) -> 
     return remapped
 
 
-def _mutation_plan_from_stage(root: Path, staged_root: Path) -> MutationPlan:
+def _mutation_plan_from_stage(
+    root: Path, staged_root: Path, initial: dict[str, MutationImage]
+) -> MutationPlan:
     entries: list[MutationEntry] = []
     candidates = [staged_root]
     candidates.extend(sorted(staged_root.rglob("*"), key=lambda path: path.relative_to(staged_root).as_posix()))
@@ -2226,8 +2247,7 @@ def _mutation_plan_from_stage(root: Path, staged_root: Path) -> MutationPlan:
             stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode)
         ):
             continue
-        target_path = root if relative == "." else root / relative
-        preimage = capture_mutation_image(target_path, root=root)
+        preimage = initial.get(relative, MutationImage("missing", None, None))
         postimage = capture_mutation_image(staged_path, root=staged_root)
         if (
             preimage.kind == postimage.kind
@@ -2258,26 +2278,6 @@ def _mutation_plan_from_stage(root: Path, staged_root: Path) -> MutationPlan:
     return MutationPlan(root=root, entries=tuple(entries))
 
 
-def _read_descriptor_image(descriptor: int) -> MutationImage:
-    metadata = os.fstat(descriptor)
-    if not stat.S_ISREG(metadata.st_mode):
-        return MutationImage("nonregular", stat.S_IMODE(metadata.st_mode), None)
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    chunks: list[bytes] = []
-    while True:
-        chunk = os.read(descriptor, 1024 * 1024)
-        if not chunk:
-            break
-        chunks.append(chunk)
-    content = b"".join(chunks)
-    return MutationImage(
-        "file",
-        stat.S_IMODE(metadata.st_mode),
-        hashlib.sha256(content).hexdigest(),
-        content,
-    )
-
-
 def _write_all(descriptor: int, content: bytes) -> None:
     view = memoryview(content)
     while view:
@@ -2300,29 +2300,24 @@ def _write_file_image(entry: MutationEntry) -> None:
     mode = entry.postimage.mode
     if content is None or mode is None:
         raise InitError(f"mutation file postimage is incomplete: {entry.relative}")
-    flags = os.O_RDWR
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    if entry.preimage.kind == "missing":
-        flags |= os.O_CREAT | os.O_EXCL
-        descriptor = os.open(path, flags, mode)
-    else:
-        descriptor = os.open(path, flags)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".reporivet-write-", dir=path.parent)
+    temporary_path = Path(temporary_name)
     try:
-        if entry.preimage.kind == "file":
-            current = _read_descriptor_image(descriptor)
-            if (
-                current.kind != entry.preimage.kind
-                or current.mode != entry.preimage.mode
-                or current.sha256 != entry.preimage.sha256
-            ):
-                raise InitError(f"preimage changed before write: {entry.relative}")
-        os.ftruncate(descriptor, 0)
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        _write_all(descriptor, content)
-        _chmod_open_file(descriptor, path, mode)
+        try:
+            _write_all(descriptor, content)
+            _chmod_open_file(descriptor, temporary_path, mode)
+        finally:
+            os.close(descriptor)
+        ensure_safe_write_path(path)
+        if not mutation_image_matches(path, entry.preimage, root=entry.root):
+            raise InitError(f"preimage changed before write: {entry.relative}")
+        if entry.preimage.kind == "missing":
+            # Link the completed file exclusively; never expose a partial target.
+            os.link(temporary_path, path)
+        else:
+            os.replace(temporary_path, path)
     finally:
-        os.close(descriptor)
+        temporary_path.unlink(missing_ok=True)
 
 
 def _apply_mutation_entry(entry: MutationEntry) -> None:
@@ -2345,28 +2340,13 @@ def _apply_mutation_entry(entry: MutationEntry) -> None:
 
 
 def _restore_file_preimage(entry: MutationEntry) -> None:
-    content = entry.preimage.content
-    mode = entry.preimage.mode
-    if content is None or mode is None:
-        raise InitError(f"file preimage is incomplete: {entry.relative}")
-    flags = os.O_RDWR
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    descriptor = os.open(entry.path, flags)
-    try:
-        current = _read_descriptor_image(descriptor)
-        if (
-            current.kind != entry.postimage.kind
-            or current.mode != entry.postimage.mode
-            or current.sha256 != entry.postimage.sha256
-        ):
-            raise InitError(f"postimage changed before rollback: {entry.relative}")
-        os.ftruncate(descriptor, 0)
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        _write_all(descriptor, content)
-        _chmod_open_file(descriptor, entry.path, mode)
-    finally:
-        os.close(descriptor)
+    _write_file_image(MutationEntry(
+        root=entry.root,
+        relative=entry.relative,
+        action="update-file",
+        preimage=entry.postimage,
+        postimage=entry.preimage,
+    ))
 
 
 def _rollback_mutation_entries(entries: Sequence[MutationEntry]) -> tuple[list[str], list[str]]:
@@ -2602,8 +2582,7 @@ def apply_harness(
     with tempfile.TemporaryDirectory(prefix="reporivet-plan-") as temporary:
         staged_parent = Path(temporary).resolve()
         staged_root = staged_parent / (root.name or "project")
-        if root.exists():
-            _copy_repository_for_plan(root, staged_root)
+        initial = _copy_repository_for_plan(root, staged_root) if root.exists() else {}
         stdout = io.StringIO()
         stderr = io.StringIO()
         try:
@@ -2629,7 +2608,7 @@ def apply_harness(
                 raise
             raise InitError(f"cannot render mutation plan: {exc}") from exc
         changes = _remap_changes(staged_changes, staged_root, root)
-        plan = _mutation_plan_from_stage(root, staged_root)
+        plan = _mutation_plan_from_stage(root, staged_root, initial)
 
     changes.print(root, dry_run=dry_run)
     plan.print()

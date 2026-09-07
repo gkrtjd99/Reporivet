@@ -79,7 +79,7 @@ repository wrapper -> copied runtime -> repository files, Git, configured comman
 - Initializer rendering is scoped per artifact so future repository-local tokens are not consumed during installation.
 - Main/Sub policies live in `AGENTS.md`, durable docs, and Task Packets rather than a hidden scheduler.
 - Mutation fingerprints are deterministic descriptions, not authorization. The initializer does not bind an earlier dry run to apply or persist a backup registry.
-- Planning uses a temporary local staging tree to derive deterministic final bytes. This does not claim process, kernel, container, or adversarial filesystem isolation; ordinary caller permissions and concurrent filesystem behavior remain the operating boundary.
+- Planning compares rendered staging bytes and modes with immutable images captured when copying the original tree; unrelated live edits are not mutations and planned paths retain their initial preimages. Initializer-managed runtime subprocesses use Python `-I` to exclude target/environment import paths. Completed temporary file bytes and modes precede preimage revalidation and replacement, including rollback. This does not claim process, kernel, container, or adversarial filesystem isolation; ordinary caller permissions and concurrent filesystem behavior remain the operating boundary.
 - Rollback changes a touched path only when its current type, mode, and content hash still match the transaction postimage. Divergent user state is preserved and reported rather than overwritten.
 
 ## CI and distribution

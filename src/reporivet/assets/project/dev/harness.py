@@ -16,6 +16,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import tomllib
 import unicodedata
 from dataclasses import dataclass
@@ -667,36 +668,24 @@ def chmod_runtime_file(descriptor: int, path: Path, mode: int) -> None:
 def restore_runtime_file(path: Path, expected: RuntimePathImage, restored: RuntimePathImage) -> None:
     if restored.kind != "file" or restored.content is None or restored.mode is None:
         raise HarnessError("transaction file preimage is incomplete")
-    flags = os.O_RDWR
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    if expected.kind == "missing":
-        flags |= os.O_CREAT | os.O_EXCL
-    descriptor = os.open(path, flags, restored.mode)
+    ensure_safe_repository_path(path)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".reporivet-write-", dir=path.parent)
+    temporary_path = Path(temporary_name)
     try:
-        if expected.kind == "file":
-            metadata = os.fstat(descriptor)
-            if not stat.S_ISREG(metadata.st_mode):
-                raise HarnessError("transaction postimage changed filesystem type")
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            chunks: list[bytes] = []
-            while True:
-                chunk = os.read(descriptor, 1024 * 1024)
-                if not chunk:
-                    break
-                chunks.append(chunk)
-            current = runtime_file_image(b"".join(chunks), stat.S_IMODE(metadata.st_mode))
-            if (
-                current.mode != expected.mode
-                or current.sha256 != expected.sha256
-            ):
-                raise HarnessError("transaction postimage changed before rollback")
-        os.ftruncate(descriptor, 0)
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        write_runtime_bytes(descriptor, restored.content)
-        chmod_runtime_file(descriptor, path, restored.mode)
+        try:
+            write_runtime_bytes(descriptor, restored.content)
+            chmod_runtime_file(descriptor, temporary_path, restored.mode)
+        finally:
+            os.close(descriptor)
+        ensure_safe_repository_path(path)
+        if not runtime_image_matches(path, expected):
+            raise HarnessError(f"transaction preimage changed before write: {path.relative_to(ROOT)}")
+        if expected.kind == "missing":
+            os.link(temporary_path, path)
+        else:
+            os.replace(temporary_path, path)
     finally:
-        os.close(descriptor)
+        temporary_path.unlink(missing_ok=True)
 
 
 def rollback_runtime_paths(
@@ -3514,7 +3503,11 @@ def expected_catalog_text(path: Path, documents: Sequence[DurableDocument], kind
     return replace_catalog(original, block, path=path)
 
 
-def command_docs_index(args: argparse.Namespace) -> int:
+def command_docs_index(
+    args: argparse.Namespace,
+    *,
+    transaction_records: Sequence[tuple[Path, RuntimePathImage, RuntimePathImage]] | None = None,
+) -> int:
     errors: list[str] = []
     documents = durable_documents(errors)
     if errors:
@@ -3522,7 +3515,17 @@ def command_docs_index(args: argparse.Namespace) -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         raise HarnessError(f"cannot build document catalog with {len(errors)} metadata error(s)")
     changed: list[Path] = []
+    guarded = {path: (before, after) for path, before, after in transaction_records or ()}
     for path, kinds, grouped in catalog_targets():
+        if transaction_records is not None:
+            preimage, postimage = guarded[path]
+            if not runtime_image_matches(path, preimage):
+                raise HarnessError(f"preimage changed before write: {path.relative_to(ROOT)}")
+            if postimage != preimage:
+                changed.append(path)
+                if not args.check:
+                    restore_runtime_file(path, preimage, postimage)
+            continue
         original = path.read_bytes().decode("utf-8") if path.exists() else ""
         updated = expected_catalog_text(path, documents, kinds, grouped)
         if updated != original:
@@ -5993,16 +5996,25 @@ def command_define_finalize(_: argparse.Namespace) -> int:
         path: capture_runtime_path(path)
         for path in (spec_path, plan_path, *(entry[0] for entry in catalog_entries))
     }
+    for path, preimage in preimages.items():
+        if not runtime_image_matches(path, preimage):
+            raise HarnessError(f"preimage changed before mutation: {path.relative_to(ROOT)}")
     records: list[tuple[Path, RuntimePathImage, RuntimePathImage]] = []
     try:
-        ensure_safe_repository_path(spec_path)
-        spec_path.parent.mkdir(parents=True, exist_ok=True)
-        spec_path.write_text(spec_text, encoding="utf-8")
-        records.append((spec_path, preimages[spec_path], capture_runtime_path(spec_path)))
-        ensure_safe_repository_path(plan_path)
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-        plan_path.write_text(plan_text, encoding="utf-8")
-        records.append((plan_path, preimages[plan_path], capture_runtime_path(plan_path)))
+        for path, text in ((spec_path, spec_text), (plan_path, plan_text)):
+            ensure_safe_repository_path(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if preimages[path].kind != "missing" or not runtime_image_matches(path, preimages[path]):
+                raise HarnessError(f"preimage changed before write: {path.relative_to(ROOT)}")
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+            try:
+                # The creation mode is captured before writing; live bytes are
+                # never promoted to transaction-owned postimages.
+                postimage = runtime_file_image(text.encode("utf-8"), stat.S_IMODE(os.fstat(descriptor).st_mode))
+                records.append((path, preimages[path], postimage))
+                write_runtime_bytes(descriptor, postimage.content)
+            finally:
+                os.close(descriptor)
 
         catalog_errors: list[str] = []
         documents = durable_documents(catalog_errors)
@@ -6014,9 +6026,13 @@ def command_define_finalize(_: argparse.Namespace) -> int:
             preimage = preimages[path]
             if preimage.kind != "file" or preimage.mode is None:
                 raise HarnessError(f"catalog target is not a regular file: {path.relative_to(ROOT)}")
-            updated = expected_catalog_text(path, documents, kinds, grouped).encode("utf-8")
+            if not runtime_image_matches(path, preimage):
+                raise HarnessError(f"preimage changed before write: {path.relative_to(ROOT)}")
+            original = preimage.content.decode("utf-8")
+            block = catalog_markdown(documents, from_path=path, kinds=kinds, grouped=grouped)
+            updated = replace_catalog(original, block, path=path).encode("utf-8")
             records.append((path, preimage, runtime_file_image(updated, preimage.mode)))
-        command_docs_index(argparse.Namespace(check=False))
+        command_docs_index(argparse.Namespace(check=False), transaction_records=records)
     except Exception as exc:
         rollback_runtime_paths(records, cause=exc, label="definition finalization")
         raise

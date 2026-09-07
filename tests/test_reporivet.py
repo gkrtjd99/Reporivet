@@ -687,6 +687,114 @@ supersedes: []
                     by_path[relative]["postimage"]["sha256"],
                 )
 
+    def test_staging_snapshot_excludes_unrelated_concurrent_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            notes = root / "notes.txt"
+            notes.write_bytes(b"original user bytes\n")
+            original = initializer._apply_harness_files
+
+            def render(**kwargs):
+                changes = original(**kwargs)
+                notes.write_bytes(b"concurrent user bytes\n")
+                notes.chmod(0o600)
+                return changes
+
+            with mock.patch.object(initializer, "_apply_harness_files", side_effect=render):
+                result = self.init(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(notes.read_bytes(), b"concurrent user bytes\n")
+            self.assertEqual(stat.S_IMODE(notes.stat().st_mode), 0o600)
+            self.assertNotIn('"path":"notes.txt"', result.stdout)
+
+    def test_staging_snapshot_retains_managed_file_initial_preimage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            agents = root / "AGENTS.md"
+            agents.write_bytes(b"original authority\n")
+            original = initializer._apply_harness_files
+
+            def render(**kwargs):
+                changes = original(**kwargs)
+                agents.write_bytes(b"concurrent authority\n")
+                agents.chmod(0o600)
+                return changes
+
+            with mock.patch.object(initializer, "_apply_harness_files", side_effect=render):
+                result = self.init(root)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("preimage changed before mutation: AGENTS.md", result.stderr)
+            self.assertEqual(agents.read_bytes(), b"concurrent authority\n")
+            self.assertEqual(stat.S_IMODE(agents.stat().st_mode), 0o600)
+            self.assertEqual(list(root.iterdir()), [agents])
+
+    def test_staged_runtime_does_not_import_target_or_environment_modules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp).resolve()
+            root = parent / "repo"
+            (root / "dev").mkdir(parents=True)
+            env_modules = parent / "env-modules"
+            env_modules.mkdir()
+            marker = parent / "executed"
+            malicious = (
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n"
+                "raise RuntimeError('untrusted project code executed')\n"
+            )
+            (root / "dev/json.py").write_text(malicious, encoding="utf-8")
+            (env_modules / "json.py").write_text(malicious, encoding="utf-8")
+            before = self.filesystem_snapshot(root)
+            with mock.patch.dict(os.environ, {"PYTHONPATH": str(env_modules)}):
+                result = self.init(root, "--dry-run")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(marker.exists())
+            self.assertEqual(self.filesystem_snapshot(root), before)
+
+    def test_completed_temp_write_rechecks_original_before_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            agents = root / "AGENTS.md"
+            agents.write_bytes(b"original authority\n")
+            original = initializer._write_all
+            injected = False
+
+            def edit_during_temp_write(descriptor, content):
+                nonlocal injected
+                original(descriptor, content)
+                if content.startswith(b"original authority"):
+                    agents.write_bytes(b"concurrent authority\n")
+                    agents.chmod(0o600)
+                    injected = True
+
+            with mock.patch.object(initializer, "_write_all", side_effect=edit_during_temp_write):
+                result = self.init(root)
+            self.assertEqual(result.returncode, 2)
+            self.assertTrue(injected)
+            self.assertIn("preimage changed before write: AGENTS.md", result.stderr)
+            self.assertEqual(agents.read_bytes(), b"concurrent authority\n")
+            self.assertEqual(stat.S_IMODE(agents.stat().st_mode), 0o600)
+            self.assertEqual(list(root.iterdir()), [agents])
+
+    def test_partial_write_failure_preserves_original_bytes_and_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            agents = root / "AGENTS.md"
+            agents.write_bytes(b"original authority\n")
+            agents.chmod(0o640)
+            before = self.filesystem_snapshot(root)
+            original = initializer._write_all
+
+            def fail_partial(descriptor, content):
+                if content.startswith(b"original authority"):
+                    os.write(descriptor, content[:4])
+                    raise OSError("injected short write failure")
+                return original(descriptor, content)
+
+            with mock.patch.object(initializer, "_write_all", side_effect=fail_partial):
+                result = self.init(root)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("injected short write failure", result.stderr)
+            self.assertEqual(self.filesystem_snapshot(root), before)
+
     def test_apply_revalidates_each_preimage_and_rolls_back_prior_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
