@@ -5,14 +5,14 @@ status: in-progress
 owner: main
 area: harness
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-08
 base_commit: "58665a897b891b0abc721e159593725c0b71af6d"
-integrated_commit: "d57fc5fe9aa10e8ea137d34565724025f9e40f24"
-verified_commit: "d57fc5fe9aa10e8ea137d34565724025f9e40f24"
+integrated_commit: "78b935e9d71e58d9084ade788bccf777bdcecaa5"
+verified_commit: "78b935e9d71e58d9084ade788bccf777bdcecaa5"
 traceability: 0
 product_spec: ""
-verification_run: "20260907T135921536448Z-verify"
-manifest_sha256: "f1c789db7aac3254e1c4d0489d53707269ee7953b02283071b784a73279301c5"
+verification_run: "20260907T145056308534Z-verify"
+manifest_sha256: "3ba1c0a14043099e7caba5175b698ea27d03a21ae01ba7a2eb8fc3174ed426d5"
 gate_verdict: "REVIEW"
 gate_review_reason: ""
 ---
@@ -35,7 +35,9 @@ gate_review_reason: ""
 - [x] T6: 독립 코드 반증과 actual wheel/standalone 검증 완료. Main은 보수 범위의 코드 결과를 수락하며 아래 문서 충돌을 별도 보류한다.
 - [x] T7: 승인된 fenced marker 설명 정정 및 관련 회귀·독립 검토 완료.
 - [x] T8/T9: 다른 현행 계약 조사와 별도 Sonnet 반증 완료. structural guard 불일치 두 건 확정.
-- [ ] 공식 종료·배포 판단: 새 confirmed 두 건은 조사만 요청받아 미보수다. Gate REVIEW 수락·배포 승인은 발명하지 않는다.
+- [x] T10: 사용자 지정 두 structural guard 누락 보수 및 회귀 추가, 최종178 tests PASS.
+- [x] T11: Sonnet 독립 반증·distribution/전체178 tests 및 Main exact `78b935e` canonical 필수6 checks/Python3.12·3.13 각각178 tests PASS. Main이 두 누락 보수 결과 수락.
+- [ ] 공식 종료·배포 판단: 두 누락은 해결했지만 Gate REVIEW 수락·배포 승인은 발명하지 않는다.
 
 ## Context and Orientation
 
@@ -714,7 +716,7 @@ Sonnet 단일 Implementer가 두 guard와 회귀를 구현했다. 명시 Task ty
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -766,11 +768,15 @@ AC-10, AC-11, AC-12
 
 #### Result
 
-T10 후보 대기.
+Main canonical 대상은 clean `78b935e9d71e58d9084ade788bccf777bdcecaa5`, explicit base `58665a897b891b0abc721e159593725c0b71af6d`, target `PLAN-2026-0005`다. Python 3.12.14에서 `./dev/verify` rc0, 전체178 tests/81.853s OK, 필수6 checks PASS, optional smoke는 미설정으로 skipped다. run `20260907T145056308534Z-verify`, manifest SHA256 `3ba1c0a14043099e7caba5175b698ea27d03a21ae01ba7a2eb8fc3174ed426d5`. Main이 실제 manifest bytes hash와 Gate hash, clean actual/intended SHA 및 base/target을 assert로 대조했다. Gate는 shadow REVIEW이며 누적 base 대비 wide/protected 경로(dev/harness.py, docs/SECURITY.md)가 이유다. 이는 사람의 승인이나 release 허가가 아니다.
+
+같은 exact archive의 Python 3.13.15 대조는 전체178 tests/79.366s OK(`/private/tmp/t11-py313.log`). canonical 원시 로그는 `/private/tmp/t11-canonical.log`다. 별도 Sonnet은 같은 exact SHA의 archive `/private/tmp/reporivet-t11-78b935e9`에서 원본 쓰기 없이 독립 검증했다. 새 CLI fixture에서 unsupported type rc2, supported type rc0, 비traceable legacy 필드 부재 rc0을 확인했다. focused tests에서 참조/미참조 malformed packet 거부와 참조 task Acceptance 검증을 대조했다. core fixture는 정상 draft 기본 제외/include-drafts 포함, active 포함을 확인했고 wrong kind/id 각각 context와 docs-check rc2 및 context authority 미노출을 확인했다. legacy/frontmatter-free·nonregular 흐름도 focused suite에서 통과했다.
+
+독립 focused 25 tests, 추가 참조/미참조 대조2 tests, distribution1 test 및 전체178 tests/78.616s PASS. source version 0.2.0과 asset token 정규화 후 runtime bytes는 동일하고 SHA256은 `62a1457aba1d4cfe4a7608349682f81fee570b3e6baa893382a380e94b310790`다. 근거: `/private/tmp/reporivet-t11-fixtures/`의 role/core 로그, `/private/tmp/reporivet-t11-role-reference.log`, `/private/tmp/reporivet-t11-runtime-sync.log`, `/private/tmp/reporivet-t11-distribution.log`, `/private/tmp/reporivet-t11-fullsuite.log`. Verifier는 두 guard 범위의 잔존 결함을 발견하지 않았고 PASS recommendation을 반환했다. Main은 독립 근거와 canonical/Python 대조를 함께 검토하여 AC-10/11/12 보수 결과를 수락한다. 이는 genuine human REVIEW 또는 공식 close-plan/release 승인을 대신하지 않는다.
 
 ## Architecture Impact
 
-없음. 현행 계약과 산출물을 읽기 전용 검증하며 구현·의존성은 변경하지 않는다.
+새 구조나 의존성 변화는 없다. 최초 T1–T4는 읽기 전용 평가였고, 승인된 T5/T10은 기존 소유권·검증 계약을 복원하는 bounded 구현 보수다. repository-local runtime 경계와 package 제거 후 운영 모델은 유지한다.
 
 ## Documentation Impact
 
@@ -781,6 +787,7 @@ T10 후보 대기.
 | SPEC-REPORIVET-001 | update | configured source 외 empty-command guard의 관찰 범위와 비권위·비재귀 한계 명시 | Main | resolved |
 | 설계·template·completed 계획 | none | 기존 경계 복원이며 새 구조나 역사 변경 없음 | Main | resolved |
 | SECURITY | update | 사용자가 권고 채택을 승인해 fenced 예시와 actual malformed marker를 구분하는 기존 동작으로 설명 정정 | Sonnet / Main | resolved |
+| PLANS / SPEC-002 / core authority 문서 | none | T10은 기존 지원 type·expected id/kind 보장을 복원하며 문서의 규칙을 변경하거나 약화하지 않음 | Main | resolved |
 
 ## Interfaces and Dependencies
 
@@ -819,20 +826,20 @@ Main은 세 읽기 전용 task의 관심사를 분리하고 결과 중복을 제
 
 ## 보수 단계의 현재 상태
 
-T5/T6 보수·독립 재검증에 이어 T7의 승인된 SECURITY 문구 정정과 T8/T9의 Sonnet 계약 조사·반증까지 완료했다. 원래 fenced marker 설명 충돌은 해결했다. 현재 미해결 사항은 새로 확인한 Task type membership 검사와 context core id/kind 검사의 누락 두 건이다. 다른 계약은 조사 범위였으므로 수정하지 않았다. 아래 Outcomes/Follow-ups는 이 최신 상태이며 T1–T6의 당시 평가는 각 Task Result에 보존한다. genuine REVIEW 판단과 배포 승인은 자동 처리하지 않는다. source presence는 configured 경로, conventional source directory, 알려진 audit manifest, 지원 root regular source file을 확인한다. 비표준 중첩 경로·미지원 확장자는 운영자가 경로/명령을 설정해야 하며 새 재귀 scanner는 도입하지 않는다.
+T5/T6 보수·독립 재검증, T7의 승인된 SECURITY 문구 정정, T8/T9의 Sonnet 계약 조사·반증에 이어 사용자가 지정한 T10/T11의 두 누락 보수·재검증까지 완료했다. fenced marker 설명 충돌과 Task type membership 검사 및 context core id/kind 검사 누락은 해결했다. 새 exact `78b935e`에서 Sonnet 독립 검증, Main canonical 필수6 checks와 Python3.12·3.13 각각178 tests가 통과했다. 다른 계약 조사나 보수로 범위를 확대하지 않았다. 아래 Outcomes/Follow-ups는 이 최신 상태이며 T1–T6의 당시 평가는 각 Task Result에 보존한다. genuine REVIEW 판단과 배포 승인은 자동 처리하지 않는다. source presence는 configured 경로, conventional source directory, 알려진 audit manifest, 지원 root regular source file을 확인한다. 비표준 중첩 경로·미지원 확장자는 운영자가 경로/명령을 설정해야 하며 새 재귀 scanner는 도입하지 않는다.
 
 Main이 Python 3.13.15 대조 환경도 준비했다. 보수 전 cddd15f archive는 최초 168 중 distribution test만 setuptools.build_meta 부재로 실패했다. 기존 로컬 setuptools84 파일을 전용 `/private/tmp/reporivet-py313-venv-EANM2w`에 복사한 뒤 전체168 tests PASS. 외부 설치나 시스템 Python 변경은 없으며 최종 보수 후보는 별도로 검사한다. 근거 `/private/tmp/reporivet-baseline-py313-QspbWb/baseline-py313-equipped.log`.
 
 ## Outcomes and Retrospective
 
-확인된 세 P2 및 추가 raw-path wrong-root 쓰기 결함은 보수했고 독립 재검증에서도 잔존 코드 결함은 발견되지 않았다. missing-parent는 안전한 사전 거부와 안내로 명확히 했고 greenfield baseline 안내도 정정했다. 원후보168 tests에서 놓친 경로를 새 회귀8개로 고정해 최종176 tests가 두 Python 버전에서 통과했다. 생성 taxonomy/authority/actual wheel/package 없는 runtime 경계도 유지했다. 기존 코드 보수 및 승인된 fenced marker 문구 정정은 Main이 수락했다. T8/T9에서 새로 확인한 아래 structural guard 결함 두 건 및 REVIEW 때문에 전체 release-ready 또는 공식 종료 완료를 선언하지 않는다.
+확인된 세 P2 및 추가 raw-path wrong-root 쓰기 결함은 보수했고 독립 재검증에서도 잔존 코드 결함은 발견되지 않았다. missing-parent는 안전한 사전 거부와 안내로 명확히 했고 greenfield baseline 안내도 정정했다. 원후보168 tests에서 놓친 경로를 새 회귀8개로 고정해 최종176 tests가 두 Python 버전에서 통과했다. 생성 taxonomy/authority/actual wheel/package 없는 runtime 경계도 유지했다. 기존 코드 보수 및 승인된 fenced marker 문구 정정은 Main이 수락했다. T8/T9에서 추가 확인한 structural guard 결함 두 건도 사용자 승인 후 T10/T11에서 보수·독립 재검증했다. 새 후보 전체178 tests가 Python3.12·3.13에서 통과했고 Main이 두 보수 결과를 수락했다. Gate REVIEW와 아래 미검증 범위는 남아 있으므로 전체 release-ready 또는 공식 종료 완료를 선언하지 않는다.
 
 검증 한계: Darwin arm64/Python3.12.14·3.13.15의 local offline 환경이다. Linux/Windows-native/Python3.11, 외부 CI, publication/deployment, 장기간 authority retirement는 이번에 신규 확인하지 않았다. source detector는 명시 범위의 empty-command guard이며 arbitrary source inventory가 아니다. OS-level race/process isolation도 보장하지 않는다.
 
 ## Follow-ups
 
 - 해결됨: 사용자 권고 채택 지시에 따라 Sonnet이 SECURITY:34 설명을 fenced 예시 보존/비ownership 및 actual malformed 거부로 정정했다. 기존 코드·테스트는 바꾸지 않았고 별도 Sonnet이 정확성을 확인했다.
-- Main 소유 / 미보수 P2: `docs/PLANS.md:45`와 SPEC-002:72는 지원 Task type과 parser 검증을 약속하지만 packaged/source runtime의 `validate_traceable_plan` 및 `validate_task_packets`(`dev/harness.py:3951–3968,4027–4065`)은 임의 값을 거부하지 않는다. traceable plan의 `not-a-task-type`도 strict plan-check rc0이다. 영향을 task-packet schema/일부 packet acceptance enforcement에 한정하며 참조된 task의 Product Trace 전체 우회를 주장하지 않는다. T9의 새 fixture/대조 근거가 있다. 권고는 문서의 유한 집합을 유지하고 runtime membership guard를 회귀와 함께 보수하는 것이다. 이번에는 다른 계약 조사만 요청받아 구현하지 않았다.
-- Main 소유 / 미보수 P2: SPEC-002:70–72의 malformed explicit authority fail-closed와 달리 `core_context_documents`/`command_context`(`dev/harness.py:2969–2999,6127–6139`)는 PRODUCT의 expected id/kind를 확인하지 않는다. wrong kind/id 각각 context rc0·authority 노출, 같은 fixture docs-check rc2가 재현됐다. 권고는 docs-check의 core schema와 context 진입 검증을 일치시키는 것이며 검증 약속을 문서에서 약화하지 않는다. 이번에는 코드 변경 없이 결과를 보고한다.
+- 해결됨 / Task type P2: T9에서 확인한 strict plan-check의 unsupported type 허용은 T10의 membership guard와 회귀로 보수했다. T11 exact 후보에서 malformed rc2, 지원 type 및 비traceable legacy 필드 부재 허용을 독립 확인했다. 참조 task Acceptance 검증도 유지한다. 보수 전 재현과 영향 한정은 T9 Result에 보존한다.
+- 해결됨 / core authority P2: T9에서 확인한 wrong core id/kind의 context authority 노출은 T10에서 기존 CORE_DOCUMENT_SCHEMAS를 재사용해 보수했다. T11 exact 후보에서 wrong kind/id 각각 context와 docs-check rc2 및 authority 미노출을 확인했고 정상 active/draft/include-drafts·기존 legacy 흐름을 유지했다. 문서 보장을 약화하거나 전체 completion gate를 context에 추가하지 않았다.
 - Main/사람 판단 필요: canonical Gate REVIEW는 wide/protected runtime 변경에 따른 결과다. 현재 검증 내용·영향·복구 경로를 검토한 genuine human rationale가 없으므로 close-plan은 실행하지 않는다. 이전 계획의 REVIEW 수락을 재사용하지 않는다.
 - 보수와 검증은 local commits에 한정했다. push/release/deployment 또는 사용자 저장소 upgrade는 수행하지 않았다.
