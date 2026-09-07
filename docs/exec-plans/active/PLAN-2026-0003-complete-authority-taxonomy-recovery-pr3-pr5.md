@@ -84,7 +84,7 @@ gate_review_reason: ""
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -128,13 +128,13 @@ Python 3.12로 `./dev/context --area harness`, 관련 소스와 테스트 읽기
 
 #### Result
 
-조사 진행 중.
+2026-09-07 읽기 전용 조사 완료. 기존 capability 생성, path symlink guard, audit, definition evidence parser 및 일부 rollback을 재사용한다. PR3 누락은 generated facts/questions, context lifecycle 필터, baseline review 검증과 durable decision 구조다. PR4는 기존 init/upgrade dry-run 및 transaction 경계에 fingerprint/preimage/postimage를 보강하며 one-shot CLI는 가져오지 않는다. PR5의 자체 DESIGN 이동 및 CLAUDE portable block projection은 사용자가 승인한 복구 원문의 명시적 migration이다.
 
 ### T2 — PR3 구현
 
 #### State
 
-blocked
+in-progress
 
 #### Task type
 
@@ -178,7 +178,9 @@ AC-1, AC-2, AC-3, AC-6
 
 #### Result
 
-T1 결과 대기.
+구현 후보 `21c50b5e26fcc9a796551d6d612f72789f32918b` 통합. 구현자 보고: PR3 13 tests, 전체 123 tests, distribution/package-removal, runtime parity 통과. Main도 `/tmp/reporivet-pr3-venv`의 Python 3.12로 `./dev/check`를 별도 실행하여 exit 0을 확인했다(`/tmp/reporivet-pr3-main-check.log`). 독립 정확성 review 진행 중이므로 완료 승인 전이다. 구현자의 canonical run `20260907T021205136834Z-verify`는 pass지만 Main 계획 편집으로 dirty target이었다. clean candidate 검증을 대신하지 않는다.
+
+범위 결정: 문서 scope overlap만으로 충돌이라고 판정하지 않으며 duplicate ID와 명시적 supersession 불일치만 기계적으로 거부한다. baseline evidence guard는 새 provenance가 있는 초안에 적용하고 legacy authority를 변경하지 않는다. 새 schema/command 없이 기존 문서의 evidence review를 사용하며 verify와 baseline 사이 순환 의존을 만들지 않는다.
 
 ### T3 — PR4 구현
 
