@@ -7,7 +7,7 @@ area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "58665a897b891b0abc721e159593725c0b71af6d"
-integrated_commit: "6ccade1f9fbf512dfcd2b2e24a847dc67f46f3a8"
+integrated_commit: "HEAD"
 verified_commit: "6ccade1f9fbf512dfcd2b2e24a847dc67f46f3a8"
 traceability: 0
 product_spec: ""
@@ -460,7 +460,7 @@ Main canonical은 동일 clean exact 후보에서 required6 checks PASS, optiona
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -512,7 +512,7 @@ existing behavior를 바꿔야 함, 다른 source 충돌, 허용 경로 밖 수�
 
 #### Result
 
-문구 정정 대기.
+Sonnet을 명시 배정해 exact base `f249f1bdd444279e4a6ab534baf4fabc29f0dd70`에서 SECURITY:34 한 문장만 정정했다. fenced examples preserved without granting ownership, malformed actual markers fail을 구분한다. Sonnet이 initializer536–581와 test_audit_adoption884–928/1018–1040을 대조하고 fenced/malformed focused2 tests OK, catalogs current 및 diff check PASS를 보고했다. ARCHITECTURE:112의 do not grant ownership은 의미상 일치하며 package template에 동일 표 문구는 없었다. Main은 tracked diff가 승인된 한 문장뿐임을 확인해 통합 후보로 수락했다. 코드·테스트·설정·다른 문서·외부 쓰기는 없다. 독립 최종 검토는 T9에서 수행한다.
 
 ### T8 — 다른 현행 계약의 Sonnet 충돌 조사
 
@@ -642,7 +642,7 @@ T7/T8 후보 대기.
 | README.md / README.en.md | update | missing-parent 사전 조건과 raw symlink 경로 거부 안내 | Main | resolved |
 | SPEC-REPORIVET-001 | update | configured source 외 empty-command guard의 관찰 범위와 비권위·비재귀 한계 명시 | Main | resolved |
 | 설계·template·completed 계획 | none | 기존 경계 복원이며 새 구조나 역사 변경 없음 | Main | resolved |
-| SECURITY | update | 사용자가 권고 채택을 승인해 fenced 예시와 actual malformed marker를 구분하는 기존 동작으로 설명 정정 | Sonnet / Main | in-progress |
+| SECURITY | update | 사용자가 권고 채택을 승인해 fenced 예시와 actual malformed marker를 구분하는 기존 동작으로 설명 정정 | Sonnet / Main | resolved |
 
 ## Interfaces and Dependencies
 

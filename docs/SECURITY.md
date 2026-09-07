@@ -31,7 +31,7 @@ applies_to:
 | Final product specifications and plans | Structural validation, stable IDs, lifecycle rules, transactional finalization/closure |
 | `dev/harness.toml` | Project-owned bytes; upgrade never rewrites it |
 | Canonical managed paths | Preflight collision, symlink, expected-type, and regular-file checks; explicit ownership marker; full-plan and per-write preimage validation |
-| Shared files | Paired managed block markers; malformed or fenced lookalikes fail |
+| Shared files | Paired managed block markers; fenced examples are preserved without granting ownership, while malformed actual markers fail |
 | Configured commands | Argument arrays, no shell interpolation, explicit executable and recursion checks |
 | Verification manifest, Gate, report, and check JSON | One run root, sanitized command metadata, manifest hashing, target binding |
 | Raw logs | Stored under ignored `.harness/runs/`; review before sharing and never commit |
