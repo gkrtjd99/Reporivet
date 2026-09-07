@@ -26,7 +26,7 @@ gate_review_reason: ""
 ## Progress
 
 - [x] 복구 원문과 현재 HEAD, 기존 계획의 종료 요건 확인.
-- [ ] PR3: 관찰 facts, baseline questions, authority drafts와 context lifecycle 구현 및 독립 검증.
+- [x] PR3: 관찰 facts, baseline questions, authority drafts와 context lifecycle 구현 및 독립 검증.
 - [ ] PR4: 현행 계약에 필요한 file-safety만 테스트부터 선별 이식 및 독립 검증.
 - [ ] PR5: 자체 문서 migration, portable contract projection, release fixture 검증.
 - [ ] 통합 후보의 canonical verification과 두 계획의 종료 상태 정리.
@@ -134,7 +134,7 @@ Python 3.12로 `./dev/context --area harness`, 관련 소스와 테스트 읽기
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -181,6 +181,8 @@ AC-1, AC-2, AC-3, AC-6
 구현 후보 `21c50b5e26fcc9a796551d6d612f72789f32918b` 통합. 구현자 보고: PR3 13 tests, 전체 123 tests, distribution/package-removal, runtime parity 통과. Main도 `/tmp/reporivet-pr3-venv`의 Python 3.12로 `./dev/check`를 별도 실행하여 exit 0을 확인했다(`/tmp/reporivet-pr3-main-check.log`). 독립 정확성 review의 focused 13개 및 adjacent 12개 테스트는 통과했지만 다음 보수 항목이 재현되어 완료 승인 전이다: `--plan` 선택 밖의 active plan 노출, `ruff.toml` command 후보의 잘못된 evidence 경로, context에서 불완전 accepted ADR 검증 누락, frontmatter 없는 legacy 문서의 warning이 hard error로 바뀌는 회귀. 추가 독립 review는 core context 문서를 읽기 전 safe-path 검사가 누락되어 외부 symlink PRODUCT가 authority로 노출되는 문제도 재현했다. 이 다섯 항목을 보수하며 initializer/runtime의 병렬 수정을 피하기 위해 PR4 후보 통합 후 순차 진행한다. 구현자의 canonical run `20260907T021205136834Z-verify`는 pass지만 Main 계획 편집으로 dirty target이었다. clean candidate 검증을 대신하지 않는다.
 
 보수 packet: `tests/test_authority_lifecycle.py`에 선택한 active plan만 출력하는 fixture, `ruff.toml` 후보의 정확한 근거 경로 fixture, 불완전 accepted ADR의 context 거부, frontmatter 없는 legacy notes의 warning/비권위 처리, core authority symlink 및 nonregular 입력 거부를 먼저 추가한다. 허용 구현은 initializer의 observed-facts renderer와 canonical/dogfood runtime의 같은 renderer 및 context 관련 함수다. PR4 transaction API·Gate·baseline 정책·기존 project-owned bytes는 변경하지 않는다. focused/adjacent 테스트와 runtime parity를 통과한 뒤 별도 context에서 재검증한다. Main 계약 해석: 원문 PR3의 `ExecPlan: 선택된 active plan만`을 그대로 적용하므로 명시적으로 선택하지 않은 plan은 기본 authority 목록에 넣지 않는다. accepted ADR을 normative context에 싣기 전에는 docs-check와 동일한 기존 구조 검증을 적용한다. frontmatter 자체가 없는 legacy notes는 warning과 함께 authority에서 제외하되, authority를 명시한 malformed metadata·충돌·unsafe path의 fail-closed 처리는 유지한다. 이는 과거 동작 전체를 복원하거나 의미 판정 규칙을 추가하는 변경이 아니다.
+
+보수 후보 `e69ecebc89846a5add8448e7b0b1006ddf2a5453` 완료. 구현자 검증: authority 18 tests, adjacent 14 tests, 전체 138 tests 및 runtime parity/diff check 통과. 로그는 `.harness/runs/20260907T025617187810Z-check`다. 독립 reviewer가 이 정확한 SHA를 `/tmp/reporivet-pr3-reverify-MPUbBq`에 archive로 분리해 재검증했다. authority 18/18, adjacent 14/14, 추가 ruff/legacy/malformed/symlink fixture 및 runtime parity 모두 통과했고 새 verified finding은 없다. Main은 이 증거로 PR3의 bounded acceptance를 승인한다. archive에는 `.git`이 없어 최종 Git-bound canonical verification은 T5에서 별도 수행한다.
 
 범위 결정: 문서 scope overlap만으로 충돌이라고 판정하지 않으며 duplicate ID와 명시적 supersession 불일치만 기계적으로 거부한다. baseline evidence guard는 새 provenance가 있는 초안에 적용하고 legacy authority를 변경하지 않는다. 새 schema/command 없이 기존 문서의 evidence review를 사용하며 verify와 baseline 사이 순환 의존을 만들지 않는다.
 
@@ -232,7 +234,9 @@ AC-4, AC-6
 
 #### Result
 
-2026-09-07 PR4 읽기 전용 조사로 범위를 확정했다. initializer apply_harness의 렌더/쓰기 interleave를 mutation plan과 작은 transaction으로 분리하고, adoption snapshot rollback과 copied runtime definition finalize/close-plan rollback에 postimage 보호를 적용한다. PR3 독립 review와 별개 후보에서 구현하고 Main이 순차 통합한다.
+2026-09-07 PR4 읽기 전용 조사로 범위를 확정했다. initializer apply_harness의 렌더/쓰기 interleave를 mutation plan과 작은 transaction으로 분리하고, adoption snapshot rollback과 copied runtime definition finalize/close-plan rollback에 postimage 보호를 적용한다. PR3 독립 review와 별개 후보에서 구현하고 Main이 순차 통합한다. 후보 `63ee936796b6c3def2b976d332f20f26a3c001e4`는 11개 허용 경로만 변경했으며 Main `dcd8a90`으로 통합했다. 구현자 환경의 전체 133 tests, distribution 및 runtime parity가 통과했지만 독립 안전성 review가 진행 중이며 3개 결함이 재현되어 acceptance는 미승인이다: staging 후 사용자 bytes/mode 변경을 늦은 live preimage 채취로 덮는 문제, staged runtime import가 target `dev/json.py`를 dry-run 중 실행하는 문제, finalize missing preimage 이후 생성된 spec을 덮는 문제. 최종 독립 보고는 추가로 finalize가 write 직후 사용자 편집을 transaction postimage로 잘못 채택해 rollback 중 삭제하는 문제, initializer의 in-place partial write 오류가 원본을 손상한 채 남기는 문제까지 총 5건을 재현했다. 재현 스크립트는 `/tmp/pr4-independent-repro.py`의 stage-edit/unsafe-import/finalize-preimage/finalize-postimage/partial-write이며 기존 focused 95 tests 및 guard 4 tests/13 scenarios는 통과했다. PR3 보수 다음 순서로 PR4를 보수한다.
+
+PR4 보수 계약: staging 초기 bytes/mode와 렌더 후의 차이만 mutation으로 계획하고 최초 preimage를 보존한다. staged runtime은 isolated Python으로 호출해 target 모듈을 import하지 않는다. finalize는 전체 및 각 write 직전 preimage 검증, missing 경로의 exclusive creation, 렌더 결과와 예정 mode에서 구성한 postimage를 사용한다. write 뒤 임의 live 파일을 postimage로 인정하지 않는다. initializer 기존 파일을 in-place truncate하지 않고 완성된 임시 bytes/mode를 준비해 preimage 재검증 후 교체한다. 사용자 divergence를 무조건 rollback해서는 안 되며, 이 변경도 OS-level 완전 동시성 isolation을 주장하지 않는다. 다섯 reproducer를 회귀 테스트로 포함하고 독립 verifier가 수정 후 다시 실행한다. 보수 구현 전 6개 회귀 테스트(다섯 결함 및 managed-preimage 변형)가 모두 실패함을 `/tmp/pr4-repair-before.log`로 확인했다. finalize의 catalog write는 기존 command_docs_index 안에서 이루어지므로 해당 쓰기 접점에만 명시적인 optional 내부 transaction 인자를 허용한다. 새 CLI/Namespace 정책 설정이나 무관한 catalog 재설계는 금지한다. 독립 reviewer는 clean 원본 worktree의 정확한 후보 SHA를 읽으며 Main tree에서는 PR3 보수를 순차 진행한다.
 
 Main 계약: 기존 init/upgrade --dry-run은 canonical 상대경로/action/preimage type·mode·hash/예정 content hash의 deterministic fingerprint를 제공한다. apply는 자체 동일 계획을 구성하고 mutation 전 전체 preimage를 다시 검증한다. 별도 실행한 dry-run을 승인 토큰으로 강제하는 기능은 추가하지 않으며 그러한 보장을 주장하지 않는다. 모든 target의 안전한 type과 부모 경로를 먼저 검사하고 mutation 직전 다시 검사한다. transaction이 실제 만든 postimage와 현재 파일이 같을 때만 rollback하며 다르면 사용자 변경을 보존하고 rollback conflict를 명시한다. 파일 bytes/mode와 새로 만든 빈 directory를 보존·복원하되 무관한 파일은 건드리지 않는다. 동시 수정의 완전한 OS-level isolation을 주장하지 않는다.
 
@@ -286,9 +290,9 @@ contract sync/check/idempotence, 링크 검사, matrix/distribution/package 제�
 
 #### Result
 
-읽기 전용 migration 조사 완료, 구현은 공유 테스트를 수정 중인 PR4 및 PR3 보수 이후 순차 수행한다. DESIGN의 durable operating 원칙과 최소 구현 관례는 core-beliefs로, ownership/technical 계약과 Gate 설명은 기존 ARCHITECTURE의 적절한 절로 통합한다. knowledge lifecycle은 README/PLANS, Main/Sub 및 공통 조사 의무는 CLAUDE portable block과 PLANS, command UX/UTF-8 및 제품 non-goals는 PRODUCT의 해당 절로 분리한다. 현재 README.md·docs/README.md·design-docs/index.md·portable contract의 live DESIGN 링크를 함께 수정하되 completed/history는 보존한다.
+읽기 전용 migration 조사 완료, 구현은 공유 테스트를 수정 중인 PR4 및 PR3 보수 이후 순차 수행한다. DESIGN의 durable operating 원칙과 최소 구현 관례는 core-beliefs로, ownership/technical 계약과 Gate 설명은 기존 ARCHITECTURE의 적절한 절로 통합한다. knowledge lifecycle은 README/PLANS, Main/Sub 및 공통 조사 의무는 CLAUDE portable block과 PLANS, command UX/UTF-8 및 제품 non-goals는 PRODUCT의 해당 절로 분리한다. 현재 docs/README.md·design-docs/index.md·portable contract의 live DESIGN 링크를 함께 수정하되 completed/history는 보존한다. Main이 README.md의 주변 문맥을 확인한 결과 DESIGN 언급은 source 링크가 아니라 generated-target 안내였으므로 지우지 않고 conditional visual taxonomy로 정정한다. README.en.md에도 동일한 stale 생성 트리가 있으므로 양쪽 generated tree/관련 lifecycle 설명의 최소 정정을 허용하며, target project-owned DESIGN 보존 보장은 그대로 유지한다.
 
-source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 AGENTS 전체 portable 내용으로 deterministic projection한다. 잘못된/중복 marker와 unsafe path는 쓰기 전에 거부하고 block 밖 provider-specific 내용은 AGENTS에 복사하지 않는다. `--check`는 읽기 전용이며 drift 때 비정상 종료한다. 새 unittest가 source command `--check`를 실행하여 기존 check/verify 경로에서 drift를 검출한다. CI/Gate/config 정책이나 target package 자산에 이 도구를 연결하지 않는다. source AGENTS와 target template의 종전 전체 동일성 assertion만 source-only 차이에 맞춰 분리하고 target AGENTS 독립성 및 runtime parity 검사는 유지한다.
+source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 AGENTS 전체 portable 내용으로 deterministic projection한다. 잘못된/중복 marker와 unsafe path는 쓰기 전에 거부하고 block 밖 provider-specific 내용은 AGENTS에 복사하지 않는다. `--check`는 읽기 전용이며 drift 때 비정상 종료한다. 새 unittest가 source command `--check`를 실행하여 기존 check/verify 경로에서 drift를 검출한다. marker spelling은 `<!-- reporivet:portable:start -->`와 `<!-- reporivet:portable:end -->`로 고정하고, 각 marker 사이의 UTF-8 line bytes를 정규화 없이 그대로 projection한다. 새 source wrapper는 기존 PYTHON 환경변수 관례를 따르고 helper는 `dev/agent_contract_sync.py` 하나로 제한한다. 임의 target CLI 옵션은 추가하지 않는다. CI/Gate/config 정책이나 target package 자산에 이 도구를 연결하지 않는다. source AGENTS와 target template의 종전 전체 동일성 assertion만 source-only 차이에 맞춰 분리하고 target AGENTS 독립성 및 runtime parity 검사는 유지한다.
 
 원문 PR3의 공통 조사 의무도 함께 반영한다: normative rule/decision의 reason·scope·방어할 실패, 기존 repo/dependency capability, 외부 선택의 공식 자료, no-change와 실질적 대안/거부 이유, verification/enforcement, revisit/retirement. 의미 판정 validator나 새로운 정책 runtime을 만들지는 않는다.
 
