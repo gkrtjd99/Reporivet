@@ -286,7 +286,11 @@ contract sync/check/idempotence, 링크 검사, matrix/distribution/package 제�
 
 #### Result
 
-M2 검증 대기.
+읽기 전용 migration 조사 완료, 구현은 공유 테스트를 수정 중인 PR4 및 PR3 보수 이후 순차 수행한다. DESIGN의 durable operating 원칙과 최소 구현 관례는 core-beliefs로, ownership/technical 계약과 Gate 설명은 기존 ARCHITECTURE의 적절한 절로 통합한다. knowledge lifecycle은 README/PLANS, Main/Sub 및 공통 조사 의무는 CLAUDE portable block과 PLANS, command UX/UTF-8 및 제품 non-goals는 PRODUCT의 해당 절로 분리한다. 현재 README.md·docs/README.md·design-docs/index.md·portable contract의 live DESIGN 링크를 함께 수정하되 completed/history는 보존한다.
+
+source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 AGENTS 전체 portable 내용으로 deterministic projection한다. 잘못된/중복 marker와 unsafe path는 쓰기 전에 거부하고 block 밖 provider-specific 내용은 AGENTS에 복사하지 않는다. `--check`는 읽기 전용이며 drift 때 비정상 종료한다. 새 unittest가 source command `--check`를 실행하여 기존 check/verify 경로에서 drift를 검출한다. CI/Gate/config 정책이나 target package 자산에 이 도구를 연결하지 않는다. source AGENTS와 target template의 종전 전체 동일성 assertion만 source-only 차이에 맞춰 분리하고 target AGENTS 독립성 및 runtime parity 검사는 유지한다.
+
+원문 PR3의 공통 조사 의무도 함께 반영한다: normative rule/decision의 reason·scope·방어할 실패, 기존 repo/dependency capability, 외부 선택의 공식 자료, no-change와 실질적 대안/거부 이유, verification/enforcement, revisit/retirement. 의미 판정 validator나 새로운 정책 runtime을 만들지는 않는다.
 
 ### T5 — 독립 통합 검증과 종료
 
