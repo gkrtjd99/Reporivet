@@ -424,4 +424,4 @@ PR3–PR5 구현과 독립 검증, 통합 canonical 검증은 완료했고 Main�
 
 ## Follow-ups
 
-- PLAN-2026-0002의 빈 closure evidence 및 사람 REVIEW 사유 요건은 최종 종료 시 별도로 확인한다.
+- 해결: PLAN-2026-0002는 자체 base `9d6d6600c54d29f7bb67dcb65eb5bffed56e337c`와 clean verified SHA `467dfdd4eec97c1a466466b8258d92665a46d527`의 실제 close-plan으로 종료됐다. run `20260907T105802775131Z-verify`, manifest SHA-256 `882c5cc12e22a833561f08754363ce66117e9bb53bc8e6155b1211b194f0856e`, 168 tests/70.651초 및 필수 6 checks PASS, optional smoke skipped, Gate REVIEW와 사용자 종료 진행 판단이 바인딩됐다. completed 이동과 criterion 15개 바인딩 후 strict docs/plan/catalog도 통과했고 완료 기록은 별도 commit `ee99d8ad0494aee789190155dfffa40c648c6500`이다. 이 계획은 별도 base/run으로 종료하며 이전 계획의 run을 재사용하지 않는다.
