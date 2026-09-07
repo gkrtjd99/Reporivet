@@ -302,11 +302,15 @@ source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 
 
 원문 PR3의 공통 조사 의무도 함께 반영한다: normative rule/decision의 reason·scope·방어할 실패, 기존 repo/dependency capability, 외부 선택의 공식 자료, no-change와 실질적 대안/거부 이유, verification/enforcement, revisit/retirement. 의미 판정 validator나 새로운 정책 runtime을 만들지는 않는다.
 
+2026-09-07 구현 후보 `17a684fff07d834ae0dcb30f25e8d63d3975e072` (base `31fe5ebf8e7c73f22862ce773f8522b90f27e264`): 정확한 18개 허용 경로만 변경, clean local commit. PLAN-0004 역할/분해/반증 및 PLANS delegation/result 절은 시작 후보와 byte-for-byte 보존했다. source DESIGN 의도/최소 구현→core-beliefs, ownership/argv/fail-closed/markers/Gate→ARCHITECTURE, lifecycle→README/PLANS, CLI UX/Unicode/non-goals→PRODUCT, agent 역할→기존 AGENTS/PLANS로 매핑하고 live source 링크를 교체한 뒤 retire했다. target optional visual DESIGN과 runtime/Gate/config/initializer/history는 변경하지 않았다. source CLAUDE portable payload→AGENTS exact-byte sync와 source wrapper/helper, 조사 의무·source template 정합성을 구현했다. catalog는 이미 current라 수동/자동 쓰기가 불필요했다.
+
+구현자 검증 환경: Darwin/Python 3.12.14 `/tmp/reporivet-pr3-venv`, 신규 테스트 first-red, focused 18/18 PASS, 최종 staged bytes의 `./dev/check` 166 tests/74.894초 PASS(distribution/offline install-uninstall/copied runtime 포함). sync --check/docs-index --check/docs-check/plan-check/diff-check 통과, commit 후 sync check PASS. run `.harness/runs/20260907T092143952903Z-check`, `/tmp/pr5-implementer-focused.log`, `/tmp/pr5-implementer-check-final.log`. 이 결과는 후보 evidence이며 독립 검토와 Main canonical 검증은 아직 진행 중이다.
+
 ### T5 — 독립 통합 검증과 종료
 
 #### State
 
-blocked
+in-progress
 
 #### Task type
 
@@ -350,7 +354,7 @@ HEAD 불일치, 누락 evidence, BLOCK/INCONCLUSIVE 또는 사람 사유 없는 
 
 #### Result
 
-구현 완료 대기.
+PR3와 PR4 bounded acceptance 완료, PR5 exact 구현 후보 `17a684fff07d834ae0dcb30f25e8d63d3975e072`의 별도 context 독립 검토 진행 중이다. Main은 이 후보와 계획 기록만 포함한 clean Git 대상에 계획 base를 지정해 canonical 검증한다. PLAN-0002의 현행 blocked/T9 및 빈 closure evidence를 확인했으며 기존 기록이 미종료 상태를 정확히 표현하므로 완료로 바꾸지 않는다. PLAN-0004에 받은 REVIEW 종료 승인을 다른 계획으로 확대하지 않는다.
 
 ## Architecture Impact
 
@@ -360,11 +364,11 @@ initializer와 copied stdlib runtime의 두 수명을 유지한다. 관찰 artif
 
 | Document | Action | Reason | Owner | Status |
 |---|---|---|---|---|
-| 현재 product/spec/design 문서와 packaged templates | update | authority lifecycle과 file-safety 계약 | Main | pending |
-| docs/DESIGN.md와 관련 현재 문서 | retire/update | 비시각 내용을 적절한 source로 이동 | Main | pending |
-| CLAUDE.md, AGENTS.md | update/generate | source portable contract projection | Main | pending |
-| docs/README.md 및 catalogs | generate/update | 현재 링크와 lifecycle 일치 | Main | pending |
-| PLAN-2026-0002 | update | 과거 complete 표시와 미종료 현실 구분 | Main | pending |
+| 현재 product/spec/design 문서와 packaged templates | update | authority lifecycle과 file-safety 계약 | Main | resolved |
+| docs/DESIGN.md와 관련 현재 문서 | retire/update | 비시각 내용을 적절한 source로 이동 | Main | resolved |
+| CLAUDE.md, AGENTS.md | update/generate | source portable contract projection | Main | resolved |
+| docs/README.md 및 catalogs | update | 현재 링크와 lifecycle 일치; catalog는 이미 current | Main | resolved |
+| PLAN-2026-0002 | update | 기존 blocked/T9 정정이 미종료 현실을 정확히 표현함을 확인 | Main | resolved |
 
 ## Interfaces and Dependencies
 
