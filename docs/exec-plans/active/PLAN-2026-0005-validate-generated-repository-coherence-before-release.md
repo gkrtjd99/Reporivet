@@ -1,19 +1,19 @@
 ---
 id: PLAN-2026-0005
 kind: exec-plan
-status: in-progress
+status: blocked
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "58665a897b891b0abc721e159593725c0b71af6d"
-integrated_commit: "HEAD"
-verified_commit: ""
+integrated_commit: "6ccade1f9fbf512dfcd2b2e24a847dc67f46f3a8"
+verified_commit: "6ccade1f9fbf512dfcd2b2e24a847dc67f46f3a8"
 traceability: 0
 product_spec: ""
-verification_run: ""
-manifest_sha256: ""
-gate_verdict: ""
+verification_run: "20260907T123724045668Z-verify"
+manifest_sha256: "5171ca080c3e221b444e77a3350a6d16aef0a6622b9a4ddb8bb3fb38c68d85c7"
+gate_verdict: "REVIEW"
 gate_review_reason: ""
 ---
 
@@ -30,7 +30,10 @@ gate_review_reason: ""
 - [x] 초기화·정의·adoption·upgrade의 bounded 실패 경로 반증. 추가 raw-path 후보는 시간 한도로 미확정.
 - [x] 실제 배포 wheel과 package 제거 후 생성 저장소 실행.
 - [x] Main의 확인된 세 결함 재현·증거 수락 및 배포 보류 권고 확정.
-- [ ] 공식 종료: 별도 canonical evidence-bound closure는 실행하지 않았다. 평가 완료와 배포 승인·결함 보수 완료를 구분한다.
+- [x] T5: 세 결함 및 raw-path 안전 보수, missing-parent 안내와 greenfield baseline 안내 정정.
+- [x] Main: exact `6ccade1` canonical 필수 6 checks 및 Python 3.12/3.13 각각 176 tests PASS.
+- [x] T6: 독립 코드 반증과 actual wheel/standalone 검증 완료. Main은 보수 범위의 코드 결과를 수락하며 아래 문서 충돌을 별도 보류한다.
+- [ ] 공식 종료·배포 판단: Gate REVIEW 및 fenced marker 현행 문서 충돌은 사람의 판단을 발명하지 않는다.
 
 ## Context and Orientation
 
@@ -384,7 +387,7 @@ AC-5, AC-6, AC-7
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -436,7 +439,13 @@ exact target 불일치, 외부 설치 필요, 허용 경계 변경 필요.
 
 #### Result
 
-후보 고정 대기.
+Main이 exact `6ccade1f9fbf512dfcd2b2e24a847dc67f46f3a8`을 고정한 뒤 별도 문맥의 두 leaf에 읽기 전용 하위 범위를 배정했다. 코드·안전 leaf는 7 focused tests와 자체 lifecycle/path 347 assertions, source/path 50 assertions를 통과했다. init/define/upgrade/adopt의 CRLF/bare CR/EOF/없는 marker/빈 파일 보존·반복 실행, malformed marker 16회 거부/무변경, 정상·broken symlink raw path 18회 거부/무변경, missing-parent 6회 사전 거부 및 ordinary 경로 성공을 확인했다. 원후보 archive에서 wrong-root 실제 쓰기를 독립 재현했고 보수 후보의 거부/무변경을 대조했다. 확인된 잔존 코드 결함은 없다는 recommendation이다. Main은 `/private/tmp/reporivet-t6-safety.ZtUy3C/{focused.log,adversarial-summary-rerun.log,source-path-summary.log}`와 코드 근거를 확인해 보수 범위에서 수락했다.
+
+distribution leaf는 별도 exact archive에서 전체176 tests PASS/79.702초, actual offline wheel build/install, 38 assets bytewise inventory, six-kind init/doctor/check/verify, installed CLI의 metadata/사용자 bytes 반복 보존 및 root main.py 빈 명령 exit2를 확인했다. 처음 monolithic script는 검증자의 runtime token 비교/오류 stdout 위치 가정 때문에 두 번 실패해 중지했다. Main은 남은 예산의 새 direct CLI 접근을 최대5분으로 한정했다. 기존 venv에서 package uninstall 및 isolated import 실패 확인 후 local check/verify/context/audit/garden/define status/new-plan/task/close-plan을 실제 실행해 모두 통과했다. standalone fixture `b12d3e9ea288ae0a2d88e6cced4e8dfe236d6121`에서 closure run 정확히1회/Gate PASS/completed 이동을 확인했다. 미완료 caveat는 이 추가 결과로 해소됐다. 근거 `/private/tmp/reporivet-independent-dist.p9vvJq/{fullsuite.log,distribution.log,asset-inventory.json,standalone.log,standalone-result.json}`. Wheel SHA256 `d5a1ef98e321c4c282d2939a22407e4870cba3d90b83256663084f26179d0265`.
+
+Main canonical은 동일 clean exact 후보에서 required6 checks PASS, optional smoke skipped, 176 tests PASS/85.291초다. 별도 Python3.13.15 exact archive도176 tests PASS/85.408초이며 `/private/tmp/reporivet-repaired-py313-41o9J8/repaired-py313.log`에 있다. run `20260907T123724045668Z-verify`, manifest SHA256 `5171ca080c3e221b444e77a3350a6d16aef0a6622b9a4ddb8bb3fb38c68d85c7`, Gate REVIEW(RISK_WIDE/PROTECTED_PATH_MATCH: dev/harness.py). Main이 실제 manifest bytes hash/clean target/HEAD 바인딩을 assert로 확인했다. 이 결과는 사람의 REVIEW 수락이나 배포 승인이 아니다.
+
+잔여 blocker: 독립 검토가 발견한 fenced marker의 SECURITY 문구와 기존 구현·테스트 간 충돌을 Main도 직접 확인했다. 해당 해석을 임의로 결정하지 않고 사용자에게 보고했으며 그 정책 항목의 acceptance를 중지했다. 코드 보수와 검증 작업은 완료하되 공식 종료·배포 준비 완료는 선언하지 않는다.
 
 ## Architecture Impact
 
@@ -450,6 +459,7 @@ exact target 불일치, 외부 설치 필요, 허용 경계 변경 필요.
 | README.md / README.en.md | update | missing-parent 사전 조건과 raw symlink 경로 거부 안내 | Main | resolved |
 | SPEC-REPORIVET-001 | update | configured source 외 empty-command guard의 관찰 범위와 비권위·비재귀 한계 명시 | Main | resolved |
 | 설계·template·completed 계획 | none | 기존 경계 복원이며 새 구조나 역사 변경 없음 | Main | resolved |
+| SECURITY | none | fenced marker의 현행 source 충돌을 보고하고 정책 판단 전 수정하지 않음 | Main / 사람 | blocked |
 
 ## Interfaces and Dependencies
 
@@ -488,19 +498,18 @@ Main은 세 읽기 전용 task의 관심사를 분리하고 결과 중복을 제
 
 ## 보수 단계의 현재 상태
 
-T5 구현은 완료했으며 Main이 후보 diff와 보수 전 실패/후 성공 근거를 검토했다. 아래 Outcomes/Follow-ups는 T1–T4 평가 당시 상태로, 확인된 세 결함 및 후속 경로 후보는 T5에서 회귀·보수했다. T6 독립 검증 및 Main 최종 canonical 수락은 아직 진행 중이다. source presence는 configured 경로, conventional source directory, 알려진 audit manifest, 지원 root regular source file을 확인한다. 비표준 중첩 경로·미지원 확장자는 운영자가 경로/명령을 설정해야 하며 새 재귀 scanner는 도입하지 않는다.
+T5 구현 및 T6 독립 재검증을 완료했다. Main은 보수 전 실패/후 성공, 새 exact 후보의 독립 반증·actual wheel/standalone·두 Python 버전 및 canonical 증거를 수락한다. 아래 Outcomes/Follow-ups는 보수 후 현재 상태다. T1–T4의 당시 평가는 각 Task Result에 보존한다. fenced marker 정책의 현행 source 충돌과 genuine REVIEW 판단은 해결하지 않고 보고했다. source presence는 configured 경로, conventional source directory, 알려진 audit manifest, 지원 root regular source file을 확인한다. 비표준 중첩 경로·미지원 확장자는 운영자가 경로/명령을 설정해야 하며 새 재귀 scanner는 도입하지 않는다.
 
 Main이 Python 3.13.15 대조 환경도 준비했다. 보수 전 cddd15f archive는 최초 168 중 distribution test만 setuptools.build_meta 부재로 실패했다. 기존 로컬 setuptools84 파일을 전용 `/private/tmp/reporivet-py313-venv-EANM2w`에 복사한 뒤 전체168 tests PASS. 외부 설치나 시스템 Python 변경은 없으며 최종 보수 후보는 별도로 검사한다. 근거 `/private/tmp/reporivet-baseline-py313-QspbWb/baseline-py313-equipped.log`.
 
 ## Outcomes and Retrospective
 
-배포 전 bounded 평가는 완료했다. 기본 생성 구조, authority 분리, 실제 wheel와 package 없는 runtime은 검사 범위에서 정상이다. 그러나 Main 재현이 있는 세 P2 때문에 현재 후보의 배포는 보류하는 편이 타당하다. 전체 168 tests 통과는 이 세 실패 경로를 배제하지 못했다. 이 판단은 release readiness recommendation이며 공식 Gate 또는 사람의 배포 승인이 아니다.
+확인된 세 P2 및 추가 raw-path wrong-root 쓰기 결함은 보수했고 독립 재검증에서도 잔존 코드 결함은 발견되지 않았다. missing-parent는 안전한 사전 거부와 안내로 명확히 했고 greenfield baseline 안내도 정정했다. 원후보168 tests에서 놓친 경로를 새 회귀8개로 고정해 최종176 tests가 두 Python 버전에서 통과했다. 생성 taxonomy/authority/actual wheel/package 없는 runtime 경계도 유지했다. 코드 보수 결과는 Main이 수락하되 아래 문서 충돌 및 REVIEW 때문에 전체 release-ready 또는 공식 종료 완료를 선언하지 않는다.
 
-검증 한계: Darwin arm64/Python 3.12.14의 local offline 환경만 신규 확인했다. Linux/Windows-native/다른 Python 조합, 외부 CI, 실제 publication/deployment, 장기간 authority retirement는 이번에 검증하지 않았다. 추가 raw-path 후보는 미확정이다. 검증 평가와 공식 계획 종료는 다르므로 canonical closure 증거 없이 completed로 이동하지 않는다.
+검증 한계: Darwin arm64/Python3.12.14·3.13.15의 local offline 환경이다. Linux/Windows-native/Python3.11, 외부 CI, publication/deployment, 장기간 authority retirement는 이번에 신규 확인하지 않았다. source detector는 명시 범위의 empty-command guard이며 arbitrary source inventory가 아니다. OS-level race/process isolation도 보장하지 않는다.
 
 ## Follow-ups
 
-- Main 소유: 별도 보수 요청 시 세 confirmed P2에 대한 failing regression부터 고정하고 보수 후 새 exact candidate를 독립 검증한다. 현재 자동 보수는 수행하지 않는다.
-- Main 소유: 추가 initializer symlink/.. 후보는 후속 보안 검증에서 실제 쓰기/거부 대조군으로 확정하거나 기각한다. 현재 confirmed defect로 취급하지 않는다.
-- Main 소유: nested root 부모 생성 제약 및 greenfield PLAN-0000 안내는 보수 범위 결정 때 검토한다. 실제 데이터 손실이나 dead end를 확인했다고 주장하지 않는다.
-- 공식 종료 blocker: 이번 검증 기록에는 신규 source canonical run/manifest와 evidence-bound close-plan이 없다. 이전 계획의 REVIEW 수락을 이 계획으로 재사용하지 않는다.
+- Main/사람 판단 필요: `docs/SECURITY.md:34`의 “malformed or fenced lookalikes fail”과 `tests/test_audit_adoption.py:884–928` 및 `initializer.py:536–581`의 fenced 예시 보존/별도 actual block append 동작이 충돌한다. Main은 두 소스를 직접 확인했다. 이번 보수 이전부터 존재한 정책 해석 문제이며, 임의의 문구 변경이나 기존 테스트 완화를 하지 않았다. 권고는 예시를 ownership으로 인정하지 않는 기존 동작을 유지하고 SECURITY 설명을 명확히 하는 것이지만, 현행 source 충돌 해결 판단 없이 적용하지 않는다. 해당 항목 acceptance는 중지 상태다.
+- Main/사람 판단 필요: canonical Gate REVIEW는 wide/protected runtime 변경에 따른 결과다. 현재 검증 내용·영향·복구 경로를 검토한 genuine human rationale가 없으므로 close-plan은 실행하지 않는다. 이전 계획의 REVIEW 수락을 재사용하지 않는다.
+- 보수와 검증은 local commits에 한정했다. push/release/deployment 또는 사용자 저장소 upgrade는 수행하지 않았다.
