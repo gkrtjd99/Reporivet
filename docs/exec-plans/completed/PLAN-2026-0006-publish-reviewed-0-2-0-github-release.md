@@ -1,19 +1,19 @@
 ---
 id: PLAN-2026-0006
 kind: exec-plan
-status: verifying
+status: complete
 owner: main
 area: harness
 created: 2026-09-08
 updated: 2026-09-08
 base_commit: "364a77346d542042307bdcc3f5a84602ec105c08"
-integrated_commit: HEAD
-verified_commit: ""
+integrated_commit: ef376c4bcdbebf2664201d8d70c41d95dd7e23a8
+verified_commit: ef376c4bcdbebf2664201d8d70c41d95dd7e23a8
 traceability: 0
 product_spec: ""
-verification_run: ""
-manifest_sha256: ""
-gate_verdict: ""
+verification_run: "20260907T173809978875Z-verify"
+manifest_sha256: "997637b340ff0492a6d8b4d68a4d90e9064bcc9877d6e36030ae5024373b312d"
+gate_verdict: "PASS"
 gate_review_reason: ""
 ---
 
