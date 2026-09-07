@@ -27,7 +27,7 @@ gate_review_reason: ""
 
 - [x] 복구 원문과 현재 HEAD, 기존 계획의 종료 요건 확인.
 - [x] PR3: 관찰 facts, baseline questions, authority drafts와 context lifecycle 구현 및 독립 검증.
-- [ ] PR4: 현행 계약에 필요한 file-safety만 테스트부터 선별 이식 및 독립 검증.
+- [x] PR4: 현행 계약에 필요한 file-safety 보수 및 exact 후보의 독립 재검증, Main bounded acceptance.
 - [ ] PR5: 자체 문서 migration, portable contract projection, release fixture 검증.
 - [ ] 통합 후보의 canonical verification과 두 계획의 종료 상태 정리.
 
@@ -190,7 +190,7 @@ AC-1, AC-2, AC-3, AC-6
 
 #### State
 
-in-progress
+complete
 
 #### Task type
 
@@ -242,11 +242,13 @@ Main 계약: 기존 init/upgrade --dry-run은 canonical 상대경로/action/prei
 
 허용 경로: src/reporivet/initializer.py, 기존 CLI 출력의 fingerprint 연결만 src/reporivet/cli.py, canonical/dogfood dev/harness.py의 definition finalize/close-plan rollback, 관련 tests 및 직접 영향 security/design/spec 문서. runtime 전반의 unrelated mutation이나 Gate 정책은 확장하지 않는다. 새로운 approval CLI, persisted backup registry, production dependency는 금지한다.
 
+2026-09-07 재개 및 보수 후 독립 검증: 보수 commit `1d064217da738ebc3ed593ce4aeccf365fb0cd16`은 이미 통합되어 있었다. 독립 verifier는 exact `24a98fc658a015f5b143a92881a0f0ba8cd5be76`를 archive `/tmp/pr4-24a98fc-verifier-kqgWD5`로 분리하고 Git blob과 핵심 코드 bytes를 비교했다. Darwin arm64/Python 3.12.14의 `/tmp/reporivet-pr3-venv` 환경에서 전체 155 tests/73.927초 PASS (distribution/offline wheel install-uninstall/copied runtime 및 service/web/library/CLI 포함). 과거 reproducer를 현행 hook과 안전 기대값에 맞춘 임시 사본으로 5 scenarios 전부 재실행했고 추가 독립 4 tests/5 scenarios (chmod/replace 실패, staging mode-only, finalize mode-only divergence, catalog partial temp write)도 PASS했다. 로그는 `/tmp/pr4-24a98fc-verifier-suite.log`, `/tmp/pr4-24a98fc-repro.log`, `/tmp/pr4-24a98fc-adversarial.log`다. 새로 재현된 결함 없음, AC-4/해당 AC-6 PASS recommendation. Main은 이를 bounded PR4 acceptance로 수락한다. archive 독립 검증은 T5의 Git-bound canonical 검증을 대체하지 않는다. 기존 OS isolation/partial-error rollback-incomplete 한계를 유지하며 운영 계약 PLAN-0004 변경을 복구 범위로 재구현하지 않는다.
+
 ### T4 — PR5 migration
 
 #### State
 
-blocked
+in-progress
 
 #### Task type
 
@@ -270,7 +272,7 @@ docs/DESIGN.md, AGENTS.md, CLAUDE.md, ARCHITECTURE.md, core-beliefs, PLANS와 �
 
 #### Allowed writes
 
-Main이 확인한 이동 대상 현재 문서, source-only dev/agent-contract-sync와 대응 검사/테스트, 문서 catalogs.
+정확한 구현 허용 경로: CLAUDE.md, AGENTS.md, 신규 dev/agent-contract-sync, 신규 dev/agent_contract_sync.py, docs/DESIGN.md(아래 내용 보존 후 retire), ARCHITECTURE.md, docs/design-docs/core-beliefs.md, docs/PRODUCT.md, docs/PLANS.md, docs/README.md, docs/design-docs/index.md, README.md, README.en.md, src/reporivet/assets/project/root/AGENTS.md.tmpl, 신규 tests/test_agent_contract_sync.py, tests/test_agent_operating_contract.py, docs/design-docs/_template.md, docs/decisions/_template.md. Main만 이 계획을 편집한다. source design/ADR template은 이미 조사 항목을 갖춘 packaged template과 맞추는 범위만 허용한다. 초기 18개 허용 경로 밖 발견은 구현하지 말고 Main에 보고한다.
 
 #### Protected paths
 
@@ -291,6 +293,10 @@ contract sync/check/idempotence, 링크 검사, matrix/distribution/package 제�
 #### Result
 
 읽기 전용 migration 조사 완료, 구현은 공유 테스트를 수정 중인 PR4 및 PR3 보수 이후 순차 수행한다. DESIGN의 durable operating 원칙과 최소 구현 관례는 core-beliefs로, ownership/technical 계약과 Gate 설명은 기존 ARCHITECTURE의 적절한 절로 통합한다. knowledge lifecycle은 README/PLANS, Main/Sub 및 공통 조사 의무는 CLAUDE portable block과 PLANS, command UX/UTF-8 및 제품 non-goals는 PRODUCT의 해당 절로 분리한다. 현재 docs/README.md·design-docs/index.md·portable contract의 live DESIGN 링크를 함께 수정하되 completed/history는 보존한다. Main이 README.md의 주변 문맥을 확인한 결과 DESIGN 언급은 source 링크가 아니라 generated-target 안내였으므로 지우지 않고 conditional visual taxonomy로 정정한다. README.en.md에도 동일한 stale 생성 트리가 있으므로 양쪽 generated tree/관련 lifecycle 설명의 최소 정정을 허용하며, target project-owned DESIGN 보존 보장은 그대로 유지한다.
+
+2026-09-07 재개한 정확한 migration 경계: PLAN-0004의 Main/Lead/leaf·분해·반증 문구는 source/target 역할 절에 그대로 보존한다. DESIGN의 repository-centric 원칙과 최소 구현 관례는 core-beliefs, ownership·fail-closed·argv 실행·Gate/closure 기술 설명은 ARCHITECTURE, lifecycle은 README/PLANS, CLI/UTF-8 observable 계약과 비목표는 PRODUCT에 대응시킨다. 이미 동등하게 존재하는 문장은 중복 복사하지 말고 Result의 mapping으로 보존을 입증한다. current live DESIGN 링크는 AGENTS/README/design-docs index에서 교체하고 target optional visual DESIGN 및 관련 fixtures/runtime/constants와 completed history는 보존한다. source PLANS Required properties 및 source design/ADR templates의 누락된 공통 조사 구조는 이미 갖춰진 target 계약에 맞춘다. 새 조사 의무는 Engineering invariants에 두어 기존 역할 절을 재작성하지 않는다.
+
+실행 제약: 구현 leaf 한 명, 재위임 금지, 쓰기는 순차. 파일 편집/local candidate commit 및 Python 3.12 focused/check 도구 허용, 예산 최대 25분, 같은 접근 두 번 실패 시 중지. 별도 read-only verifier가 exact 후보의 source sync/path/migration/target parity를 반증하며 최대 15분. 추가 의존성/CLI target/CI/Gate/config 변경 금지. source sync는 root/parent 및 CLAUDE/AGENTS의 unsafe symlink·nonregular를 검증하고 marker malformed/fenced/duplicate/reversed와 invalid UTF-8을 쓰기 전 거부한다. payload bytes는 정규화하지 않으며 --check는 파일·mode·mtime을 변경하지 않는다. drift sync는 같은 directory의 완성된 temporary file 교체 및 기존 mode 보존, preimage divergence 시 중지, idempotent 동작이다. OS-level 완전 동시성 isolation이나 외부 approval-token binding은 주장하지 않는다. helper/wrapper는 package asset/target에 포함하지 않는다.
 
 source-only sync의 최소 계약: CLAUDE의 유일한 paired portable block을 AGENTS 전체 portable 내용으로 deterministic projection한다. 잘못된/중복 marker와 unsafe path는 쓰기 전에 거부하고 block 밖 provider-specific 내용은 AGENTS에 복사하지 않는다. `--check`는 읽기 전용이며 drift 때 비정상 종료한다. 새 unittest가 source command `--check`를 실행하여 기존 check/verify 경로에서 drift를 검출한다. marker spelling은 `<!-- reporivet:portable:start -->`와 `<!-- reporivet:portable:end -->`로 고정하고, 각 marker 사이의 UTF-8 line bytes를 정규화 없이 그대로 projection한다. 새 source wrapper는 기존 PYTHON 환경변수 관례를 따르고 helper는 `dev/agent_contract_sync.py` 하나로 제한한다. 임의 target CLI 옵션은 추가하지 않는다. CI/Gate/config 정책이나 target package 자산에 이 도구를 연결하지 않는다. source AGENTS와 target template의 종전 전체 동일성 assertion만 source-only 차이에 맞춰 분리하고 target AGENTS 독립성 및 runtime parity 검사는 유지한다.
 
