@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-0005
 kind: exec-plan
-status: blocked
+status: in-progress
 owner: main
 area: harness
 created: 2026-09-07
@@ -62,6 +62,12 @@ gate_review_reason: ""
 
 문서 영향: Main이 이 계획의 결과/근거를 갱신한다. runtime의 현행 의미를 설명하는 문서 수정이 실제 필요하면 Main이 해당 현행 문서만 검토 후 갱신한다. completed 문서는 변경하지 않는다. 기본 보수는 기존 계약 복원이므로 migration/schema 변환은 없으며 source/package runtime 동기화와 신규 생성·upgrade 경로를 검증한다. rollback은 이 bounded 변경의 정상 revert이며 사용자 문서·설정 변환을 요구하지 않는다.
 
+## 승인된 문구 정정·추가 계약 조사 — 2026-09-07
+
+사용자는 “니가 말하는 권장사항이 더 옳다고 생각되면 그걸로 진행시켜 다른계약들도 충돌있나 파악해주는데 이 때 sonnet으로 문서읽고 작업다해라”라고 요청했다. Main은 fenced 예시를 보존하되 ownership으로 인정하지 않는 기존 동작을 유지하고 SECURITY 문구를 명확히 하는 권고를 채택한다. 근거는 예시가 들어 있다는 이유로 정상 사용자 문서를 거부하지 않으면서 actual malformed marker 거부와 파일 소유권 보호를 유지하기 때문이다. no-change는 알려진 설명 충돌을 남기며, fenced 예시 전부 거부는 기존 테스트와 정상 adoption 동작을 바꾸므로 기각한다. 새 외부 기술·dependency 선택은 없다. enforcement는 기존 fenced/actual malformed marker 회귀와 독립 문서 검토이며 marker 문법 또는 adoption ownership을 명시 변경할 때 재검토한다.
+
+T7에서 해당 SECURITY 설명만 정정한다. T8의 다른 현행 계약 충돌은 조사·평가가 범위이며 정책·코드 변경까지 승인받은 것으로 확대하지 않는다. 발견된 충돌은 해당 항목의 기대값 판단을 중지하고 보고한다. T7/T8/T9의 문서 조사·수정·독립 검토는 모두 model=sonnet으로 명시 실행한다. 모델 선택은 이번 사용자 요청에 따른 실행 배정이지 portable contract의 역할 규칙 변경이 아니다. Main은 계획·범위·최종 통합·검증만 소유한다. 이전 T6 REVIEW는 사용자에게 이미 보고한 검증 결과지만 이번 지시를 임의의 새 Gate rationale로 변환하지 않는다. push/release/deployment는 계속 비목표다.
+
 ## Acceptance Criteria
 
 - **AC-1:** 생성 문서의 논리 정합성을 실제 산출물과 canonical 요구사항/명령에 대조한다.
@@ -72,6 +78,9 @@ gate_review_reason: ""
 - **AC-5:** ordinary define와 재초기화/upgrade는 기존 config의 name/summary를 존중하고 AGENTS/.gitignore 관리 블록 밖 bytes를 보존한다. 관련 실패 회귀와 반복 실행 대조군이 통과한다.
 - **AC-6:** root-level 구현이 있는 프로젝트에서 빈 check/verify 명령은 명시적으로 실패하고, 실제 빈 프로젝트와 명시된 정상/실패 명령의 기존 동작을 유지한다. source detection은 문서·config authority를 변경하지 않는다.
 - **AC-7:** raw symlink/.. 후보를 확정/기각하고 확인된 경로 계약 위반은 거부 회귀로 보수한다. 신규 후보의 전체 suite, 독립 검토, actual wheel/standalone 및 Main canonical 결과를 기록한다. 미실행 플랫폼/외부 CI/배포는 통과로 주장하지 않는다.
+
+- **AC-8:** SECURITY가 fenced 예시의 비ownership·원문 보존과 actual malformed marker 거부를 구분해 기존 테스트·구현과 일치한다. 동작·config·테스트를 바꾸지 않는다.
+- **AC-9:** 다른 현행 계약 충돌 조사 범위·exact target·서로 대립하는 근거·실험 및 불확실성을 기록하고 별도 Sonnet이 후보를 재검토한다. 기대값을 임의 결정하거나 조사하지 않은 영역을 통과로 주장하지 않는다.
 
 ## Milestones
 
@@ -447,6 +456,180 @@ Main canonical은 동일 clean exact 후보에서 required6 checks PASS, optiona
 
 잔여 blocker: 독립 검토가 발견한 fenced marker의 SECURITY 문구와 기존 구현·테스트 간 충돌을 Main도 직접 확인했다. 해당 해석을 임의로 결정하지 않고 사용자에게 보고했으며 그 정책 항목의 acceptance를 중지했다. 코드 보수와 검증 작업은 완료하되 공식 종료·배포 준비 완료는 선언하지 않는다.
 
+### T7 — 승인된 fenced marker 계약 문구 정정
+
+#### State
+
+in-progress
+
+#### Task type
+
+implementation
+
+#### Depends on
+
+T6
+
+#### Execution constraints
+
+- Required capabilities: Sonnet의 문서·코드·회귀 근거 대조와 최소 문구 정정.
+- Tool access: read/edit/Python focused checks, docs/SECURITY.md만 쓰기.
+- Concurrency: 단일 문서 writer. T8은 이전 exact archive만 읽는다. Main은 구현 중 tracked 쓰기 없음.
+- Retry budget: 같은 접근 두 번 실패 시 반환.
+- Time budget: 10분.
+
+#### Outcome
+
+사용자가 승인한 권고에 따라 fenced marker 예시는 보존하되 ownership으로 인정하지 않는 기존 구현·테스트에 맞게 SECURITY 설명을 정정한다. malformed actual marker는 계속 거부한다.
+
+#### Non-goals
+
+코드·테스트·정책 동작 변경, unrelated 문구 정리, 다른 계약 충돌의 암묵적 수정, 계획 편집, commit, 재위임.
+
+#### Read
+
+SECURITY, 관련 initializer marker parsing, test_audit_adoption의 fenced/partial/duplicate/reversed 회귀. 같은 주장의 package template 존재 여부도 확인만 한다.
+
+#### Allowed writes
+
+`docs/SECURITY.md`와 자신의 임시 로그만.
+
+#### Protected paths
+
+위 경로 외 tracked 파일, 사용자 데이터, 다른 fixture, 외부 저장소.
+
+#### Acceptance
+
+AC-8
+
+#### Verify
+
+정정 문구와 기존 marker 관련 테스트를 대조하고 focused tests/docs-check를 실행한다. final approval은 Main 소유다.
+
+#### Stop conditions
+
+existing behavior를 바꿔야 함, 다른 source 충돌, 허용 경로 밖 수정 필요.
+
+#### Result
+
+문구 정정 대기.
+
+### T8 — 다른 현행 계약의 Sonnet 충돌 조사
+
+#### State
+
+in-progress
+
+#### Task type
+
+verification
+
+#### Depends on
+
+T6
+
+#### Execution constraints
+
+- Required capabilities: Sonnet의 source-of-truth/생성 계약/실행 동작 독립 대조.
+- Tool access: exact archive read/search 및 임시 fixture/log만 쓰기.
+- Concurrency: 두 읽기 전용 leaf. A는 역할·계획·authority, B는 lifecycle·검증·파일 소유권. 공유 exact 후보는 f6cea2186a4f3d807619b4d42ab6b6f0064ed943.
+- Retry budget: 같은 접근 두 번 실패 시 중지.
+- Time budget: 각 leaf 12분.
+
+#### Outcome
+
+다른 현행 계약 간 모순 또는 문서와 실제 동작의 충돌을 근거·trigger·영향과 함께 보고한다. 애매한 문구·운영 한계·역사 기록은 확정 충돌과 구분한다.
+
+#### Non-goals
+
+어떤 tracked 수정도 없음, 새 규칙 발명, completed history를 현행 authority로 취급, 검증 결과를 배포 승인으로 확대, 재위임.
+
+#### Read
+
+docs/README의 map에 따른 현행 PRODUCT/SPEC/ARCHITECTURE/QUALITY/SECURITY/PLANS/core-beliefs/accepted ADR/module contracts, CLAUDE/AGENTS, 해당 package templates/runtime/initializer/tests의 필요한 근거만. 전체 logs/dependencies/history preload 금지.
+
+#### Allowed writes
+
+자신의 임시 archive/fixture/log만.
+
+#### Protected paths
+
+모든 원본 tracked 파일과 다른 task fixture, 외부 저장소.
+
+#### Acceptance
+
+AC-9
+
+#### Verify
+
+충돌 후보마다 서로 반대되는 정확한 두 주장 또는 코드·실행 근거를 제시한다. 같은 개념의 범위 차이인지 반증하며 이미 승인된 fenced 문구 정정은 중복 결함으로 세지 않는다. 내용 수정은 Main의 명시 범위 조정 없이 하지 않는다.
+
+#### Stop conditions
+
+현행 source 충돌의 기대값 판단 필요 시 그 항목을 멈추고 보고. 다른 비충돌 범위 조사는 계속할 수 있다.
+
+#### Result
+
+읽기 전용 조사 대기.
+
+### T9 — Sonnet 독립 검토 및 Main 통합 검증
+
+#### State
+
+blocked
+
+#### Task type
+
+verification
+
+#### Depends on
+
+T7, T8
+
+#### Execution constraints
+
+- Required capabilities: Sonnet의 독립 문서·계약 반증, Main의 exact target/canonical evidence 통합.
+- Tool access: 별도 exact archive read/임시 실험, Main만 계획 기록·local commit·canonical 명령.
+- Concurrency: T7 쓰기 종료 및 후보 고정 후. final canonical과 읽기 전용 검토 병렬 허용.
+- Retry budget: 같은 접근 두 번 실패 시 중지.
+- Time budget: 독립 leaf 10분, Main 통합 10분.
+
+#### Outcome
+
+승인된 문구 보수의 정확성과 T8 finding의 진위를 별도 Sonnet 문맥에서 재검토한다. Main이 confirmed findings/한계/검증 결과를 기록한다.
+
+#### Non-goals
+
+미승인 추가 수정, 사람 REVIEW rationale 발명, 자동 배포, 재위임.
+
+#### Read
+
+고정 후보 diff, T8의 구체적 후보와 original 근거, 관련 테스트·현행 계약만.
+
+#### Allowed writes
+
+leaf는 자신의 임시 fixture/log만. Main은 이 계획만 기록하고 승인된 문구 변경을 통합한다.
+
+#### Protected paths
+
+runtime/tests/config/CI/AGENTS/CLAUDE/completed history/외부 저장소.
+
+#### Acceptance
+
+AC-8, AC-9
+
+#### Verify
+
+exact commit 독립 반증, Main explicit-target canonical verify 및 docs/plan/catalog/diff 검사. REVIEW의 미수락과 확인된 잔여 충돌은 별도 보고한다.
+
+#### Stop conditions
+
+새 정책·동작 결정 필요, 수정 경계 확대, 검증 불가 환경.
+
+#### Result
+
+T7/T8 후보 대기.
+
 ## Architecture Impact
 
 없음. 현행 계약과 산출물을 읽기 전용 검증하며 구현·의존성은 변경하지 않는다.
@@ -459,7 +642,7 @@ Main canonical은 동일 clean exact 후보에서 required6 checks PASS, optiona
 | README.md / README.en.md | update | missing-parent 사전 조건과 raw symlink 경로 거부 안내 | Main | resolved |
 | SPEC-REPORIVET-001 | update | configured source 외 empty-command guard의 관찰 범위와 비권위·비재귀 한계 명시 | Main | resolved |
 | 설계·template·completed 계획 | none | 기존 경계 복원이며 새 구조나 역사 변경 없음 | Main | resolved |
-| SECURITY | none | fenced marker의 현행 source 충돌을 보고하고 정책 판단 전 수정하지 않음 | Main / 사람 | blocked |
+| SECURITY | update | 사용자가 권고 채택을 승인해 fenced 예시와 actual malformed marker를 구분하는 기존 동작으로 설명 정정 | Sonnet / Main | in-progress |
 
 ## Interfaces and Dependencies
 
