@@ -228,6 +228,8 @@ All criteria in this plan.
 
 `./dev/verify` plus declared smoke or reproduction commands.
 
+Verifier는 반례·실패 경로·회귀를 능동적으로 찾고 테스트 자체의 가정도 의심한다. 수정 후에는 새 exact candidate를 재검증한다.
+
 #### Stop conditions
 
 The candidate commit differs from the integrated target, evidence is unavailable, or requirements conflict.
@@ -235,6 +237,8 @@ The candidate commit differs from the integrated target, evidence is unavailable
 #### Result
 
 TODO: status; exact target commit SHA; changed paths or read-only scope; execution environment; commands run; verification scope; results and evidence; blockers, unresolved issues, and residual limitations; verifier recommendation; Main or human approval recorded separately. If an independent context was unavailable, state that independent verification was not performed.
+
+결함에는 위반한 요구사항·trigger·영향과 재현 또는 구체적인 코드 근거를 제시한다. 우려·취향·미검증 영역은 결함과 구분하고 결함 개수를 강제하지 않는다.
 
 ## Architecture Impact
 
@@ -248,6 +252,10 @@ TODO: affected modules, dependency edges, invariants, and required machine check
 | `ARCHITECTURE.md` | TODO | TODO | Main | pending |
 
 ## Interfaces and Dependencies
+
+Main은 Task 간 공유 인터페이스·경로 소유권·의존성·통합 순서를 설계한다. 지정된 Lead는 상위 계약 안의 leaf 분해·경계 설계를 담당한다. TODO: 필요한 경계와 소유자·의존성·통합 순서를 적는다.
+
+공유 계약은 병렬 수행 동안 고정한다. 변경이 필요하면 영향 작업을 멈추고 경계 소유자(Main: Task 간, Lead: parent 내부)가 계약을 조정한 뒤 재배정한다. parent 범위·계약·권한 변경은 Main에게 반환한다. 이 절차는 host/project의 더 제한적인 병렬 정책을 완화하지 않으며, 독립 경계를 만들 수 없으면 순차 수행한다.
 
 - Existing project capability inspected: TODO
 - New production dependency: none / TODO

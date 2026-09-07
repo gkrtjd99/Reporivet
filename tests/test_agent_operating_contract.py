@@ -59,7 +59,10 @@ class AgentOperatingContractTests(unittest.TestCase):
             "without further approval for each leaf",
             "execution stays within the parent budget",
             "must not be used to bypass a denied action",
-            "lead role is limited to scheduling leaf work",
+            "lead의 역할은 상위 계약 안의 leaf 분해·경계 설계·packet 구성과 배정",
+            "scheduling leaf work, coordinating repairs, consolidating results로 제한한다",
+            "lead cannot change permissions or plan state",
+            "edit the durable execplan, perform final integration, or approve acceptance",
             "memory is auxiliary",
         ):
             self.assertIn(required, normalized)
@@ -86,7 +89,10 @@ class AgentOperatingContractTests(unittest.TestCase):
             "scope changes return to main",
             "execution stays within the parent budget",
             "must not be used to bypass a denied action",
-            "lead role is limited to scheduling",
+            "lead의 역할은 상위 계약 안의 leaf 분해·경계 설계·packet 구성과 배정",
+            "consolidating leaf results and status로 제한",
+            "lead cannot change acceptance, permissions, or plan state",
+            "edit the durable execplan, perform final integration, or approve completion",
             "focused verification",
             "canonical verification",
             "separate worktrees",
@@ -154,6 +160,53 @@ class AgentOperatingContractTests(unittest.TestCase):
         verifier = blocks["T3"].casefold()
         self.assertIn("independent context", verifier)
         self.assertIn("not performed", verifier)
+
+    def test_decomposition_ownership_and_shared_contract_change_protocol(self) -> None:
+        contracts = {
+            "agents": section(self.read("AGENTS.md"), "Agent operating roles"),
+            "plans": section(self.read("docs/PLANS.md"), "Operating roles and delegation"),
+            "template": section(
+                self.read("docs/exec-plans/_template.md"), "Interfaces and Dependencies"
+            ),
+        }
+        for name, contract in contracts.items():
+            with self.subTest(contract=name):
+                for required in (
+                    "Main은 Task 간 공유 인터페이스·경로 소유권·의존성·통합 순서를 설계한다",
+                    "상위 계약 안의 leaf 분해·경계 설계",
+                    "공유 계약은 병렬 수행 동안 고정한다",
+                    "변경이 필요하면 영향 작업을 멈추고",
+                    "경계 소유자(Main: Task 간, Lead: parent 내부)가 계약을 조정한 뒤 재배정한다",
+                    "parent 범위·계약·권한 변경은 Main에게 반환한다",
+                    "host/project의 더 제한적인 병렬 정책을 완화하지 않으며",
+                    "독립 경계를 만들 수 없으면 순차 수행한다",
+                ):
+                    self.assertIn(required, contract)
+                self.assertNotIn("Beyond composing those packets", contract)
+
+    def test_verifier_falsification_and_evidence_based_findings(self) -> None:
+        plans = self.read("docs/PLANS.md")
+        verifier = task_blocks(self.read("docs/exec-plans/_template.md"))["T3"]
+        contracts = {
+            "agents": (section(self.read("AGENTS.md"), "Agent operating roles"),) * 2,
+            "plans": (
+                section(plans, "Operating roles and delegation"),
+                section(plans, "Result prose contract"),
+            ),
+            "template": (
+                verifier.split("#### Verify", 1)[1].split("#### Stop conditions", 1)[0],
+                verifier.split("#### Result", 1)[1].split("\n## ", 1)[0],
+            ),
+        }
+        for name, (verification, result) in contracts.items():
+            with self.subTest(contract=name):
+                self.assertIn("반례·실패 경로·회귀를 능동적으로 찾고", verification)
+                self.assertIn("테스트 자체의 가정도 의심한다", verification)
+                self.assertIn("수정 후에는 새 exact candidate를 재검증한다", verification)
+                self.assertIn("위반한 요구사항·trigger·영향", result)
+                self.assertIn("재현 또는 구체적인 코드 근거를 제시한다", result)
+                self.assertIn("우려·취향·미검증 영역은 결함과 구분", result)
+                self.assertIn("결함 개수를 강제하지 않는다", result)
 
     def test_knowledge_maps_explain_explicit_plan_selection_without_changing_taxonomy(self) -> None:
         source = self.read("docs/README.md")
