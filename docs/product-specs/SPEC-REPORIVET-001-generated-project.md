@@ -59,12 +59,22 @@ A generated profile creates this operating surface. Optional document entries ap
 │   ├── module-contracts/
 │   ├── decisions/
 │   ├── runbooks/
-│   ├── generated/code-map.md
+│   ├── generated/
+│   │   ├── code-map.md
+│   │   ├── repository-facts.md
+│   │   └── baseline-questions.md
 │   └── references/project-definition-protocol.md
 └── .harness/runs/
 ```
 
 Service and application profiles select `RELIABILITY.md` by default; web profiles also select `DESIGN.md` and `FRONTEND.md`; library, CLI, and other profiles select no optional documents by default. Explicit capabilities may select optional documents in schema 2 configuration. CI workflows are added only with `--with-ci` or when an existing managed CI surface is upgraded.
+
+## Authority draft and evidence lifecycle
+
+- `repository-facts.md` records only directly observed manifests, lockfiles, source/test roots, CI, runtime configuration, and entry-point paths plus mechanically derived language, runtime, and command candidates. Every row names an evidence path, observed facts and candidates remain distinct, and neither becomes normative authority automatically.
+- `baseline-questions.md` identifies product intent, user, non-goal, ownership, security, reliability/SLO, and visual-choice questions that scanning cannot answer.
+- `PRODUCT.md` and `ARCHITECTURE.md` start as target-centered drafts with a one-line provenance marker. Their baseline review sections require completed evidence checklists and concrete review evidence before an established baseline can pass; lifecycle status edits alone do not satisfy the guard.
+- Fresh initialization creates only the design-document index and reusable template, not a project-specific technical design or replacement for an existing `core-beliefs.md`.
 
 ## New empty repository lifecycle
 
@@ -86,18 +96,21 @@ Service and application profiles select `RELIABILITY.md` by default; web profile
 - `reporivet audit` and `./dev/audit` are deterministic, read-only, and do not execute project commands.
 - `reporivet define --adopt` audits first, preserves current authority, adds only missing responsibilities, refuses collisions before writing, and keeps inferred commands in review.
 
-## Context and traceability behavior
+## Context, authority, and traceability behavior
 
 - Module contracts are created only for justified actual, configured, or confirmed planned multi-file boundaries.
 - `./dev/code-map` emits only evidence-backed rows and marks the map as generated/non-authoritative.
-- `./dev/context --path`, `--area`, or `--plan` routes to matching current-state docs, product specs, contracts, map entries, and active plans.
+- `./dev/context --path`, `--area`, or `--plan` includes active current-state/product/design/runbook documents and accepted decisions by default. `--include-drafts` exposes draft/proposed authority; `--include-history` exposes deprecated/superseded/rejected authority and completed plans.
+- Context fails on objective authority ambiguity such as duplicate authority IDs or inconsistent explicit supersession links. Different IDs with related or identical `applies_to` scopes are legal and are not treated as a semantic conflict.
+- Accepted decisions require concrete context/reason, at least two substantive alternatives with rejection rationale, and verification or enforcement. New decision/design templates additionally prompt for scope, protected condition or prevented failure, existing repository/dependency capabilities, applicable official primary sources, no-change and practical alternatives, and revisit/retirement conditions.
 - Plans opt into product-to-evidence traceability through `traceability: 1` and one active `product_spec`; historical non-opt-in plans remain valid.
 
 ## Upgrade behavior
 
 - Managed runtime, wrappers, workflows, and bounded blocks may be refreshed.
 - Future-work tokens in templates remain unresolved until a repository-local command creates the corresponding artifact.
-- Missing newly introduced scaffold files may be created.
+- Missing newly introduced scaffold or generated-evidence files may be created.
+- New baseline-evidence artifacts are required only for target-centered drafts carrying the new provenance marker; legacy project-owned configurations and authority are not silently migrated or made invalid merely because an upgrade can add those artifacts.
 - Project-owned current-state documents, specifications, plans, decisions, runbooks, definition evidence, and command configuration are preserved.
 - New configurations include explicit conservative `[gate]` shadow defaults.
 - Existing configuration bytes are never rewritten. Missing `[gate]` uses conservative in-memory defaults and produces a doctor advisory.

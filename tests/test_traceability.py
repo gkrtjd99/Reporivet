@@ -494,7 +494,10 @@ The bounded behavior and evidence chain are recorded.
                     continue
                 text = path.read_text(encoding="utf-8")
                 path.write_text(
-                    text.replace("status: draft", "status: active").replace("TODO", "Established"),
+                    text.replace("status: draft", "status: active")
+                    .replace("TODO", "Established")
+                    .replace("- [ ] Observed repository facts reviewed:", "- [x] Observed repository facts reviewed:")
+                    .replace("- [ ] Baseline questions resolved or tracked:", "- [x] Baseline questions resolved or tracked:"),
                     encoding="utf-8",
                 )
             config = root / "dev/harness.toml"

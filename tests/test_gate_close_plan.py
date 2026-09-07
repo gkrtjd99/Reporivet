@@ -76,7 +76,12 @@ class ClosePlanTests(unittest.TestCase):
             if not path.exists():
                 continue
             text = path.read_text(encoding="utf-8")
-            text = text.replace("status: draft", "status: active").replace("TODO", "Established")
+            text = (
+                text.replace("status: draft", "status: active")
+                .replace("TODO", "Established")
+                .replace("- [ ] Observed repository facts reviewed:", "- [x] Observed repository facts reviewed:")
+                .replace("- [ ] Baseline questions resolved or tracked:", "- [x] Baseline questions resolved or tracked:")
+            )
             path.write_text(text, encoding="utf-8")
         config = root / "dev/harness.toml"
         config.write_text(

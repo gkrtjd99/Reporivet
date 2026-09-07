@@ -664,6 +664,113 @@ def detect_commands(root: Path) -> dict[str, list[list[str]]]:
     return commands
 
 
+def markdown_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ")
+
+
+def command_evidence_path(root: Path, command: Sequence[str]) -> str | None:
+    executable = command[0] if command else ""
+    candidates: tuple[str, ...]
+    if executable in {"npm", "pnpm", "yarn", "bun"}:
+        candidates = (
+            "package.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            "bun.lock",
+            "bun.lockb",
+            "package-lock.json",
+        )
+    elif executable in {"python", "python3", "uv", "poetry"}:
+        candidates = ("pyproject.toml", "requirements.txt", "uv.lock", "poetry.lock", "tests")
+    elif executable == "go":
+        candidates = ("go.mod",)
+    elif executable == "cargo":
+        candidates = ("Cargo.toml", "Cargo.lock")
+    elif executable in {"mvn", "./mvnw"}:
+        candidates = ("mvnw", "pom.xml")
+    elif executable in {"gradle", "./gradlew"}:
+        candidates = ("gradlew", "build.gradle", "build.gradle.kts")
+    else:
+        candidates = ("Makefile", "justfile", "Taskfile.yml", "Taskfile.yaml")
+    return next((relative for relative in candidates if (root / relative).exists()), None)
+
+
+def repository_fact_values(root: Path) -> dict[str, str]:
+    files, _ = audit_repository_entries(root)
+    observed: set[tuple[str, str]] = set()
+    for path in files:
+        relative = audit_relative(path, root)
+        category = audit_file_category(relative)
+        if category in {"manifest", "lockfile", "ci", "runtime-config", "entry-point"}:
+            observed.add((category, relative))
+    for relative in AUDIT_SOURCE_DIRECTORIES:
+        path = root / relative
+        if path.is_dir() and not path.is_symlink():
+            observed.add(("source-root", relative))
+    for relative in AUDIT_TEST_DIRECTORIES:
+        path = root / relative
+        if path.is_dir() and not path.is_symlink():
+            observed.add(("test-root", relative))
+
+    observed_rows = [
+        f"| {markdown_cell(category)} | `{markdown_cell(relative)}` exists | `{markdown_cell(relative)}` |"
+        for category, relative in sorted(observed, key=lambda item: (item[0], item[1]))
+    ]
+    if not observed_rows:
+        observed_rows.append("| none | No supported repository evidence was observed. | `.` |")
+
+    candidates: set[tuple[str, str, str]] = set()
+    language_runtime_evidence = (
+        ("package.json", "TypeScript/JavaScript", "Node.js"),
+        ("pyproject.toml", "Python", "Python"),
+        ("requirements.txt", "Python", "Python"),
+        ("go.mod", "Go", "Go"),
+        ("Cargo.toml", "Rust", "Rust"),
+        ("pom.xml", "Java", "JVM"),
+        ("build.gradle", "Java/Kotlin", "JVM"),
+        ("build.gradle.kts", "Kotlin/Java", "JVM"),
+    )
+    for evidence, language, runtime in language_runtime_evidence:
+        if (root / evidence).is_file() and not (root / evidence).is_symlink():
+            candidates.add(("language", language, evidence))
+            candidates.add(("runtime", runtime, evidence))
+    for group, commands in detect_commands(root).items():
+        for command in commands:
+            evidence = command_evidence_path(root, command)
+            if evidence is None:
+                continue
+            candidates.add(
+                (
+                    f"{group} command",
+                    json.dumps(command, ensure_ascii=False, separators=(",", ":")),
+                    evidence,
+                )
+            )
+    candidate_rows = [
+        f"| {markdown_cell(kind)} | `{markdown_cell(candidate)}` | `{markdown_cell(evidence)}` |"
+        for kind, candidate, evidence in sorted(candidates, key=lambda item: (item[0], item[1], item[2]))
+    ]
+    if not candidate_rows:
+        candidate_rows.append("| none | No supported language, runtime, or command candidate was derived. | `.` |")
+
+    architecture_paths = sorted(
+        (relative, category)
+        for category, relative in observed
+        if category in {"source-root", "test-root"}
+    )
+    architecture_rows = [
+        f"| `{markdown_cell(relative)}` | Observed {markdown_cell(category)}; responsibility remains open. | `{markdown_cell(relative)}` |"
+        for relative, category in architecture_paths
+    ]
+    if not architecture_rows:
+        architecture_rows.append("| `TODO` | No conventional source or test root was observed; establish paths from evidence. | `.` |")
+    return {
+        "OBSERVED_FACT_ROWS": "\n".join(observed_rows),
+        "CANDIDATE_FACT_ROWS": "\n".join(candidate_rows),
+        "ARCHITECTURE_PATH_ROWS": "\n".join(architecture_rows),
+    }
+
+
 def toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
@@ -874,6 +981,7 @@ def config_values(
         "DATE": date.today().isoformat(),
         "ARCHITECTURE_START": architecture_start,
         "HARNESS_VERSION": __version__,
+        **repository_fact_values(root),
     }
 
 
@@ -896,7 +1004,6 @@ def project_documents(
         "docs/product-specs/index.md": "docs/product-specs/index.md.tmpl",
         "docs/product-specs/_template.md": "docs/product-specs/_template.md.tmpl",
         "docs/design-docs/index.md": "docs/design-docs/index.md.tmpl",
-        "docs/design-docs/core-beliefs.md": "docs/design-docs/core-beliefs.md.tmpl",
         "docs/design-docs/_template.md": "docs/design-docs/_template.md.tmpl",
         "docs/exec-plans/_template.md": "docs/exec-plans/_template.md.tmpl",
         "docs/exec-plans/tech-debt-tracker.md": "docs/exec-plans/tech-debt-tracker.md.tmpl",
@@ -906,6 +1013,8 @@ def project_documents(
         "docs/decisions/_template.md": "docs/decisions/_template.md.tmpl",
         "docs/generated/README.md": "docs/generated/README.md.tmpl",
         "docs/generated/code-map.md": "docs/generated/code-map.md.tmpl",
+        "docs/generated/repository-facts.md": "docs/generated/repository-facts.md.tmpl",
+        "docs/generated/baseline-questions.md": "docs/generated/baseline-questions.md.tmpl",
         "docs/references/README.md": "docs/references/README.md.tmpl",
         "docs/references/project-definition-protocol.md": "docs/references/project-definition-protocol.md.tmpl",
         "docs/runbooks/index.md": "docs/runbooks/index.md.tmpl",
@@ -2210,6 +2319,16 @@ def doctor_project(root: Path) -> int:
         "dev/close-plan",
         "dev/garden",
     )
+    provenance_marker = "Provenance: initialized by Reporivet"
+    if any(
+        (root / relative).is_file()
+        and provenance_marker in (root / relative).read_text(encoding="utf-8", errors="ignore")
+        for relative in ("ARCHITECTURE.md", "docs/PRODUCT.md")
+    ):
+        required += (
+            "docs/generated/repository-facts.md",
+            "docs/generated/baseline-questions.md",
+        )
     for relative in required:
         if not (root / relative).exists():
             errors.append(f"missing {relative}")

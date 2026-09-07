@@ -10,21 +10,25 @@ applies_to:
 
 # Architecture
 
+Provenance: initialized by Reporivet from explicit project input and observed paths; review [`docs/generated/repository-facts.md`](docs/generated/repository-facts.md) before activation.
+
 {{ARCHITECTURE_START}}
 
-This document describes implemented reality. Proposed structure belongs in an active ExecPlan until it exists and is verified.
+This draft describes the target project's implemented reality. Proposed structure belongs in an active ExecPlan until it exists and is verified.
 
 ## Runtime profile
 
-- Project kind: `{{PROJECT_KIND}}`
-- Primary language: `{{PRIMARY_LANGUAGE}}`
-- Runtime: `{{RUNTIME}}`
+- Declared project kind: `{{PROJECT_KIND}}`
+- Primary-language candidate for review: `{{PRIMARY_LANGUAGE}}`
+- Runtime candidate for review: `{{RUNTIME}}`
 
 ## Repository map
 
-| Path | Responsibility | Public boundary |
+| Path | Observed role | Evidence |
 |---|---|---|
-| `TODO` | Replace with observed repository paths and responsibilities. | TODO |
+{{ARCHITECTURE_PATH_ROWS}}
+
+Responsibilities and public boundaries remain open until supported by project authority; path presence does not establish ownership.
 
 ## Domains and dependency direction
 
@@ -53,3 +57,9 @@ TODO: list dependency, schema, security, or layering rules that are enforced by 
 ## Known gaps
 
 - TODO: record verified gaps and point to an active plan or the technical-debt tracker.
+
+## Baseline evidence review
+
+- [ ] Observed repository facts reviewed: [`docs/generated/repository-facts.md`](docs/generated/repository-facts.md)
+- [ ] Baseline questions resolved or tracked: [`docs/generated/baseline-questions.md`](docs/generated/baseline-questions.md)
+- Review evidence: TODO: name the review record, commit, or active plan section that supports activation.

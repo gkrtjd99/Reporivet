@@ -9,7 +9,7 @@ This file is a short map and operating contract. Durable knowledge belongs in th
 
 ## Start here
 
-1. Run `./dev/context` with `--path`, `--area`, or `--plan` when one is known.
+1. Run `./dev/context` with `--path`, `--area`, or `--plan` when one is known. It selects active authority and accepted decisions by default; use `--include-drafts` or `--include-history` only when the task requires them.
 2. Read [`docs/README.md`](docs/README.md) for the knowledge map.
 3. Check [`docs/exec-plans/active/`](docs/exec-plans/active/) for matching complex work.
 4. Read only the source-of-truth documents and code needed by the current task.
@@ -26,8 +26,9 @@ Do not preload all documentation, dependencies, generated output, caches, or raw
 - Quality, security, and reliability: [`docs/QUALITY.md`](docs/QUALITY.md), [`docs/SECURITY.md`](docs/SECURITY.md), and `docs/RELIABILITY.md` when present
 - Planning policy and active work: [`docs/PLANS.md`](docs/PLANS.md), [`docs/exec-plans/active/`](docs/exec-plans/active/)
 - Historical execution and decisions: [`docs/exec-plans/completed/`](docs/exec-plans/completed/), [`docs/decisions/`](docs/decisions/)
+- Non-authoritative observed facts and baseline questions: [`docs/generated/repository-facts.md`](docs/generated/repository-facts.md), [`docs/generated/baseline-questions.md`](docs/generated/baseline-questions.md)
 
-When current sources conflict, stop and report the conflict. Do not silently choose the easiest interpretation.
+When current sources conflict, stop and report the conflict. Duplicate authority IDs and inconsistent explicit supersession are mechanical conflicts; overlapping scope alone is not. Do not infer a natural-language conflict or silently choose the easiest interpretation.
 
 ## Work classification
 

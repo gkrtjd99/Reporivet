@@ -85,9 +85,10 @@ class DistributionTests(unittest.TestCase):
                 continue
             text = path.read_text(encoding="utf-8")
             path.write_text(
-                text.replace("status: draft", "status: active").replace(
-                    "TODO", "Established"
-                ),
+                text.replace("status: draft", "status: active")
+                .replace("TODO", "Established")
+                .replace("- [ ] Observed repository facts reviewed:", "- [x] Observed repository facts reviewed:")
+                .replace("- [ ] Baseline questions resolved or tracked:", "- [x] Baseline questions resolved or tracked:"),
                 encoding="utf-8",
             )
         config = root / "dev" / "harness.toml"
@@ -226,6 +227,8 @@ class DistributionTests(unittest.TestCase):
                 "import reporivet",
                 (project / "dev" / "harness.py").read_text(encoding="utf-8"),
             )
+            self.assertTrue((project / "docs/generated/repository-facts.md").is_file())
+            self.assertTrue((project / "docs/generated/baseline-questions.md").is_file())
             self.assert_success(self.run_command(reporivet, "doctor", "--root", project, env=environment))
             self.assert_success(
                 self.run_command(project / "dev" / "verify", cwd=project, env=environment)
@@ -266,7 +269,12 @@ class DistributionTests(unittest.TestCase):
                 (project / "dev" / "garden",),
                 (definition / "dev" / "define", "status"),
                 (definition / "dev" / "audit",),
-                (definition / "dev" / "context", "--path", "docs/product-specs/project-definition.draft.md"),
+                (
+                    definition / "dev" / "context",
+                    "--path",
+                    "docs/product-specs/project-definition.draft.md",
+                    "--include-drafts",
+                ),
             ):
                 self.assert_success(self.run_command(*command, cwd=command[0].parents[1], env=environment))
 

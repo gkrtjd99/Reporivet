@@ -67,7 +67,13 @@ Package and repository-local audit share observable semantics but remain indepen
 
 Traceability applies only when a plan opts in with `traceability: 1` and one active `product_spec`. Narrow parsers validate known confirmed IDs, reciprocal Product Trace links, task types, task acceptance IDs, and criterion-level closure evidence. Historical plans without the metadata remain valid.
 
-Module contracts are conditional, not universal. A contract exists only for an actual, configured, or confirmed planned durable boundary. `./dev/code-map` derives non-authoritative rows from those same evidence classes and never invents generic modules. `./dev/context --path|--area|--plan` routes matching specifications, contracts, map entries, durable documents, and active plans.
+Module contracts are conditional, not universal. A contract exists only for an actual, configured, or confirmed planned durable boundary. `./dev/code-map` derives non-authoritative rows from those same evidence classes and never invents generic modules.
+
+Initialization uses the same evidence discipline for `repository-facts.md`: directly observed manifests, lockfiles, source/test roots, CI, runtime configuration, and entry points are separated from mechanically derived language, runtime, and command candidates, and every row carries an evidence path. `baseline-questions.md` exposes the product, ownership, security, reliability/SLO, and visual decisions that scanning cannot answer. Target-centered `PRODUCT.md` and `ARCHITECTURE.md` remain drafts until their structural evidence-review records are completed with concrete review evidence; status edits do not satisfy that check, and the review record does not require a verification result that would create a verify/evidence cycle.
+
+`./dev/context --path|--area|--plan` routes matching specifications, contracts, map entries, durable documents, and active plans. Default authority is lifecycle-bounded to active current-state/product/design/runbook documents and accepted decisions. `--include-drafts` and `--include-history` opt into draft/proposed and deprecated/superseded/rejected/completed material. Context rejects duplicate IDs and inconsistent explicit supersession links but allows different authority IDs to cover the same scope; it performs no natural-language conflict interpretation or model judgment.
+
+Accepted decision validation requires concrete reason/context, at least two substantive alternatives with rejection rationale, and verification/enforcement. The technical design and decision templates additionally make scope, the protected condition or prevented failure, repository/dependency capability research, applicable official primary sources, no-change and practical alternatives, and revisit/retirement conditions explicit.
 
 ## One Verification Run
 

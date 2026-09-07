@@ -30,7 +30,7 @@ The installed `reporivet` package:
 - renders packaged assets and establishes ownership boundaries;
 - initializes a greenfield or existing repository;
 - explicitly starts definition or performs audit-first adoption;
-- creates review-state configuration and a baseline plan when inferred implementation evidence requires confirmation;
+- creates target-centered authority drafts, generated repository facts, generated baseline questions, review-state configuration, and a baseline plan when inferred implementation evidence requires confirmation;
 - refreshes only managed artifacts during upgrade; and
 - diagnoses required files, executability, runtime version, catalogs, plans, and Gate configuration.
 
@@ -59,6 +59,8 @@ repository wrapper -> copied runtime -> repository files, Git, configured comman
 - Current-state documents, definition drafts/final specs, plans, decisions, and `dev/harness.toml` are project-owned.
 - Runtime code, wrappers, workflows, and `.reporivet-version` are managed only when they carry the ownership marker.
 - `AGENTS.md` and `.gitignore` use bounded managed blocks.
+- Generated facts and questions remain non-authoritative path-bound evidence. Fresh authority drafts carry a provenance marker and structural baseline-review record; legacy project-owned authority without that marker is not forced through a hidden schema migration.
+- Fresh initialization leaves `docs/design-docs/` with its index and reusable template only. Upgrade preserves any existing project-owned technical documents, including `core-beliefs.md`.
 - Upgrade creates a missing newly introduced project-owned scaffold but never rewrites an existing one.
 - New configurations receive explicit Gate defaults. Existing configurations remain byte-identical; missing Gate settings use conservative in-memory defaults and a doctor advisory.
 

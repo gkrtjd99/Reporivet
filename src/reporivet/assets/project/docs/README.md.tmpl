@@ -47,10 +47,11 @@ This directory is the version-controlled record system for product intent, produ
 
 ## Document authority and lifecycle
 
-- Current-state documents are updated when approved intent or implemented reality changes.
-- Active ExecPlans are living, restartable execution records.
-- Completed plans and accepted decisions are historical records; supersede them rather than rewriting history.
-- Generated documents identify their generator and are never edited manually.
+- Current-state, product/design, and runbook documents enter default context only while active; decisions enter it only while accepted.
+- Draft/proposed authority requires `./dev/context --include-drafts`; deprecated, superseded, rejected, and completed history requires `--include-history`.
+- Active ExecPlans are living, restartable execution records; completed plans are history.
+- Duplicate authority IDs and inconsistent explicit supersession fail context. Different IDs may legitimately cover the same scope, and tooling does not judge natural-language meaning.
+- Generated documents identify their generator and are never edited manually. Observed facts and mechanically derived candidates remain non-authoritative evidence.
 - A durable document is added only when knowledge is long-lived, shared across changes, and too detailed for an existing source of truth.
 - Retirement requires an explicit plan action, replacement or rationale, and removal of current references.
 

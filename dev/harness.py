@@ -204,13 +204,14 @@ AUDIT_PROJECT_DOCUMENT_PATHS = (
     "docs/product-specs/index.md",
     "docs/product-specs/_template.md",
     "docs/design-docs/index.md",
-    "docs/design-docs/core-beliefs.md",
     "docs/design-docs/_template.md",
     "docs/exec-plans/_template.md",
     "docs/exec-plans/tech-debt-tracker.md",
     "docs/module-contracts/README.md",
     "docs/module-contracts/_template.md",
     "docs/generated/code-map.md",
+    "docs/generated/repository-facts.md",
+    "docs/generated/baseline-questions.md",
     "docs/decisions/README.md",
     "docs/decisions/_template.md",
     "docs/generated/README.md",
@@ -277,7 +278,6 @@ REQUIRED_DOCS = (
     Path("docs/product-specs/_template.md"),
     Path("docs/design-docs/index.md"),
     Path("docs/design-docs/_template.md"),
-    Path("docs/design-docs/core-beliefs.md"),
     Path("docs/exec-plans/_template.md"),
     Path("docs/exec-plans/tech-debt-tracker.md"),
     Path("docs/module-contracts/README.md"),
@@ -304,6 +304,19 @@ VALID_STATUSES = {
     "decision": {"proposed", "accepted", "rejected", "superseded"},
     "runbook": {"draft", "active", "deprecated"},
 }
+CONTEXT_CORE_DOCUMENTS = (
+    Path("ARCHITECTURE.md"),
+    Path("docs/PRODUCT.md"),
+    Path("docs/QUALITY.md"),
+    Path("docs/SECURITY.md"),
+    Path("docs/DESIGN.md"),
+    Path("docs/FRONTEND.md"),
+    Path("docs/PRODUCT_SENSE.md"),
+    Path("docs/RELIABILITY.md"),
+)
+DEFAULT_AUTHORITY_STATUSES = frozenset({"active", "accepted"})
+DRAFT_AUTHORITY_STATUSES = frozenset({"draft", "proposed"})
+HISTORICAL_AUTHORITY_STATUSES = frozenset({"deprecated", "superseded", "rejected"})
 ACTIVE_PLAN_STATES = {"proposed", "approved", "in-progress", "verifying", "blocked"}
 COMPLETED_PLAN_STATES = {"complete", "cancelled", "superseded"}
 PLAN_REQUIRED_HEADINGS = (
@@ -581,6 +594,8 @@ class DurableDocument:
     area: str
     summary: str
     applies_to: tuple[str, ...]
+    supersedes: tuple[str, ...] = ()
+    superseded_by: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -2727,6 +2742,18 @@ def check_links(path: Path, errors: list[str]) -> None:
             errors.append(f"{path.relative_to(ROOT)}: missing link target: {raw_target}")
 
 
+def optional_metadata_list(metadata: dict[str, object], field: str) -> tuple[str, ...]:
+    value = metadata.get(field, [])
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or stripped == "[]":
+            return ()
+        return (stripped,)
+    if isinstance(value, list):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    return ()
+
+
 def durable_documents(errors: list[str] | None = None) -> list[DurableDocument]:
     sink = errors if errors is not None else []
     documents: list[DurableDocument] = []
@@ -2752,7 +2779,10 @@ def durable_documents(errors: list[str] | None = None) -> list[DurableDocument]:
             if status not in VALID_STATUSES.get(kind, set()):
                 sink.append(f"{path.relative_to(ROOT)}: invalid status '{status}' for kind '{kind}'")
             if doc_id in seen_ids:
-                sink.append(f"{path.relative_to(ROOT)}: duplicate id '{doc_id}' also used by {seen_ids[doc_id].relative_to(ROOT)}")
+                sink.append(
+                    f"{path.relative_to(ROOT)}: duplicate authority id '{doc_id}' also used by "
+                    f"{seen_ids[doc_id].relative_to(ROOT)}"
+                )
             else:
                 seen_ids[doc_id] = path
             applies = metadata.get("applies_to", [])
@@ -2771,9 +2801,108 @@ def durable_documents(errors: list[str] | None = None) -> list[DurableDocument]:
                     area=str(metadata["area"]),
                     summary=str(metadata["summary"]),
                     applies_to=applies_list,
+                    supersedes=optional_metadata_list(metadata, "supersedes"),
+                    superseded_by=optional_metadata_list(metadata, "superseded_by"),
                 )
             )
     return documents
+
+
+def core_context_documents(errors: list[str]) -> list[DurableDocument]:
+    documents: list[DurableDocument] = []
+    for relative in CONTEXT_CORE_DOCUMENTS:
+        path = ROOT / relative
+        if not path.exists():
+            continue
+        metadata, _, _ = read_frontmatter(path)
+        required = ("id", "kind", "status", "area", "summary")
+        missing = [name for name in required if not str(metadata.get(name, "")).strip()]
+        if missing:
+            errors.append(f"{relative}: missing frontmatter fields: {', '.join(missing)}")
+            continue
+        status = str(metadata["status"]).lower()
+        if status not in {"draft", "active"}:
+            errors.append(f"{relative}: current-state status must be 'draft' or 'active'")
+        documents.append(
+            DurableDocument(
+                path=path,
+                id=str(metadata["id"]),
+                kind=str(metadata["kind"]),
+                status=status,
+                area=str(metadata["area"]),
+                summary=str(metadata["summary"]),
+                applies_to=optional_metadata_list(metadata, "applies_to"),
+                supersedes=optional_metadata_list(metadata, "supersedes"),
+                superseded_by=optional_metadata_list(metadata, "superseded_by"),
+            )
+        )
+    return documents
+
+
+def authority_conflict_errors(documents: Sequence[DurableDocument]) -> list[str]:
+    errors: list[str] = []
+    by_id: dict[str, DurableDocument] = {}
+    duplicate_ids: set[str] = set()
+    for document in documents:
+        existing = by_id.get(document.id)
+        if existing is not None:
+            duplicate_ids.add(document.id)
+            errors.append(
+                f"{document.path.relative_to(ROOT)}: duplicate authority id '{document.id}' also used by "
+                f"{existing.path.relative_to(ROOT)}"
+            )
+        else:
+            by_id[document.id] = document
+    for document in documents:
+        if document.id in duplicate_ids:
+            continue
+        if document.status == "superseded":
+            for replacement_id in document.superseded_by:
+                replacement = by_id.get(replacement_id)
+                if replacement is None:
+                    errors.append(
+                        f"{document.path.relative_to(ROOT)}: superseded_by references missing authority '{replacement_id}'"
+                    )
+                elif document.id not in replacement.supersedes:
+                    errors.append(
+                        f"{document.path.relative_to(ROOT)}: supersession mismatch; {replacement.path.relative_to(ROOT)} "
+                        f"does not name '{document.id}' in supersedes"
+                    )
+        if document.status not in DEFAULT_AUTHORITY_STATUSES:
+            continue
+        for replaced_id in document.supersedes:
+            replaced = by_id.get(replaced_id)
+            if replaced is None:
+                errors.append(
+                    f"{document.path.relative_to(ROOT)}: supersedes references missing authority '{replaced_id}'"
+                )
+                continue
+            if replaced.status != "superseded":
+                errors.append(
+                    f"{document.path.relative_to(ROOT)}: supersession mismatch; normative authority '{document.id}' "
+                    f"cannot supersede {replaced.path.relative_to(ROOT)} while its status is '{replaced.status}'"
+                )
+            elif replaced.superseded_by and document.id not in replaced.superseded_by:
+                errors.append(
+                    f"{document.path.relative_to(ROOT)}: supersession mismatch; {replaced.path.relative_to(ROOT)} "
+                    f"names different superseded_by authority"
+                )
+    return errors
+
+
+def authority_in_context(
+    document: DurableDocument,
+    *,
+    include_drafts: bool,
+    include_history: bool,
+) -> bool:
+    if document.status in DEFAULT_AUTHORITY_STATUSES:
+        return True
+    if include_drafts and document.status in DRAFT_AUTHORITY_STATUSES:
+        return True
+    if include_history and document.status in HISTORICAL_AUTHORITY_STATUSES:
+        return True
+    return False
 
 
 def metadata_string_list(
@@ -3906,6 +4035,107 @@ def validate_core_documents(
             errors.append(f"{relative}: established baseline requires status 'active'")
 
 
+def first_present_section(text: str, headings: Sequence[str]) -> str:
+    for heading in headings:
+        value = section_text(text, heading)
+        if value:
+            return value
+    return ""
+
+
+def substantive_markdown_bullets(text: str) -> list[str]:
+    bullets: list[str] = []
+    for line in text.splitlines():
+        match = re.match(r"^\s*[-*]\s+(.+?)\s*$", line)
+        if not match:
+            continue
+        value = match.group(1).strip()
+        if definition_value_is_concrete(value) and len(value) >= 12:
+            bullets.append(value)
+    return bullets
+
+
+def validate_durable_decisions(documents: Sequence[DurableDocument], errors: list[str]) -> None:
+    for document in documents:
+        if document.kind != "decision" or document.status != "accepted":
+            continue
+        relative = document.path.relative_to(ROOT)
+        _, _, text = read_frontmatter(document.path)
+        reason = first_present_section(text, ("Reason", "Context and scope", "Context"))
+        if not definition_value_is_concrete(reason):
+            errors.append(f"{relative}: accepted decision requires a concrete reason")
+        alternatives = first_present_section(text, ("Alternatives considered", "Alternatives and trade-offs"))
+        alternative_bullets = substantive_markdown_bullets(alternatives)
+        rejected_alternatives = [
+            bullet
+            for bullet in alternative_bullets
+            if re.search(r"\b(?:rejected|not selected|not chosen)\b", bullet, re.IGNORECASE)
+        ]
+        if len(alternative_bullets) < 2 or len(rejected_alternatives) < 2:
+            errors.append(
+                f"{relative}: accepted decision requires at least two substantive alternatives with rejection reasons"
+            )
+        verification = first_present_section(
+            text,
+            ("Verification and enforcement", "Verification and retirement", "Verification"),
+        )
+        if not definition_value_is_concrete(verification):
+            errors.append(f"{relative}: accepted decision requires concrete verification or enforcement")
+
+
+def generated_baseline_review_required() -> bool:
+    marker = "Provenance: initialized by Reporivet"
+    for relative in (Path("ARCHITECTURE.md"), Path("docs/PRODUCT.md")):
+        path = ROOT / relative
+        if path.exists() and marker in path.read_text(encoding="utf-8", errors="ignore"):
+            return True
+    return False
+
+
+def validate_generated_baseline_review(errors: list[str], *, strict: bool) -> None:
+    if not generated_baseline_review_required():
+        return
+    for relative in (
+        Path("docs/generated/repository-facts.md"),
+        Path("docs/generated/baseline-questions.md"),
+    ):
+        if not (ROOT / relative).is_file():
+            errors.append(f"missing required generated baseline evidence: {relative}")
+    if not strict:
+        return
+    required_checks = (
+        "- [x] Observed repository facts reviewed:",
+        "- [x] Baseline questions resolved or tracked:",
+    )
+    for relative in (Path("ARCHITECTURE.md"), Path("docs/PRODUCT.md")):
+        path = ROOT / relative
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "Provenance: initialized by Reporivet" not in text:
+            continue
+        review = section_text(text, "Baseline evidence review")
+        if not review:
+            errors.append(f"{relative}: established baseline requires a baseline evidence review section")
+            continue
+        for required in required_checks:
+            if required not in review:
+                errors.append(
+                    f"{relative}: established baseline requires completed baseline evidence review checklists"
+                )
+                break
+        evidence = next(
+            (
+                line.split(":", 1)[1].strip()
+                for line in review.splitlines()
+                if line.strip().startswith("- Review evidence:") and ":" in line
+            ),
+            "",
+        )
+        if not definition_value_is_concrete(evidence):
+            errors.append(f"{relative}: established baseline requires concrete baseline review evidence")
+
+
 def command_docs_check(args: argparse.Namespace) -> int:
     config = load_config()
     strict = bool(args.strict or config.lifecycle == "active")
@@ -3921,6 +4151,10 @@ def command_docs_check(args: argparse.Namespace) -> int:
             errors.append(f"missing required file: {relative}")
 
     documents = durable_documents(errors)
+    core_documents = core_context_documents(errors)
+    errors.extend(authority_conflict_errors([*core_documents, *documents]))
+    validate_durable_decisions(documents, errors)
+    validate_generated_baseline_review(errors, strict=strict)
     _, _, code_entries = code_map_model(config, errors)
     validate_core_documents(errors, strict=strict, enabled=enabled)
     agents = ROOT / "AGENTS.md"
@@ -5687,9 +5921,25 @@ def code_map_relevance(entry: CodeMapEntry, *, path: str, area: str) -> bool:
 def command_context(args: argparse.Namespace) -> int:
     config = load_config()
     document_errors: list[str] = []
-    documents = durable_documents(document_errors)
-    for error in document_errors:
-        print(f"WARNING: {error}")
+    durable = durable_documents(document_errors)
+    core = core_context_documents(document_errors)
+    document_errors.extend(authority_conflict_errors([*core, *durable]))
+    if document_errors:
+        unique_errors = list(dict.fromkeys(document_errors))
+        for error in unique_errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        raise HarnessError(
+            f"context routing failed with {len(unique_errors)} authority metadata or conflict error(s)"
+        )
+    documents = [
+        document
+        for document in [*core, *durable]
+        if authority_in_context(
+            document,
+            include_drafts=bool(args.include_drafts),
+            include_history=bool(args.include_history),
+        )
+    ]
     model_errors: list[str] = []
     _, contracts, code_entries = code_map_model(config, model_errors)
     if model_errors:
@@ -5700,6 +5950,12 @@ def command_context(args: argparse.Namespace) -> int:
     path_filter = args.path or ""
     area_filter = args.area or ""
     selected_plan: Plan | None = locate_plan(args.plan) if args.plan else None
+    if selected_plan is not None:
+        selected_is_history = "completed" in selected_plan.path.relative_to(ROOT).parts
+        if selected_is_history and not args.include_history:
+            raise HarnessError(
+                f"selected plan {selected_plan.id} is historical; retry with --include-history"
+            )
     selected_authority: DurableDocument | None = None
     if selected_plan is not None:
         product_spec = str(selected_plan.metadata.get("product_spec", "")).strip()
@@ -5718,7 +5974,14 @@ def command_context(args: argparse.Namespace) -> int:
     print(f"- Document capabilities: {', '.join(sorted(capabilities)) or 'none'}")
     print("- Operating contract: `AGENTS.md`")
     print("- Knowledge map: `docs/README.md`")
-    print("- Current architecture: `ARCHITECTURE.md`")
+    active_architecture = next(
+        (document for document in core if document.path.relative_to(ROOT) == Path("ARCHITECTURE.md") and document.status == "active"),
+        None,
+    )
+    if active_architecture is not None:
+        print("- Current architecture authority is active.")
+    else:
+        print("- Current architecture authority is not active.")
     if selected_plan is not None:
         print("\n## Selected plan")
         print(f"- `{selected_plan.path.relative_to(ROOT)}` — {selected_plan.title} [{selected_plan.status}]")
@@ -5765,11 +6028,20 @@ def command_context(args: argparse.Namespace) -> int:
     else:
         for doc in relevant:
             print(f"- `{doc.path.relative_to(ROOT)}` — {doc.id} [{doc.status}] {doc.summary}")
-    if (ROOT / DEFINITION_DRAFT).exists() and (not path_filter and area_filter.casefold() in {"", "product", "definition"}):
+    if (
+        args.include_drafts
+        and (ROOT / DEFINITION_DRAFT).exists()
+        and (not path_filter and area_filter.casefold() in {"", "product", "definition"})
+    ):
         print(f"- `{DEFINITION_DRAFT}` — persisted project-definition session [draft]")
 
+    all_plans = plan_files()
     print("\n## Active plans")
-    active = [plan for plan in plan_files() if "active" in plan.path.relative_to(ROOT).parts]
+    active = [
+        plan
+        for plan in all_plans
+        if "active" in plan.path.relative_to(ROOT).parts and plan.status in ACTIVE_PLAN_STATES
+    ]
     if area_filter:
         active = [plan for plan in active if str(plan.metadata.get("area", "")).casefold() == area_filter.casefold()]
     if not active:
@@ -5777,6 +6049,24 @@ def command_context(args: argparse.Namespace) -> int:
     else:
         for plan in active:
             print(f"- `{plan.path.relative_to(ROOT)}` — {plan.title} [{plan.status}]")
+    if args.include_history:
+        print("\n## Historical plans")
+        historical = [
+            plan
+            for plan in all_plans
+            if "completed" in plan.path.relative_to(ROOT).parts and plan.status in COMPLETED_PLAN_STATES
+        ]
+        if area_filter:
+            historical = [
+                plan
+                for plan in historical
+                if str(plan.metadata.get("area", "")).casefold() == area_filter.casefold()
+            ]
+        if not historical:
+            print("- None")
+        else:
+            for plan in historical:
+                print(f"- `{plan.path.relative_to(ROOT)}` — {plan.title} [{plan.status}]")
     print("\n## Deterministic commands")
     for name in ("bootstrap", "run", "check", "verify", "smoke", "architecture"):
         group = config.command_group(name)
@@ -6100,6 +6390,16 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("--path", default="")
     context.add_argument("--area", default="")
     context.add_argument("--plan", default="")
+    context.add_argument(
+        "--include-drafts",
+        action="store_true",
+        help="include draft current-state/product/design/runbook documents and proposed decisions",
+    )
+    context.add_argument(
+        "--include-history",
+        action="store_true",
+        help="include deprecated, superseded, and rejected authority plus completed plans",
+    )
     context.set_defaults(func=command_context)
     define = sub.add_parser("define", help="inspect, validate, or finalize the project definition")
     define_actions = define.add_subparsers(dest="define_action", required=True)
