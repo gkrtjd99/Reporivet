@@ -1,19 +1,19 @@
 ---
 id: PLAN-2026-0004
 kind: exec-plan
-status: blocked
+status: in-progress
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "1d064217da738ebc3ed593ce4aeccf365fb0cd16"
-integrated_commit: "6f80627a388c9a29cb4e0219f4be376d9b299cb8"
-verified_commit: "6f80627a388c9a29cb4e0219f4be376d9b299cb8"
+integrated_commit: "72ce34901e8473139691a73f42b919709adaafa0"
+verified_commit: ""
 traceability: 0
 product_spec: ""
-verification_run: "20260907T060621364377Z-verify"
-manifest_sha256: "54209ff1e14266923c3e5e30f45fa1fbee1f2147f049c9e364434cff4cd44da5"
-gate_verdict: "REVIEW"
+verification_run: ""
+manifest_sha256: ""
+gate_verdict: ""
 gate_review_reason: ""
 ---
 
@@ -29,7 +29,8 @@ gate_review_reason: ""
 - [x] source 및 generated-target 운영 계약과 회귀 테스트 업데이트.
 - [x] 잘못된 메모리를 제거하고 사용자 선호를 모델 중립적으로 정리.
 - [x] 독립 검토와 clean exact-target canonical verification.
-- [ ] 공식 close-plan: genuine human REVIEW 사유가 없어 blocked. 구현·검증 미완료와 구분한다.
+- [ ] T4 추가 승인: Main·Lead 분해 책임과 Verifier의 적극적인 반증 의무 보강 및 새 후보 검증.
+- [ ] 공식 close-plan: 이번 추가 요청은 구현 승인이다. 이전 REVIEW 승인이나 공식 closure로 자동 처리하지 않는다.
 
 ## Context and Orientation
 
@@ -224,6 +225,56 @@ target 불일치, 실제 결함, evidence 누락, 사람 이유 없는 REVIEW cl
 
 Main의 canonical run `20260907T060621364377Z-verify`는 base `1d064217da738ebc3ed593ce4aeccf365fb0cd16`에서 clean HEAD `6f80627a388c9a29cb4e0219f4be376d9b299cb8`을 검증했다. 실제/의도 HEAD 일치, clean=true, TARGET_CONFIRMED. 보안·catalog·문서·계획·architecture·project 필수 검사 모두 통과했으며 project는 152 tests/70.038초였다. optional smoke는 미설정으로 skipped. Gate는 shadow REVIEW이며 이유는 RISK_WIDE 및 보호 경로 AGENTS.md/dev/harness.py 변경이다. Main은 구현/검증 evidence를 수락했지만 genuine human REVIEW 사유는 없으므로 close-plan을 실행하지 않았다. 이후 commit은 이 증거의 문서 기록만이며 검증된 코드 후보를 변경하지 않는다.
 
+### T4 — 분해 책임 및 적극적인 반증 검증 보강
+
+#### State
+
+in-progress
+
+#### Task type
+
+implementation
+
+#### Depends on
+
+T3
+
+#### Outcome
+
+2026-09-07 사용자의 추가 승인에 따라 Main의 Task 간 인터페이스·경로 소유권·의존성·통합 순서 설계 책임과 Lead의 parent 내부 leaf 분해 책임을 명시한다. 공유 계약 변경 시 영향 작업 중지·계약 조정·재배정, 상위 경계 변경 시 Main 반환을 명시한다. Verifier는 반례·실패 경로·회귀 및 테스트의 잘못된 가정을 적극 검토하며 결함은 재현 또는 구체적인 코드 근거로 입증한다. 추측·취향·미검증 영역을 결함과 구분하고 finding 개수를 강제하지 않는다. AC-1, AC-2, AC-3, AC-6의 추가 구체화이며 기존 권한을 확대하지 않는다.
+
+#### Non-goals
+
+runtime/Gate/CI/schema 변경, PR4/PR5, 메모리 중복 기록, push 및 공식 closure.
+
+#### Read
+
+AGENTS.md, docs/PLANS.md, source/packaged ExecPlan templates, 대응 AGENTS/PLANS templates, tests/test_agent_operating_contract.py, 이 계획.
+
+#### Allowed writes
+
+AGENTS.md; docs/PLANS.md; docs/exec-plans/_template.md; src/reporivet/assets/project/root/AGENTS.md.tmpl; src/reporivet/assets/project/docs/PLANS.md.tmpl; src/reporivet/assets/project/docs/exec-plans/_template.md.tmpl; tests/test_agent_operating_contract.py. Main만 이 계획을 수정한다.
+
+#### Protected paths
+
+위 허용 경로 외 전체. 구현자는 계획 수정·재위임·최종 승인 금지.
+
+#### Acceptance
+
+AC-1, AC-2, AC-3, AC-6. source/target 의미 일치, 기존 leaf·Main 통합·권한 경계 보존, 분해 책임과 증거 기반 반증 의무의 회귀 검사.
+
+#### Verify
+
+Python 3.12 venv `/tmp/reporivet-pr3-venv`에서 focused contract tests 및 diff check. 별도 context read-only verifier가 정확한 commit과 focused tests로 독립 평가한다. Main은 clean 통합 후보에 canonical verify를 실행한다. 구현·검토는 순차이며 각각 최대 15분, 같은 접근 실패 두 번이면 중지한다. 구현자는 파일 읽기/편집 및 테스트·local candidate commit 도구만 사용한다. verifier는 tracked 쓰기 없이 읽기·테스트만 수행한다.
+
+#### Stop conditions
+
+상위 권한 확대, protected paths 변경 필요, 요구사항 충돌, 같은 접근 두 번 실패. 검증 불가 영역은 명시하며 성공으로 간주하지 않는다.
+
+#### Result
+
+구현 후보: `72ce34901e8473139691a73f42b919709adaafa0` (base `7b018cfceaec7598d7221ef4b6d14f463101c4b4`). 허용된 7개 경로만 변경했다. Python 3.12.14 venv에서 operating-contract focused 6 tests와 diff check 통과. Main은 변경 경로와 diff를 확인했고 별도 context의 read-only verifier에 exact 후보를 전달했다. 독립 평가 및 canonical 결과는 대기 중이며 후보 통합을 acceptance로 간주하지 않는다. 기존 Gate/closure 회귀 9 tests 및 계획 형식 검사도 통과했다. 이전 T1–T3의 증거는 이전 후보에만 적용되며 이번 추가 변경의 검증을 대신하지 않는다.
+
 ## Architecture Impact
 
 역할은 문서상 책임이며 실행 engine이 아니다. package/copied runtime 경계, stdlib-only 독립성, Gate를 유지한다.
@@ -232,7 +283,7 @@ Main의 canonical run `20260907T060621364377Z-verify`는 base `1d064217da738ebc3
 
 | Document | Action | Reason | Owner | Status |
 |---|---|---|---|---|
-| AGENTS/PLANS 및 packaged 대응 template | update | 모델 중립적 위임·승인 계약 | Main | resolved |
+| AGENTS/PLANS 및 packaged 대응 template | update | 모델 중립적 위임·승인 계약 및 T4 분해·반증 책임 | Main | resolved |
 | README/context 및 계획 template | update | 선택 안내·결과 인수인계 | Main | resolved |
 | docs/DESIGN Main/Sub 문장 | update | 이번 변경과 상충하는 문구 방지; retirement 아님 | Main | resolved |
 | memory 및 index | retire/update | 오래된 제품 경계 제거·선호만 보존 | Main | resolved |
@@ -277,7 +328,7 @@ Main의 canonical run `20260907T060621364377Z-verify`는 base `1d064217da738ebc3
 
 ## Outcomes and Retrospective
 
-요청된 운영 계약·메모리·context 선택 안내 업데이트와 독립/canonical 검증을 완료했다. Task Lead는 모델명이 아닌 책임으로 정의되며 위임 권한과 깊이가 제한된다. 기존 parser/schema·Gate·target 소유권·PR4/PR5 경계는 유지했다. Main은 bounded 구현 evidence를 수락했다. 계획의 blocked 상태는 오직 genuine human REVIEW 사유 및 공식 close-plan 부재를 뜻하며, 구현 실패를 뜻하지 않는다.
+T1–T3의 운영 계약·메모리·context 선택 안내 업데이트와 독립/canonical 검증은 완료했고 Main이 해당 후보의 evidence를 수락했다. 사용자 추가 승인으로 T4를 재개하여 분해 책임과 적극적 반증 의무를 구현했다. 현재 추가 후보의 독립/canonical 검증은 진행 중이며 이전 검증 metadata를 재사용하지 않는다. 기존 parser/schema·Gate·target 소유권·PR4/PR5 경계와 공식 closure 구분을 유지한다.
 
 ## Follow-ups
 
