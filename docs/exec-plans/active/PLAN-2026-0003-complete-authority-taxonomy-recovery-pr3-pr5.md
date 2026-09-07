@@ -178,7 +178,7 @@ AC-1, AC-2, AC-3, AC-6
 
 #### Result
 
-구현 후보 `21c50b5e26fcc9a796551d6d612f72789f32918b` 통합. 구현자 보고: PR3 13 tests, 전체 123 tests, distribution/package-removal, runtime parity 통과. Main도 `/tmp/reporivet-pr3-venv`의 Python 3.12로 `./dev/check`를 별도 실행하여 exit 0을 확인했다(`/tmp/reporivet-pr3-main-check.log`). 독립 정확성 review 진행 중이므로 완료 승인 전이다. 구현자의 canonical run `20260907T021205136834Z-verify`는 pass지만 Main 계획 편집으로 dirty target이었다. clean candidate 검증을 대신하지 않는다.
+구현 후보 `21c50b5e26fcc9a796551d6d612f72789f32918b` 통합. 구현자 보고: PR3 13 tests, 전체 123 tests, distribution/package-removal, runtime parity 통과. Main도 `/tmp/reporivet-pr3-venv`의 Python 3.12로 `./dev/check`를 별도 실행하여 exit 0을 확인했다(`/tmp/reporivet-pr3-main-check.log`). 독립 정확성 review의 focused 13개 및 adjacent 12개 테스트는 통과했지만 다음 보수 항목이 재현되어 완료 승인 전이다: `--plan` 선택 밖의 active plan 노출, `ruff.toml` command 후보의 잘못된 evidence 경로, context에서 불완전 accepted ADR 검증 누락, frontmatter 없는 legacy 문서의 warning이 hard error로 바뀌는 회귀. 추가 code review 결과와 함께 보수하며 initializer/runtime의 병렬 수정을 피하기 위해 PR4 후보 통합 후 순차 진행한다. 구현자의 canonical run `20260907T021205136834Z-verify`는 pass지만 Main 계획 편집으로 dirty target이었다. clean candidate 검증을 대신하지 않는다.
 
 범위 결정: 문서 scope overlap만으로 충돌이라고 판정하지 않으며 duplicate ID와 명시적 supersession 불일치만 기계적으로 거부한다. baseline evidence guard는 새 provenance가 있는 초안에 적용하고 legacy authority를 변경하지 않는다. 새 schema/command 없이 기존 문서의 evidence review를 사용하며 verify와 baseline 사이 순환 의존을 만들지 않는다.
 
@@ -186,7 +186,7 @@ AC-1, AC-2, AC-3, AC-6
 
 #### State
 
-blocked
+in-progress
 
 #### Task type
 
@@ -230,7 +230,11 @@ AC-4, AC-6
 
 #### Result
 
-M1 검증 대기.
+2026-09-07 PR4 읽기 전용 조사로 범위를 확정했다. initializer apply_harness의 렌더/쓰기 interleave를 mutation plan과 작은 transaction으로 분리하고, adoption snapshot rollback과 copied runtime definition finalize/close-plan rollback에 postimage 보호를 적용한다. PR3 독립 review와 별개 후보에서 구현하고 Main이 순차 통합한다.
+
+Main 계약: 기존 init/upgrade --dry-run은 canonical 상대경로/action/preimage type·mode·hash/예정 content hash의 deterministic fingerprint를 제공한다. apply는 자체 동일 계획을 구성하고 mutation 전 전체 preimage를 다시 검증한다. 별도 실행한 dry-run을 승인 토큰으로 강제하는 기능은 추가하지 않으며 그러한 보장을 주장하지 않는다. 모든 target의 안전한 type과 부모 경로를 먼저 검사하고 mutation 직전 다시 검사한다. transaction이 실제 만든 postimage와 현재 파일이 같을 때만 rollback하며 다르면 사용자 변경을 보존하고 rollback conflict를 명시한다. 파일 bytes/mode와 새로 만든 빈 directory를 보존·복원하되 무관한 파일은 건드리지 않는다. 동시 수정의 완전한 OS-level isolation을 주장하지 않는다.
+
+허용 경로: src/reporivet/initializer.py, 기존 CLI 출력의 fingerprint 연결만 src/reporivet/cli.py, canonical/dogfood dev/harness.py의 definition finalize/close-plan rollback, 관련 tests 및 직접 영향 security/design/spec 문서. runtime 전반의 unrelated mutation이나 Gate 정책은 확장하지 않는다. 새로운 approval CLI, persisted backup registry, production dependency는 금지한다.
 
 ### T4 — PR5 migration
 
