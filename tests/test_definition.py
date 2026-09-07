@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import io
 import os
 import re
@@ -108,6 +109,17 @@ class DefinitionTests(unittest.TestCase):
             command.append("-I")
         command.extend((str(root / "dev" / "harness.py"), *args))
         return subprocess.run(command, cwd=root, text=True, capture_output=True, check=False)
+
+    def load_runtime_module(self, root: Path):
+        module_name = f"definition_harness_{root.name.replace('-', '_')}"
+        spec = importlib.util.spec_from_file_location(module_name, root / "dev/harness.py")
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        self.addCleanup(sys.modules.pop, module_name, None)
+        return module
 
     def run_define_wrapper(self, root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
@@ -1027,6 +1039,66 @@ class DefinitionTests(unittest.TestCase):
             self.assertEqual(list((root / "docs/exec-plans/active").glob("*.md")), [])
             self.assertEqual(docs_readme.read_bytes(), docs_before)
             self.assertEqual(product_index.read_bytes(), index_before)
+
+    def test_finalize_rollback_preserves_concurrent_catalog_edit_and_reports_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            self.assertEqual(self.define(root).returncode, 0)
+            self.write_draft(root)
+            module = self.load_runtime_module(root)
+            original_docs_index = module.command_docs_index
+            catalog = root / "docs/README.md"
+            user_bytes = b"concurrent catalog edit\n"
+
+            def edit_catalog_after_index(args):
+                original_docs_index(args)
+                catalog.write_bytes(user_bytes)
+                raise module.HarnessError("forced failure after catalog edit")
+
+            module.command_docs_index = edit_catalog_after_index
+            with self.assertRaisesRegex(module.HarnessError, "rollback incomplete") as caught:
+                module.command_define_finalize(module.argparse.Namespace())
+
+            self.assertEqual(catalog.read_bytes(), user_bytes)
+            self.assertIn("docs/README.md", str(caught.exception))
+            self.assertFalse((root / "docs/product-specs/SPEC-PROJECT-001-product-definition.md").exists())
+            self.assertEqual(list((root / "docs/exec-plans/active").glob("*.md")), [])
+
+    def test_finalize_rollback_preserves_concurrent_spec_or_plan_edit(self) -> None:
+        for target_kind in ("spec", "plan"):
+            with self.subTest(target_kind=target_kind), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                self.assertEqual(self.define(root).returncode, 0)
+                self.write_draft(root)
+                module = self.load_runtime_module(root)
+                user_bytes = f"concurrent {target_kind} edit\n".encode("utf-8")
+                edited_path: Path | None = None
+
+                def edit_created_path(_args):
+                    nonlocal edited_path
+                    if target_kind == "spec":
+                        edited_path = root / "docs/product-specs/SPEC-PROJECT-001-product-definition.md"
+                    else:
+                        plans = list((root / "docs/exec-plans/active").glob("*.md"))
+                        self.assertEqual(len(plans), 1)
+                        edited_path = plans[0]
+                    edited_path.write_bytes(user_bytes)
+                    raise module.HarnessError(f"forced {target_kind} edit")
+
+                module.command_docs_index = edit_created_path
+                with self.assertRaisesRegex(module.HarnessError, "rollback incomplete") as caught:
+                    module.command_define_finalize(module.argparse.Namespace())
+
+                self.assertIsNotNone(edited_path)
+                assert edited_path is not None
+                self.assertEqual(edited_path.read_bytes(), user_bytes)
+                self.assertIn(edited_path.relative_to(root).as_posix(), str(caught.exception))
+                if target_kind == "spec":
+                    self.assertEqual(list((root / "docs/exec-plans/active").glob("*.md")), [])
+                else:
+                    self.assertFalse(
+                        (root / "docs/product-specs/SPEC-PROJECT-001-product-definition.md").exists()
+                    )
 
     @unittest.skipIf(os.name == "nt", "symlink ownership checks require POSIX semantics")
     def test_repository_definition_commands_refuse_symlink_paths_without_external_writes(self) -> None:

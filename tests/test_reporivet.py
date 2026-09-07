@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
+import json
 import os
 import re
 import stat
@@ -12,6 +14,7 @@ import tomllib
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SRC = REPOSITORY / "src"
@@ -83,6 +86,25 @@ class ReporivetTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+    def mutation_fingerprint(self, output: str) -> str:
+        match = re.search(r"^Mutation plan fingerprint: ([0-9a-f]{64})$", output, re.MULTILINE)
+        self.assertIsNotNone(match, output)
+        assert match is not None
+        return match.group(1)
+
+    def filesystem_snapshot(self, root: Path) -> tuple[tuple[str, str, int, bytes], ...]:
+        entries: list[tuple[str, str, int, bytes]] = []
+        if not root.exists():
+            return ()
+        for path in sorted(root.rglob("*")):
+            relative = path.relative_to(root).as_posix()
+            mode = stat.S_IMODE(path.lstat().st_mode)
+            if path.is_dir():
+                entries.append((relative, "directory", mode, b""))
+            elif path.is_file():
+                entries.append((relative, "file", mode, path.read_bytes()))
+        return tuple(entries)
 
     def test_initializes_repository_local_harness(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -606,19 +628,157 @@ supersedes: []
     def test_dry_run_does_not_create_or_modify_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             missing = Path(tmp).resolve() / "new-project"
-            dry_init = self.init(missing, "--dry-run")
-            self.assertEqual(dry_init.returncode, 0, dry_init.stdout + dry_init.stderr)
+            first_dry_init = self.init(missing, "--dry-run")
+            second_dry_init = self.init(missing, "--dry-run")
+            self.assertEqual(first_dry_init.returncode, 0, first_dry_init.stdout + first_dry_init.stderr)
+            self.assertEqual(second_dry_init.returncode, 0, second_dry_init.stdout + second_dry_init.stderr)
             self.assertFalse(missing.exists())
+            self.assertEqual(
+                self.mutation_fingerprint(first_dry_init.stdout),
+                self.mutation_fingerprint(second_dry_init.stdout),
+            )
 
             root = Path(tmp).resolve() / "existing"
             root.mkdir()
             result = self.init(root)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            before = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
-            dry_upgrade = self.run_cli("upgrade", "--root", str(root), "--dry-run")
-            self.assertEqual(dry_upgrade.returncode, 0, dry_upgrade.stdout + dry_upgrade.stderr)
-            after = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
-            self.assertEqual(before, after)
+            before = self.filesystem_snapshot(root)
+            first_dry_upgrade = self.run_cli("upgrade", "--root", str(root), "--dry-run")
+            second_dry_upgrade = self.run_cli("upgrade", "--root", str(root), "--dry-run")
+            self.assertEqual(first_dry_upgrade.returncode, 0, first_dry_upgrade.stdout + first_dry_upgrade.stderr)
+            self.assertEqual(second_dry_upgrade.returncode, 0, second_dry_upgrade.stdout + second_dry_upgrade.stderr)
+            self.assertEqual(before, self.filesystem_snapshot(root))
+            self.assertEqual(
+                self.mutation_fingerprint(first_dry_upgrade.stdout),
+                self.mutation_fingerprint(second_dry_upgrade.stdout),
+            )
+
+    def test_mutation_plan_fingerprint_is_canonical_and_path_relative(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve() / "project"
+            preview = self.init(root, "--dry-run")
+            self.assertEqual(preview.returncode, 0, preview.stdout + preview.stderr)
+            entry_lines = [
+                line.removeprefix("  - ")
+                for line in preview.stdout.splitlines()
+                if line.startswith("  - {")
+            ]
+            entries = [json.loads(line) for line in entry_lines]
+            self.assertTrue(entries)
+            self.assertEqual([entry["path"] for entry in entries], sorted(entry["path"] for entry in entries))
+            for entry in entries:
+                self.assertFalse(Path(entry["path"]).is_absolute())
+                self.assertIn(entry["action"], {"create-directory", "create-file", "update-file"})
+                self.assertIn(entry["preimage"]["type"], {"missing", "directory", "file"})
+                self.assertIn(entry["postimage"]["type"], {"directory", "file"})
+                if entry["postimage"]["type"] == "file":
+                    self.assertRegex(entry["postimage"]["sha256"], r"^[0-9a-f]{64}$")
+            canonical = json.dumps(entries, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            self.assertEqual(self.mutation_fingerprint(preview.stdout), hashlib.sha256(canonical).hexdigest())
+            self.assertNotIn(str(root), "\n".join(entry_lines))
+
+            applied = self.init(root)
+            self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+            self.assertEqual(self.mutation_fingerprint(applied.stdout), self.mutation_fingerprint(preview.stdout))
+            by_path = {entry["path"]: entry for entry in entries}
+            for relative in ("docs/generated/code-map.md", "docs/README.md"):
+                self.assertEqual(
+                    hashlib.sha256((root / relative).read_bytes()).hexdigest(),
+                    by_path[relative]["postimage"]["sha256"],
+                )
+
+    def test_apply_revalidates_each_preimage_and_rolls_back_prior_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            agents = root / "AGENTS.md"
+            agents.write_text("# Original authority\n", encoding="utf-8")
+            original_apply = initializer._apply_mutation_entry
+            edited = False
+
+            def edit_before_agents(entry: object) -> None:
+                nonlocal edited
+                if getattr(entry, "relative") == "AGENTS.md" and not edited:
+                    agents.write_text("# Concurrent user edit\n", encoding="utf-8")
+                    edited = True
+                original_apply(entry)
+
+            with mock.patch.object(initializer, "_apply_mutation_entry", side_effect=edit_before_agents):
+                result = self.init(root)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertTrue(edited)
+            self.assertIn("preimage changed before write: AGENTS.md", result.stderr)
+            self.assertEqual(agents.read_text(encoding="utf-8"), "# Concurrent user edit\n")
+            self.assertEqual([path for path in root.rglob("*") if path != agents], [])
+
+    def test_intermediate_mutation_failure_restores_exact_bytes_modes_and_created_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            agents = root / "AGENTS.md"
+            agents.write_text("# Original authority\n", encoding="utf-8")
+            agents.chmod(0o640)
+            before = self.filesystem_snapshot(root)
+            original_apply = initializer._apply_mutation_entry
+            calls = 0
+
+            def fail_after_write(entry: object) -> None:
+                nonlocal calls
+                original_apply(entry)
+                calls += 1
+                if calls == 5:
+                    raise OSError("injected mutation failure")
+
+            with mock.patch.object(initializer, "_apply_mutation_entry", side_effect=fail_after_write):
+                result = self.init(root)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("injected mutation failure", result.stderr)
+            self.assertEqual(self.filesystem_snapshot(root), before)
+
+    def test_rollback_preserves_user_edit_to_transaction_postimage_and_reports_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            original_apply = initializer._apply_mutation_entry
+            changed_path: Path | None = None
+
+            def edit_after_write(entry: object) -> None:
+                nonlocal changed_path
+                original_apply(entry)
+                if getattr(entry, "postimage").kind == "file":
+                    changed_path = root / getattr(entry, "relative")
+                    changed_path.write_text("concurrent user edit\n", encoding="utf-8")
+                    raise OSError("injected failure after concurrent edit")
+
+            with mock.patch.object(initializer, "_apply_mutation_entry", side_effect=edit_after_write):
+                result = self.init(root)
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIsNotNone(changed_path)
+            assert changed_path is not None
+            self.assertEqual(changed_path.read_text(encoding="utf-8"), "concurrent user edit\n")
+            self.assertIn("rollback incomplete", result.stderr)
+            self.assertIn(changed_path.relative_to(root).as_posix(), result.stderr)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO support is required")
+    def test_init_refuses_fifo_and_directory_type_mismatches_before_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            fifo = root / "AGENTS.md"
+            os.mkfifo(fifo)
+            result = self.init(root)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("not a regular file", result.stderr)
+            self.assertEqual(set(root.iterdir()), {fifo})
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            target = root / "dev/harness.py"
+            target.mkdir(parents=True)
+            result = self.init(root)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("filesystem type", result.stderr)
+            self.assertTrue(target.is_dir())
+            self.assertEqual(set(root.rglob("*")), {root / "dev", target})
 
     def test_init_refuses_to_replace_existing_project_owned_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

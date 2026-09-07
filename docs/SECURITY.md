@@ -30,7 +30,7 @@ applies_to:
 | Project-owned documents and definition draft | Create-if-missing semantics; no upgrade overwrite |
 | Final product specifications and plans | Structural validation, stable IDs, lifecycle rules, transactional finalization/closure |
 | `dev/harness.toml` | Project-owned bytes; upgrade never rewrites it |
-| Canonical managed paths | Preflight collision, symlink, and regular-file checks; explicit ownership marker |
+| Canonical managed paths | Preflight collision, symlink, expected-type, and regular-file checks; explicit ownership marker; full-plan and per-write preimage validation |
 | Shared files | Paired managed block markers; malformed or fenced lookalikes fail |
 | Configured commands | Argument arrays, no shell interpolation, explicit executable and recursion checks |
 | Verification manifest, Gate, report, and check JSON | One run root, sanitized command metadata, manifest hashing, target binding |
@@ -41,7 +41,9 @@ applies_to:
 ## Required controls
 
 - Resolve the target root and reject non-directory, symlinked, out-of-root, or nonregular paths before reading or writing sensitive entries.
-- Refuse partial managed markers and unmarked canonical command collisions before any adoption or initialization write.
+- Refuse partial managed markers, unmarked canonical command collisions, FIFO/nonregular inputs, and expected file/directory type mismatches before any adoption or initialization write.
+- Render preview and apply from the same canonical repository-relative mutation entries. Validate every type/mode/content-hash preimage before mutation and revalidate each target immediately before its write.
+- Include generated code-map and catalog postimages in the transaction rather than leaving follow-up writes outside rollback. Restore a touched path only while it still matches the transaction postimage; preserve and report concurrent divergence.
 - Keep audit deterministic and byte-stable; do not run configured or detected project commands during inventory.
 - Preserve existing README, instruction, architecture, CI, and configuration authority during adoption.
 - Keep Confirmed, Proposed, Open, and Sources evidence separate; blocking Open items and contradictions prevent finalization.
@@ -59,7 +61,7 @@ applies_to:
 
 Required check failure produces `BLOCK`; required error/unknown or target mismatch produces `INCONCLUSIVE`; neither can be overridden. Protected, unknown, wide, irreversible, or policy-required dirty conditions produce `REVIEW`, which requires a genuine safe human reason before closure. Structural PASS or REVIEW acceptance does not certify semantic correctness or authorize deployment/publication.
 
-`close-plan` verifies one clean current commit once, binds the manifest hash and Gate verdict to the plan, and restores the exact active plan if post-move structural checks fail. Verification artifacts remain for diagnosis.
+`close-plan` verifies one clean current commit once, binds the manifest hash and Gate verdict to the plan, and guards both active and completed paths during post-move rollback. Unchanged transaction postimages are restored to exact bytes and mode; concurrent edits are preserved and reported. Verification artifacts remain for diagnosis.
 
 ## Security-sensitive change gates
 
@@ -68,6 +70,8 @@ Path traversal, symlink semantics, file replacement, audit/adoption, command exe
 ## Operator responsibility
 
 The runtime cannot redact secrets emitted by arbitrary project commands. Keep credentials out of command output, use least-privilege environments, review `.harness/runs/` before sharing, and inspect ignored/tracked state during adoption. Rotate and revoke any exposed credential and remove sensitive history as required; ignore rules and scanning are defense-in-depth only.
+
+Mutation staging and postimage guards do not provide OS, container, process, permission, or adversarial concurrency isolation. The caller's ordinary filesystem authority remains the trust boundary. Preview fingerprints describe current planned bytes; they are not approvals, capabilities, or a substitute for reviewing the target and diff.
 
 A person accepting REVIEW must inspect the report, changed paths, protected matches, recovery path, and relevant raw logs, then provide their own reason. An agent must not generate that acceptance on their behalf.
 

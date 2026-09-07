@@ -31,7 +31,8 @@ The installed `reporivet` package:
 - initializes a greenfield or existing repository;
 - explicitly starts definition or performs audit-first adoption;
 - creates target-centered authority drafts, generated repository facts, generated baseline questions, review-state configuration, and a baseline plan when inferred implementation evidence requires confirmation;
-- refreshes only managed artifacts during upgrade; and
+- refreshes only managed artifacts during upgrade;
+- renders one canonical repository-relative mutation plan for preview and apply, including final code-map/catalog postimages, then guards preimages and rollback by type, mode, and content hash; and
 - diagnoses required files, executability, runtime version, catalogs, plans, and Gate configuration.
 
 ### Repository lifetime
@@ -77,6 +78,9 @@ repository wrapper -> copied runtime -> repository files, Git, configured comman
 - Repository hygiene combines preventive ignore rules with tracked-file scanning.
 - Initializer rendering is scoped per artifact so future repository-local tokens are not consumed during installation.
 - Main/Sub policies live in `AGENTS.md`, durable docs, and Task Packets rather than a hidden scheduler.
+- Mutation fingerprints are deterministic descriptions, not authorization. The initializer does not bind an earlier dry run to apply or persist a backup registry.
+- Planning uses a temporary local staging tree to derive deterministic final bytes. This does not claim process, kernel, container, or adversarial filesystem isolation; ordinary caller permissions and concurrent filesystem behavior remain the operating boundary.
+- Rollback changes a touched path only when its current type, mode, and content hash still match the transaction postimage. Divergent user state is preserved and reported rather than overwritten.
 
 ## CI and distribution
 

@@ -61,7 +61,7 @@ Package and repository-local audit share observable semantics but remain indepen
 - emits sorted repository-relative paths and `confirmed`, `inferred`, `unknown`, `conflict`, or `skipped` status; and
 - performs no writes, command execution, timestamps, random IDs, or machine-specific path emission.
 
-`define --adopt` runs audit first and refuses any conflict before mutation. Existing README, instructions, architecture, CI, catalogs outside managed blocks, and configuration bytes are preserved. Missing responsibilities are added; inferred commands remain `configuration = "review"`. A failed write restores the exact captured tree.
+`define --adopt` runs audit first and refuses any conflict before mutation. Existing README, instructions, architecture, CI, catalogs outside managed blocks, and configuration bytes are preserved. Missing responsibilities are added; inferred commands remain `configuration = "review"`. Adoption uses the same current mutation plan as initialization: all preimages are validated before mutation, each target is rechecked before writing, and failure restores only unchanged transaction postimages. Concurrent user edits are retained and reported as incomplete rollback rather than overwritten.
 
 ## Traceability, contracts, and context routing
 
@@ -116,7 +116,7 @@ New configurations receive explicit shadow defaults. Existing project-owned conf
 
 `close-plan` requires one active plan, a clean current HEAD, and an explicit plan base. It invokes the canonical verification implementation exactly once. PASS closes directly. REVIEW requires a genuine safe one-line reason supplied by a person. BLOCK and INCONCLUSIVE cannot be overridden.
 
-Closure records the run ID, finalized manifest SHA-256, Gate verdict, verified commit, criterion evidence, and REVIEW reason when applicable. The plan then moves to `completed/` and only structural post-move checks run. A post-move failure restores the exact active plan bytes and mode while retaining run artifacts. The later historical bookkeeping commit is not reverified by a second canonical run.
+Closure records the run ID, finalized manifest SHA-256, Gate verdict, verified commit, criterion evidence, and REVIEW reason when applicable. The plan then moves to `completed/` and only structural post-move checks run. Definition finalization and closure capture file type, mode, and content hash for their project-owned preimages and planned postimages. Rollback restores only a still-matching postimage; a concurrent edit at a catalog, specification, active-plan, or completed-plan path is preserved and named while unaffected transaction paths are recovered. Run artifacts remain available. The later historical bookkeeping commit is not reverified by a second canonical run.
 
 ## CI, package removal, and local release boundary
 

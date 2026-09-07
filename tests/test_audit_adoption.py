@@ -1086,6 +1086,33 @@ architecture = []
             self.assertEqual(calls, 1)
             self.assertEqual(before, self.tree_snapshot(root))
 
+    def test_adoption_rollback_preserves_concurrent_user_edit_and_reports_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            self.write_existing_repository(root)
+            original_apply = initializer._apply_mutation_entry
+            edited: Path | None = None
+
+            def edit_after_first_file_write(entry: object) -> None:
+                nonlocal edited
+                original_apply(entry)
+                if getattr(entry, "postimage").kind != "file":
+                    return
+                edited = root / getattr(entry, "relative")
+                edited.write_text("concurrent adoption edit\n", encoding="utf-8")
+                raise OSError("injected adoption failure after user edit")
+
+            with mock.patch.object(initializer, "_apply_mutation_entry", side_effect=edit_after_first_file_write):
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    with self.assertRaisesRegex(InitError, "rollback incomplete") as caught:
+                        adopt_project(root=root, dry_run=False)
+
+            self.assertIsNotNone(edited)
+            assert edited is not None
+            self.assertEqual(edited.read_text(encoding="utf-8"), "concurrent adoption edit\n")
+            self.assertIn(edited.relative_to(root).as_posix(), str(caught.exception))
+
     def test_audit_and_adoption_refuse_a_root_below_a_symlinked_parent(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
             parent = Path(directory).resolve()

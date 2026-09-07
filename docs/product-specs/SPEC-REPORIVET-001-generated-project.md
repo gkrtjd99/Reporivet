@@ -105,6 +105,15 @@ Service and application profiles select `RELIABILITY.md` by default; web profile
 - Accepted decisions require concrete context/reason, at least two substantive alternatives with rejection rationale, and verification or enforcement. New decision/design templates additionally prompt for scope, protected condition or prevented failure, existing repository/dependency capabilities, applicable official primary sources, no-change and practical alternatives, and revisit/retirement conditions.
 - Plans opt into product-to-evidence traceability through `traceability: 1` and one active `product_spec`; historical non-opt-in plans remain valid.
 
+## Mutation preview and recovery behavior
+
+- Existing `init --dry-run` and `upgrade --dry-run` remain read-only and emit the same additive mutation-plan format used by apply.
+- The plan fingerprint is SHA-256 over canonical, path-sorted entries containing only repository-relative path, action, preimage type/mode/content hash, and postimage type/mode/content hash. It contains no absolute path, timestamp, random identifier, approval token, or persisted backup reference.
+- Apply renders its own current plan, validates every preimage before mutation, and revalidates the target immediately before each write. The staged rendering step is a deterministic planning aid, not an OS isolation or authorization boundary.
+- The plan includes the final `code-map` and document-catalog bytes rather than reporting their later updates as hidden partial success.
+- Failure restores transaction-owned bytes and modes and removes transaction-created empty files/directories only while their current state still matches the transaction postimage. A concurrent user edit or type/mode/hash divergence is preserved and reported as an incomplete rollback with the affected repository-relative path.
+- Preview output is informational. There is no separate dry-run-to-apply approval binding, approval CLI, backup registry, daemon, or external transaction runtime.
+
 ## Upgrade behavior
 
 - Managed runtime, wrappers, workflows, and bounded blocks may be refreshed.
@@ -138,7 +147,7 @@ Service and application profiles select `RELIABILITY.md` by default; web profile
 - `./dev/close-plan` requires a clean current HEAD and the plan's explicit base.
 - It invokes canonical verification exactly once, then records run ID, manifest hash, Gate verdict, verified SHA, criterion evidence, and a genuine human REVIEW reason when required.
 - PASS closes directly; REVIEW requires the reason; BLOCK and INCONCLUSIVE cannot be overridden.
-- Post-move structural failure restores the exact active plan while retaining run evidence.
+- Post-move structural failure restores an unchanged transaction postimage to the exact active-plan bytes and mode while retaining run evidence. Concurrent edits at either the active or completed path are preserved and named as incomplete rollback state; the unaffected side is still recovered when its postimage matches.
 
 ## CI behavior
 

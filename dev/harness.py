@@ -13,6 +13,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tomllib
@@ -583,6 +584,161 @@ def ensure_safe_repository_path(path: Path) -> None:
             raise HarnessError(
                 f"refusing to read or write through repository symlink: {relative} (via {candidate.relative_to(ROOT)})"
             )
+
+
+@dataclass(frozen=True)
+class RuntimePathImage:
+    kind: str
+    content: bytes | None
+    mode: int | None
+    sha256: str | None
+
+
+def runtime_file_image(content: bytes, mode: int) -> RuntimePathImage:
+    return RuntimePathImage("file", content, mode & 0o7777, hashlib.sha256(content).hexdigest())
+
+
+def capture_runtime_path(path: Path) -> RuntimePathImage:
+    ensure_safe_repository_path(path)
+    relative = path.relative_to(ROOT)
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return RuntimePathImage("missing", None, None, None)
+    except OSError as exc:
+        raise HarnessError(f"cannot inspect transaction path {relative}: {portable_detail(exc)}") from exc
+    mode = stat.S_IMODE(metadata.st_mode)
+    if stat.S_ISDIR(metadata.st_mode):
+        return RuntimePathImage("directory", None, mode, None)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise HarnessError(f"transaction path is not a regular file or directory: {relative}")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                raise HarnessError(f"transaction path changed filesystem type while reading: {relative}")
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        finally:
+            os.close(descriptor)
+    except HarnessError:
+        raise
+    except OSError as exc:
+        raise HarnessError(f"cannot read transaction path {relative}: {portable_detail(exc)}") from exc
+    return runtime_file_image(b"".join(chunks), stat.S_IMODE(opened.st_mode))
+
+
+def runtime_image_matches(path: Path, image: RuntimePathImage) -> bool:
+    try:
+        current = capture_runtime_path(path)
+    except HarnessError:
+        return False
+    return (
+        current.kind == image.kind
+        and current.mode == image.mode
+        and current.sha256 == image.sha256
+    )
+
+
+def write_runtime_bytes(descriptor: int, content: bytes) -> None:
+    view = memoryview(content)
+    while view:
+        written = os.write(descriptor, view)
+        if written <= 0:
+            raise OSError("short write during transaction recovery")
+        view = view[written:]
+
+
+def chmod_runtime_file(descriptor: int, path: Path, mode: int) -> None:
+    if hasattr(os, "fchmod"):
+        os.fchmod(descriptor, mode)
+    else:
+        os.chmod(path, mode)
+
+
+def restore_runtime_file(path: Path, expected: RuntimePathImage, restored: RuntimePathImage) -> None:
+    if restored.kind != "file" or restored.content is None or restored.mode is None:
+        raise HarnessError("transaction file preimage is incomplete")
+    flags = os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if expected.kind == "missing":
+        flags |= os.O_CREAT | os.O_EXCL
+    descriptor = os.open(path, flags, restored.mode)
+    try:
+        if expected.kind == "file":
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise HarnessError("transaction postimage changed filesystem type")
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            current = runtime_file_image(b"".join(chunks), stat.S_IMODE(metadata.st_mode))
+            if (
+                current.mode != expected.mode
+                or current.sha256 != expected.sha256
+            ):
+                raise HarnessError("transaction postimage changed before rollback")
+        os.ftruncate(descriptor, 0)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        write_runtime_bytes(descriptor, restored.content)
+        chmod_runtime_file(descriptor, path, restored.mode)
+    finally:
+        os.close(descriptor)
+
+
+def rollback_runtime_paths(
+    records: Sequence[tuple[Path, RuntimePathImage, RuntimePathImage]],
+    *,
+    cause: BaseException,
+    label: str,
+) -> None:
+    preserved: list[str] = []
+    errors: list[str] = []
+    for path, preimage, postimage in reversed(records):
+        relative = str(path.relative_to(ROOT))
+        if runtime_image_matches(path, preimage):
+            continue
+        if not runtime_image_matches(path, postimage):
+            preserved.append(relative)
+            continue
+        try:
+            if preimage.kind == "missing":
+                if postimage.kind == "file":
+                    path.unlink()
+                elif postimage.kind == "directory":
+                    path.rmdir()
+            elif preimage.kind == "file":
+                restore_runtime_file(path, postimage, preimage)
+            elif preimage.kind == "directory" and postimage.kind == "missing":
+                if preimage.mode is None:
+                    raise HarnessError("transaction directory preimage has no mode")
+                path.mkdir(mode=preimage.mode)
+                os.chmod(path, preimage.mode)
+            else:
+                raise HarnessError("unsupported transaction rollback image")
+        except (OSError, HarnessError) as exc:
+            preserved.append(relative)
+            errors.append(f"{relative}: {portable_detail(exc)}")
+    if preserved or errors:
+        detail = f"{label} failed ({cause}); rollback incomplete"
+        if preserved:
+            detail += "; preserved path(s): " + ", ".join(sorted(set(preserved)))
+        if errors:
+            detail += "; rollback error(s): " + "; ".join(errors)
+        raise HarnessError(detail) from cause
 
 
 @dataclass(frozen=True)
@@ -5817,42 +5973,36 @@ def command_define_finalize(_: argparse.Namespace) -> int:
     if expected_plan_path != plan_path:
         raise HarnessError("first plan title and destination are inconsistent")
 
-    catalog_snapshots = {
-        path: path.read_bytes() if path.exists() else None
-        for path, _, _ in catalog_entries
+    preimages = {
+        path: capture_runtime_path(path)
+        for path in (spec_path, plan_path, *(entry[0] for entry in catalog_entries))
     }
-    created: list[Path] = []
+    records: list[tuple[Path, RuntimePathImage, RuntimePathImage]] = []
     try:
         ensure_safe_repository_path(spec_path)
         spec_path.parent.mkdir(parents=True, exist_ok=True)
-        created.append(spec_path)
         spec_path.write_text(spec_text, encoding="utf-8")
+        records.append((spec_path, preimages[spec_path], capture_runtime_path(spec_path)))
         ensure_safe_repository_path(plan_path)
         plan_path.parent.mkdir(parents=True, exist_ok=True)
-        created.append(plan_path)
         plan_path.write_text(plan_text, encoding="utf-8")
+        records.append((plan_path, preimages[plan_path], capture_runtime_path(plan_path)))
+
+        catalog_errors: list[str] = []
+        documents = durable_documents(catalog_errors)
+        if catalog_errors:
+            raise HarnessError(
+                f"cannot build document catalog with {len(catalog_errors)} metadata error(s)"
+            )
+        for path, kinds, grouped in catalog_entries:
+            preimage = preimages[path]
+            if preimage.kind != "file" or preimage.mode is None:
+                raise HarnessError(f"catalog target is not a regular file: {path.relative_to(ROOT)}")
+            updated = expected_catalog_text(path, documents, kinds, grouped).encode("utf-8")
+            records.append((path, preimage, runtime_file_image(updated, preimage.mode)))
         command_docs_index(argparse.Namespace(check=False))
     except Exception as exc:
-        rollback_errors: list[str] = []
-        for path in reversed(created):
-            try:
-                ensure_safe_repository_path(path)
-                path.unlink(missing_ok=True)
-            except (OSError, HarnessError) as rollback_exc:
-                rollback_errors.append(f"cannot remove {path.relative_to(ROOT)}: {rollback_exc}")
-        for path, payload in catalog_snapshots.items():
-            try:
-                ensure_safe_repository_path(path)
-                if payload is None:
-                    path.unlink(missing_ok=True)
-                else:
-                    path.write_bytes(payload)
-            except (OSError, HarnessError) as rollback_exc:
-                rollback_errors.append(f"cannot restore {path.relative_to(ROOT)}: {rollback_exc}")
-        if rollback_errors:
-            raise HarnessError(
-                f"definition finalization failed ({exc}); rollback also failed: {'; '.join(rollback_errors)}"
-            ) from exc
+        rollback_runtime_paths(records, cause=exc, label="definition finalization")
         raise
     print(f"Finalized definition: {DEFINITION_SPEC}")
     print(f"Created first vertical-slice plan: {plan_path.relative_to(ROOT)}")
@@ -6187,25 +6337,6 @@ def bind_traceable_verification_rows(
     return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 
 
-def restore_active_plan(
-    source: Path,
-    destination: Path,
-    original_bytes: bytes,
-    original_mode: int,
-    cause: BaseException,
-) -> None:
-    try:
-        destination.unlink(missing_ok=True)
-        ensure_safe_repository_path(source)
-        source.write_bytes(original_bytes)
-        os.chmod(source, original_mode & 0o7777)
-    except OSError as rollback_error:
-        raise HarnessError(
-            "plan closure failed and exact active-plan restoration also failed: "
-            + portable_detail(rollback_error)
-        ) from cause
-
-
 def command_close_plan(args: argparse.Namespace) -> int:
     plan = locate_plan(args.plan, active_only=True)
     if plan.status != "verifying":
@@ -6236,8 +6367,11 @@ def command_close_plan(args: argparse.Namespace) -> int:
     ensure_safe_repository_path(destination)
     if destination.exists():
         raise HarnessError(f"completed plan already exists: {destination.relative_to(ROOT)}")
-    original_bytes = plan.path.read_bytes()
-    original_mode = plan.path.stat().st_mode
+    source_preimage = capture_runtime_path(plan.path)
+    if source_preimage.kind != "file" or source_preimage.content is None or source_preimage.mode is None:
+        raise HarnessError("close-plan requires a regular active-plan preimage")
+    original_bytes = source_preimage.content
+    original_mode = source_preimage.mode
     try:
         original_text = original_bytes.decode("utf-8")
     except UnicodeError as exc:
@@ -6288,19 +6422,37 @@ def command_close_plan(args: argparse.Namespace) -> int:
         review_reason=review_reason,
     )
 
-    completed_dir.mkdir(parents=True, exist_ok=True)
-    moved = False
+    completed_preimage = capture_runtime_path(completed_dir)
+    records: list[tuple[Path, RuntimePathImage, RuntimePathImage]] = []
+    if completed_preimage.kind == "missing":
+        completed_dir.mkdir(parents=True)
+        records.append((completed_dir, completed_preimage, capture_runtime_path(completed_dir)))
+    elif completed_preimage.kind != "directory":
+        raise HarnessError("completed plan path is not a regular directory")
+    destination_preimage = capture_runtime_path(destination)
+    if destination_preimage.kind != "missing":
+        raise HarnessError(f"completed plan already exists: {destination.relative_to(ROOT)}")
+    destination_postimage = runtime_file_image(updated.encode("utf-8"), original_mode)
+    source_postimage = RuntimePathImage("missing", None, None, None)
+    records.extend(
+        (
+            (destination, destination_preimage, destination_postimage),
+            (plan.path, source_preimage, source_postimage),
+        )
+    )
     try:
-        destination.write_bytes(updated.encode("utf-8"))
-        os.chmod(destination, original_mode & 0o7777)
+        if not runtime_image_matches(destination, destination_preimage):
+            raise HarnessError("completed plan preimage changed before write")
+        destination.write_bytes(destination_postimage.content or b"")
+        os.chmod(destination, original_mode)
+        if not runtime_image_matches(plan.path, source_preimage):
+            raise HarnessError("active plan preimage changed before removal")
         plan.path.unlink()
-        moved = True
         command_docs_index(argparse.Namespace(check=True))
         command_docs_check(argparse.Namespace(strict=True))
         command_plan_check(argparse.Namespace(strict=True))
     except BaseException as exc:
-        if moved or destination.exists():
-            restore_active_plan(plan.path, destination, original_bytes, original_mode, exc)
+        rollback_runtime_paths(records, cause=exc, label="plan closure")
         raise
     print(
         f"Closed {plan.id} at verified commit {head} with Gate {verdict}. "

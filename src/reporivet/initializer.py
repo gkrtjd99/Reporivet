@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import io
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import tomllib
 from dataclasses import dataclass, field
 from datetime import date
@@ -162,6 +167,51 @@ SOURCE_MARKERS = (
     "build.gradle",
     "build.gradle.kts",
 )
+COMMAND_INFERENCE_INPUTS = (
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "pyproject.toml",
+    "requirements.txt",
+    "uv.lock",
+    "poetry.lock",
+    "ruff.toml",
+    "mypy.ini",
+    "pytest.ini",
+    "go.mod",
+    "Cargo.toml",
+    "Cargo.lock",
+    "pom.xml",
+    "mvnw",
+    "build.gradle",
+    "build.gradle.kts",
+    "gradlew",
+    "tests",
+)
+HARNESS_DIRECTORY_PATHS = frozenset(
+    {
+        ".",
+        ".github",
+        ".github/workflows",
+        ".harness",
+        ".harness/runs",
+        "dev",
+        "docs",
+        "docs/decisions",
+        "docs/design-docs",
+        "docs/exec-plans",
+        "docs/exec-plans/active",
+        "docs/exec-plans/completed",
+        "docs/generated",
+        "docs/module-contracts",
+        "docs/product-specs",
+        "docs/references",
+        "docs/runbooks",
+    }
+)
 
 
 class InitError(RuntimeError):
@@ -190,6 +240,75 @@ class ChangeSet:
                 except ValueError:
                     display = path
                 print(f"  - {display}")
+
+
+@dataclass(frozen=True)
+class MutationImage:
+    kind: str
+    mode: int | None
+    sha256: str | None
+    content: bytes | None = field(default=None, repr=False, compare=False)
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "mode": self.mode,
+            "sha256": self.sha256,
+            "type": self.kind,
+        }
+
+
+@dataclass(frozen=True)
+class MutationEntry:
+    root: Path = field(repr=False, compare=False)
+    relative: str
+    action: str
+    preimage: MutationImage
+    postimage: MutationImage
+
+    @property
+    def path(self) -> Path:
+        return self.root if self.relative == "." else self.root / self.relative
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "action": self.action,
+            "path": self.relative,
+            "postimage": self.postimage.as_dict(),
+            "preimage": self.preimage.as_dict(),
+        }
+
+
+@dataclass(frozen=True)
+class MutationPlan:
+    root: Path = field(repr=False, compare=False)
+    entries: tuple[MutationEntry, ...]
+
+    @property
+    def fingerprint(self) -> str:
+        payload = json.dumps(
+            [entry.as_dict() for entry in self.entries],
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def print(self) -> None:
+        print(f"Mutation plan fingerprint: {self.fingerprint}")
+        print("Mutation plan entries:")
+        if not self.entries:
+            print("  - none")
+            return
+        for entry in self.entries:
+            print(
+                "  - "
+                + json.dumps(
+                    entry.as_dict(),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+            )
 
 
 @dataclass(frozen=True)
@@ -283,6 +402,121 @@ def ensure_safe_write_path(path: Path) -> None:
     component = symlink_component(path)
     if component is not None:
         raise InitError(f"refusing to write through symlink path: {path} (via {component})")
+
+
+def mutation_relative(path: Path, root: Path) -> str:
+    if path == root:
+        return "."
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError as exc:
+        raise InitError(f"mutation path is outside the project root: {path}") from exc
+
+
+def capture_mutation_image(path: Path, *, root: Path) -> MutationImage:
+    relative = mutation_relative(path, root)
+    ensure_safe_write_path(path)
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return MutationImage("missing", None, None)
+    except OSError as exc:
+        raise InitError(f"cannot inspect mutation path {relative}: {exc}") from exc
+    mode = stat.S_IMODE(metadata.st_mode)
+    if stat.S_ISDIR(metadata.st_mode):
+        return MutationImage("directory", mode, None)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise InitError(f"mutation target is not a regular file or directory: {relative}")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                raise InitError(f"mutation target changed filesystem type while reading: {relative}")
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        finally:
+            os.close(descriptor)
+    except InitError:
+        raise
+    except OSError as exc:
+        raise InitError(f"cannot read mutation target {relative}: {exc}") from exc
+    content = b"".join(chunks)
+    return MutationImage(
+        "file",
+        stat.S_IMODE(opened.st_mode),
+        hashlib.sha256(content).hexdigest(),
+        content,
+    )
+
+
+def mutation_image_matches(path: Path, image: MutationImage, *, root: Path) -> bool:
+    try:
+        current = capture_mutation_image(path, root=root)
+    except InitError:
+        return False
+    return (
+        current.kind == image.kind
+        and current.mode == image.mode
+        and current.sha256 == image.sha256
+    )
+
+
+def preflight_mutation_target_types(
+    root: Path,
+    *,
+    kind: str,
+    capabilities: Iterable[str] | None,
+    with_ci: bool,
+    include_definition_draft: bool,
+) -> None:
+    for relative in harness_target_relative_paths(
+        kind=kind,
+        capabilities=capabilities,
+        with_ci=with_ci,
+        include_definition_draft=include_definition_draft,
+    ):
+        path = root / relative
+        ensure_safe_write_path(path)
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise InitError(f"cannot inspect mutation target {relative}: {exc}") from exc
+        expected_directory = relative in HARNESS_DIRECTORY_PATHS
+        actual_directory = stat.S_ISDIR(metadata.st_mode)
+        actual_file = stat.S_ISREG(metadata.st_mode)
+        if expected_directory and not actual_directory:
+            raise InitError(f"mutation target has an unexpected filesystem type; expected directory: {relative}")
+        if not expected_directory and not actual_file:
+            raise InitError(
+                f"mutation target has an unexpected filesystem type and is not a regular file: {relative}"
+            )
+
+
+def preflight_command_inference_inputs(root: Path) -> None:
+    for relative in COMMAND_INFERENCE_INPUTS:
+        path = root / relative
+        ensure_safe_write_path(path)
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise InitError(f"cannot inspect command inference input {relative}: {exc}") from exc
+        expected_directory = relative == "tests"
+        if expected_directory and not stat.S_ISDIR(metadata.st_mode):
+            raise InitError(f"command inference input has an unexpected filesystem type: {relative}")
+        if not expected_directory and not stat.S_ISREG(metadata.st_mode):
+            raise InitError(f"command inference input is not a regular file: {relative}")
 
 
 def is_managed_file(path: Path) -> bool:
@@ -1279,30 +1513,7 @@ def audit_command_findings(root: Path) -> list[AuditFinding]:
             return findings
         configuration = configuration_value.casefold()
     else:
-        command_inputs = (
-            "package.json",
-            "package-lock.json",
-            "pnpm-lock.yaml",
-            "yarn.lock",
-            "bun.lock",
-            "bun.lockb",
-            "pyproject.toml",
-            "requirements.txt",
-            "uv.lock",
-            "poetry.lock",
-            "ruff.toml",
-            "mypy.ini",
-            "pytest.ini",
-            "go.mod",
-            "Cargo.toml",
-            "Cargo.lock",
-            "pom.xml",
-            "mvnw",
-            "build.gradle",
-            "build.gradle.kts",
-            "gradlew",
-            "tests",
-        )
+        command_inputs = COMMAND_INFERENCE_INPUTS
         unsafe = [
             relative
             for relative in command_inputs
@@ -1834,80 +2045,6 @@ def preflight_optional_document_targets(
             raise InitError(f"cannot read optional document target as UTF-8: {relative}") from exc
 
 
-@dataclass(frozen=True)
-class PathSnapshot:
-    path: Path
-    kind: str
-    content: bytes | None
-    mode: int | None
-
-
-def capture_path_snapshots(root: Path, relative_paths: Sequence[str]) -> tuple[PathSnapshot, ...]:
-    snapshots: list[PathSnapshot] = []
-    for relative in relative_paths:
-        path = root / relative
-        if path.is_symlink():
-            raise InitError(f"refusing to snapshot a symbolic-link path: {relative}")
-        if path.is_file():
-            try:
-                content = path.read_bytes()
-                mode = path.stat().st_mode & 0o7777
-            except OSError as exc:
-                raise InitError(f"cannot snapshot adoption path: {relative}: {exc}") from exc
-            snapshots.append(
-                PathSnapshot(
-                    path=path,
-                    kind="file",
-                    content=content,
-                    mode=mode,
-                )
-            )
-        elif path.is_dir():
-            snapshots.append(PathSnapshot(path=path, kind="directory", content=None, mode=None))
-        elif path.exists():
-            raise InitError(f"refusing to snapshot a non-regular path: {relative}")
-        else:
-            snapshots.append(PathSnapshot(path=path, kind="missing", content=None, mode=None))
-    return tuple(snapshots)
-
-
-def restore_path_snapshots(snapshots: Sequence[PathSnapshot]) -> None:
-    errors: list[str] = []
-    missing = sorted(
-        (snapshot for snapshot in snapshots if snapshot.kind == "missing"),
-        key=lambda snapshot: len(snapshot.path.parts),
-        reverse=True,
-    )
-    for snapshot in missing:
-        path = snapshot.path
-        try:
-            if path.is_symlink() or path.is_file():
-                path.unlink()
-            elif path.is_dir():
-                path.rmdir()
-        except OSError as exc:
-            errors.append(f"{path}: {exc}")
-
-    for snapshot in snapshots:
-        if snapshot.kind != "file":
-            continue
-        path = snapshot.path
-        try:
-            if path.is_symlink():
-                path.unlink()
-            elif path.is_dir():
-                path.rmdir()
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(snapshot.content or b"")
-            if snapshot.mode is not None:
-                path.chmod(snapshot.mode)
-        except OSError as exc:
-            errors.append(f"{path}: {exc}")
-
-    if errors:
-        raise InitError("adoption rollback failed: " + "; ".join(errors))
-
-
 def ensure_directories(root: Path, *, dry_run: bool) -> None:
     if dry_run:
         return
@@ -1948,11 +2085,17 @@ def create_definition_draft(root: Path, values: dict[str, str], changes: ChangeS
     write_if_missing(root / DEFINITION_DRAFT_PATH, content, changes, dry_run=dry_run)
 
 
-def run_generated(root: Path, command: str, *args: str) -> int:
+def run_generated(root: Path, command: str, *args: str, quiet: bool = False) -> int:
     harness = root / "dev" / "harness.py"
     if not harness.exists():
         raise InitError("generated dev/harness.py is missing")
-    completed = subprocess.run([sys.executable, str(harness), command, *args], cwd=root, check=False)
+    completed = subprocess.run(
+        [sys.executable, str(harness), command, *args],
+        cwd=root,
+        check=False,
+        stdout=subprocess.DEVNULL if quiet else None,
+        stderr=subprocess.DEVNULL if quiet else None,
+    )
     return completed.returncode
 
 
@@ -2000,7 +2143,263 @@ def preflight_adoption_blocks(
         upsert_block_text_preserving(original, block, start, end)
 
 
-def apply_harness(
+def _copy_repository_for_plan(source: Path, destination: Path) -> None:
+    destination.mkdir(mode=stat.S_IMODE(source.lstat().st_mode), parents=True)
+
+    def copy_directory(current_source: Path, current_destination: Path) -> None:
+        try:
+            entries = sorted(os.scandir(current_source), key=lambda entry: entry.name)
+        except OSError as exc:
+            raise InitError(f"cannot stage repository path {current_source}: {exc}") from exc
+        for directory_entry in entries:
+            source_path = Path(directory_entry.path)
+            destination_path = current_destination / directory_entry.name
+            relative = source_path.relative_to(source).as_posix()
+            if relative in {".git", ".harness"}:
+                continue
+            try:
+                metadata = source_path.lstat()
+            except OSError as exc:
+                raise InitError(f"cannot inspect repository path while planning: {relative}: {exc}") from exc
+            mode = stat.S_IMODE(metadata.st_mode)
+            if stat.S_ISLNK(metadata.st_mode):
+                os.symlink(os.readlink(source_path), destination_path)
+            elif stat.S_ISDIR(metadata.st_mode):
+                destination_path.mkdir(mode=mode)
+                if directory_entry.name not in AUDIT_IGNORED_DIRECTORIES:
+                    copy_directory(source_path, destination_path)
+                os.chmod(destination_path, mode)
+            elif stat.S_ISREG(metadata.st_mode):
+                image = capture_mutation_image(source_path, root=source)
+                destination_path.write_bytes(image.content or b"")
+                os.chmod(destination_path, mode)
+            elif stat.S_ISFIFO(metadata.st_mode) and hasattr(os, "mkfifo"):
+                os.mkfifo(destination_path, mode)
+            else:
+                raise InitError(
+                    f"cannot safely render a mutation plan with non-regular repository entry: {relative}"
+                )
+
+    copy_directory(source, destination)
+    os.chmod(destination, stat.S_IMODE(source.lstat().st_mode))
+
+
+def _remap_changes(changes: ChangeSet, source_root: Path, target_root: Path) -> ChangeSet:
+    remapped = ChangeSet()
+    for label in ("created", "updated", "skipped"):
+        values = [
+            target_root / path.relative_to(source_root)
+            for path in getattr(changes, label)
+        ]
+        setattr(remapped, label, values)
+    return remapped
+
+
+def _mutation_plan_from_stage(root: Path, staged_root: Path) -> MutationPlan:
+    entries: list[MutationEntry] = []
+    candidates = [staged_root]
+    candidates.extend(sorted(staged_root.rglob("*"), key=lambda path: path.relative_to(staged_root).as_posix()))
+    for staged_path in candidates:
+        relative = mutation_relative(staged_path, staged_root)
+        try:
+            metadata = staged_path.lstat()
+        except OSError as exc:
+            raise InitError(f"cannot inspect staged mutation path {relative}: {exc}") from exc
+        if stat.S_ISLNK(metadata.st_mode) or not (
+            stat.S_ISDIR(metadata.st_mode) or stat.S_ISREG(metadata.st_mode)
+        ):
+            continue
+        target_path = root if relative == "." else root / relative
+        preimage = capture_mutation_image(target_path, root=root)
+        postimage = capture_mutation_image(staged_path, root=staged_root)
+        if (
+            preimage.kind == postimage.kind
+            and preimage.mode == postimage.mode
+            and preimage.sha256 == postimage.sha256
+        ):
+            continue
+        if postimage.kind == "directory":
+            if preimage.kind != "missing":
+                raise InitError(f"mutation target has an unexpected filesystem type: {relative}")
+            action = "create-directory"
+        elif postimage.kind == "file":
+            if preimage.kind not in {"missing", "file"}:
+                raise InitError(f"mutation target has an unexpected filesystem type: {relative}")
+            action = "create-file" if preimage.kind == "missing" else "update-file"
+        else:
+            raise InitError(f"unsupported staged mutation type: {relative}")
+        entries.append(
+            MutationEntry(
+                root=root,
+                relative=relative,
+                action=action,
+                preimage=preimage,
+                postimage=postimage,
+            )
+        )
+    entries.sort(key=lambda entry: entry.relative)
+    return MutationPlan(root=root, entries=tuple(entries))
+
+
+def _read_descriptor_image(descriptor: int) -> MutationImage:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode):
+        return MutationImage("nonregular", stat.S_IMODE(metadata.st_mode), None)
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    while True:
+        chunk = os.read(descriptor, 1024 * 1024)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    content = b"".join(chunks)
+    return MutationImage(
+        "file",
+        stat.S_IMODE(metadata.st_mode),
+        hashlib.sha256(content).hexdigest(),
+        content,
+    )
+
+
+def _write_all(descriptor: int, content: bytes) -> None:
+    view = memoryview(content)
+    while view:
+        written = os.write(descriptor, view)
+        if written <= 0:
+            raise OSError("short write while applying mutation")
+        view = view[written:]
+
+
+def _chmod_open_file(descriptor: int, path: Path, mode: int) -> None:
+    if hasattr(os, "fchmod"):
+        os.fchmod(descriptor, mode)
+    else:
+        os.chmod(path, mode)
+
+
+def _write_file_image(entry: MutationEntry) -> None:
+    path = entry.path
+    content = entry.postimage.content
+    mode = entry.postimage.mode
+    if content is None or mode is None:
+        raise InitError(f"mutation file postimage is incomplete: {entry.relative}")
+    flags = os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if entry.preimage.kind == "missing":
+        flags |= os.O_CREAT | os.O_EXCL
+        descriptor = os.open(path, flags, mode)
+    else:
+        descriptor = os.open(path, flags)
+    try:
+        if entry.preimage.kind == "file":
+            current = _read_descriptor_image(descriptor)
+            if (
+                current.kind != entry.preimage.kind
+                or current.mode != entry.preimage.mode
+                or current.sha256 != entry.preimage.sha256
+            ):
+                raise InitError(f"preimage changed before write: {entry.relative}")
+        os.ftruncate(descriptor, 0)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        _write_all(descriptor, content)
+        _chmod_open_file(descriptor, path, mode)
+    finally:
+        os.close(descriptor)
+
+
+def _apply_mutation_entry(entry: MutationEntry) -> None:
+    path = entry.path
+    ensure_safe_write_path(path)
+    if not mutation_image_matches(path, entry.preimage, root=entry.root):
+        raise InitError(f"preimage changed before write: {entry.relative}")
+    if entry.action == "create-directory":
+        if entry.postimage.mode is None:
+            raise InitError(f"mutation directory postimage is incomplete: {entry.relative}")
+        path.mkdir(mode=entry.postimage.mode)
+        os.chmod(path, entry.postimage.mode)
+        return
+    if entry.action in {"create-file", "update-file"}:
+        if not path.parent.is_dir():
+            raise InitError(f"mutation parent directory is unavailable: {entry.relative}")
+        _write_file_image(entry)
+        return
+    raise InitError(f"unsupported mutation action for {entry.relative}: {entry.action}")
+
+
+def _restore_file_preimage(entry: MutationEntry) -> None:
+    content = entry.preimage.content
+    mode = entry.preimage.mode
+    if content is None or mode is None:
+        raise InitError(f"file preimage is incomplete: {entry.relative}")
+    flags = os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(entry.path, flags)
+    try:
+        current = _read_descriptor_image(descriptor)
+        if (
+            current.kind != entry.postimage.kind
+            or current.mode != entry.postimage.mode
+            or current.sha256 != entry.postimage.sha256
+        ):
+            raise InitError(f"postimage changed before rollback: {entry.relative}")
+        os.ftruncate(descriptor, 0)
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        _write_all(descriptor, content)
+        _chmod_open_file(descriptor, entry.path, mode)
+    finally:
+        os.close(descriptor)
+
+
+def _rollback_mutation_entries(entries: Sequence[MutationEntry]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    preserved: list[str] = []
+    for entry in reversed(entries):
+        path = entry.path
+        if mutation_image_matches(path, entry.preimage, root=entry.root):
+            continue
+        if not mutation_image_matches(path, entry.postimage, root=entry.root):
+            preserved.append(entry.relative)
+            continue
+        try:
+            if entry.preimage.kind == "missing":
+                if entry.postimage.kind == "file":
+                    path.unlink()
+                elif entry.postimage.kind == "directory":
+                    path.rmdir()
+            elif entry.preimage.kind == "file":
+                _restore_file_preimage(entry)
+            else:
+                raise InitError(f"unsupported rollback preimage: {entry.relative}")
+        except (OSError, InitError) as exc:
+            preserved.append(entry.relative)
+            errors.append(f"{entry.relative}: {exc}")
+    return sorted(set(preserved)), errors
+
+
+def _apply_mutation_plan(plan: MutationPlan) -> None:
+    for entry in plan.entries:
+        if not mutation_image_matches(entry.path, entry.preimage, root=plan.root):
+            raise InitError(f"preimage changed before mutation: {entry.relative}")
+    touched: list[MutationEntry] = []
+    try:
+        for entry in plan.entries:
+            touched.append(entry)
+            _apply_mutation_entry(entry)
+    except BaseException as exc:
+        preserved, rollback_errors = _rollback_mutation_entries(touched)
+        if preserved or rollback_errors:
+            detail = f"mutation failed ({exc}); rollback incomplete"
+            if preserved:
+                detail += "; preserved path(s): " + ", ".join(preserved)
+            if rollback_errors:
+                detail += "; rollback error(s): " + "; ".join(rollback_errors)
+            raise InitError(detail) from exc
+        raise InitError(f"mutation failed and was rolled back: {exc}") from exc
+
+
+def _apply_harness_files(
     *,
     root: Path,
     mode: str,
@@ -2015,6 +2414,7 @@ def apply_harness(
     skip_check: bool,
     capabilities: Sequence[str] | None = None,
     include_definition_draft: bool = False,
+    quiet_generated: bool = False,
 ) -> ChangeSet:
     root = validate_root(root, create=mode in {"init", "define"}, dry_run=dry_run)
     kind_value = kind.strip() or "other"
@@ -2130,14 +2530,95 @@ def apply_harness(
     if dry_run or mode == "adopt":
         return changes
 
-    if run_generated(root, "code-map") != 0:
+    if run_generated(root, "code-map", quiet=quiet_generated) != 0:
         raise InitError("code-map failed after initialization")
-    if run_generated(root, "docs-index") != 0:
+    if run_generated(root, "docs-index", quiet=quiet_generated) != 0:
         raise InitError("docs-index failed after initialization")
     if skip_check:
         return changes
-    if run_generated(root, "docs-check") != 0:
+    if run_generated(root, "docs-check", quiet=quiet_generated) != 0:
         raise InitError("docs-check failed after initialization")
+    return changes
+
+
+def apply_harness(
+    *,
+    root: Path,
+    mode: str,
+    name: str,
+    summary: str,
+    kind: str,
+    primary_language: str,
+    runtime: str,
+    with_ci: bool,
+    baseline: bool,
+    dry_run: bool,
+    skip_check: bool,
+    capabilities: Sequence[str] | None = None,
+    include_definition_draft: bool = False,
+) -> ChangeSet:
+    root = validate_root(
+        root,
+        create=mode in {"init", "define"},
+        dry_run=True,
+    )
+    preflight_command_inference_inputs(root) if root.exists() else None
+    kind_value = kind.strip() or "other"
+    config_path = root / "dev" / "harness.toml"
+    existing_config: dict[str, object] | None = None
+    if config_path.is_file() and symlink_component(config_path) is None:
+        existing_config = read_existing_config(root)
+        kind_value = configured_project_kind(existing_config)
+    enabled_capabilities = effective_document_capabilities(
+        kind=kind_value,
+        requested=capabilities,
+        existing_config=existing_config,
+    )
+    preflight_mutation_target_types(
+        root,
+        kind=kind_value,
+        capabilities=enabled_capabilities,
+        with_ci=with_ci,
+        include_definition_draft=include_definition_draft,
+    )
+
+    with tempfile.TemporaryDirectory(prefix="reporivet-plan-") as temporary:
+        staged_parent = Path(temporary).resolve()
+        staged_root = staged_parent / (root.name or "project")
+        if root.exists():
+            _copy_repository_for_plan(root, staged_root)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                staged_changes = _apply_harness_files(
+                    root=staged_root,
+                    mode=mode,
+                    name=name,
+                    summary=summary,
+                    kind=kind_value,
+                    primary_language=primary_language,
+                    runtime=runtime,
+                    with_ci=with_ci,
+                    baseline=baseline,
+                    dry_run=False,
+                    skip_check=skip_check,
+                    capabilities=tuple(sorted(enabled_capabilities)),
+                    include_definition_draft=include_definition_draft,
+                    quiet_generated=True,
+                )
+        except BaseException as exc:
+            if isinstance(exc, InitError):
+                raise
+            raise InitError(f"cannot render mutation plan: {exc}") from exc
+        changes = _remap_changes(staged_changes, staged_root, root)
+        plan = _mutation_plan_from_stage(root, staged_root)
+
+    changes.print(root, dry_run=dry_run)
+    plan.print()
+    if dry_run:
+        return changes
+    _apply_mutation_plan(plan)
     return changes
 
 
@@ -2183,13 +2664,6 @@ def adopt_project(*, root: Path, dry_run: bool) -> ChangeSet:
         existing_config=existing_config,
     )
     preflight_optional_document_targets(root, capabilities)
-    relative_paths = harness_target_relative_paths(
-        kind=project_kind,
-        capabilities=capabilities,
-        with_ci=False,
-        include_definition_draft=True,
-    )
-    snapshots = () if dry_run else capture_path_snapshots(root, relative_paths)
     try:
         return apply_harness(
             root=root,
@@ -2207,14 +2681,10 @@ def adopt_project(*, root: Path, dry_run: bool) -> ChangeSet:
             include_definition_draft=True,
         )
     except Exception as exc:
-        if snapshots:
-            try:
-                restore_path_snapshots(snapshots)
-            except InitError as rollback_exc:
-                raise InitError(f"adoption failed ({exc}); {rollback_exc}") from rollback_exc
-        if isinstance(exc, InitError):
-            raise
-        raise InitError(f"adoption failed and was rolled back: {exc}") from exc
+        detail = str(exc)
+        if "rollback incomplete" in detail:
+            raise InitError(f"adoption failed; {detail}") from exc
+        raise InitError(f"adoption failed and was rolled back: {detail}") from exc
 
 
 def read_existing_config(root: Path) -> dict[str, object]:

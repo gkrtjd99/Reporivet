@@ -339,6 +339,59 @@ class ClosePlanTests(unittest.TestCase):
             self.assertFalse((root / "docs/exec-plans/completed" / plan_path.name).exists())
             self.assertEqual(len(self.verification_runs(root)), 1)
 
+    def test_close_plan_rollback_preserves_concurrent_completed_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            plan_path, plan_id, _, _ = self.prepare_candidate(root)
+            original_bytes = plan_path.read_bytes()
+            destination = root / "docs/exec-plans/completed" / plan_path.name
+            module = self.load_runtime_module(root)
+            original_plan_check = module.command_plan_check
+            calls = 0
+            user_bytes = b"concurrent completed edit\n"
+
+            def edit_completed_after_move(args):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    return original_plan_check(args)
+                destination.write_bytes(user_bytes)
+                raise module.HarnessError("forced post-move completed edit")
+
+            module.command_plan_check = edit_completed_after_move
+            with self.assertRaisesRegex(module.HarnessError, "rollback incomplete") as caught:
+                module.command_close_plan(module.argparse.Namespace(plan=plan_id, accept_review=""))
+
+            self.assertEqual(destination.read_bytes(), user_bytes)
+            self.assertEqual(plan_path.read_bytes(), original_bytes)
+            self.assertIn(destination.relative_to(root).as_posix(), str(caught.exception))
+
+    def test_close_plan_rollback_preserves_concurrent_active_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            plan_path, plan_id, _, _ = self.prepare_candidate(root)
+            destination = root / "docs/exec-plans/completed" / plan_path.name
+            module = self.load_runtime_module(root)
+            original_plan_check = module.command_plan_check
+            calls = 0
+            user_bytes = b"concurrent active edit\n"
+
+            def edit_active_after_move(args):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    return original_plan_check(args)
+                plan_path.write_bytes(user_bytes)
+                raise module.HarnessError("forced post-move active edit")
+
+            module.command_plan_check = edit_active_after_move
+            with self.assertRaisesRegex(module.HarnessError, "rollback incomplete") as caught:
+                module.command_close_plan(module.argparse.Namespace(plan=plan_id, accept_review=""))
+
+            self.assertEqual(plan_path.read_bytes(), user_bytes)
+            self.assertFalse(destination.exists())
+            self.assertIn(plan_path.relative_to(root).as_posix(), str(caught.exception))
+
     def test_head_change_during_verification_prevents_closure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
