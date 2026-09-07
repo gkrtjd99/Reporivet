@@ -1,20 +1,20 @@
 ---
 id: PLAN-2026-0004
 kind: exec-plan
-status: verifying
+status: complete
 owner: main
 area: harness
 created: 2026-09-07
 updated: 2026-09-07
 base_commit: "1d064217da738ebc3ed593ce4aeccf365fb0cd16"
-integrated_commit: "HEAD"
-verified_commit: "ea051d74dbfd662dabda04363b15fedd06531909"
+integrated_commit: 8dcec3d2bd2b43a06598a4bd067093a697f9e1d5
+verified_commit: 8dcec3d2bd2b43a06598a4bd067093a697f9e1d5
 traceability: 0
 product_spec: ""
-verification_run: "20260907T075423870569Z-verify"
-manifest_sha256: "0aa6c48fc28f9d4c5ac89a344f0ff98cb0f6e0b500ac88e1dbe7b6e28b26277c"
+verification_run: "20260907T081641344093Z-verify"
+manifest_sha256: "4ccb7a11c56ac52063d44738f21f9a29575d2aa5ca3ca952c1b709700672b9cb"
 gate_verdict: "REVIEW"
-gate_review_reason: ""
+gate_review_reason: "사용자는 Task 내부 조정은 Lead에, 범위 변경과 최종 승인은 Main에 두는 경계를 수락했다. Main과 Lead가 공유 인터페이스·수정 경계를 설계하고 Verifier가 증거에 기반해 적극적으로 반증하는 방향에 동의했다. 보호된 운영 계약 변경과 기존 DESIGN 제한 문장의 정합성 보수, 독립 재검증 및 전체 155개 테스트 통과 결과를 설명받은 후 REVIEW 사유 기록과 PLAN-2026-0004 공식 종료에 동의했다."
 ---
 
 # 모델 중립적인 agent 운영 계약 정리
