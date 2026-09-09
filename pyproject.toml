@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "reporivet"
 dynamic = ["version"]
-description = "Repository-native harness initializer for long-running agent-driven software development"
+description = "Safe Markdown entrypoints for navigating existing repository knowledge"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -41,17 +41,5 @@ namespaces = false
 
 [tool.setuptools.package-data]
 reporivet = [
-  "assets/project/dev/harness.py",
-  "assets/project/dev/*.tmpl",
-  "assets/project/docs/*.tmpl",
-  "assets/project/docs/*/*.tmpl",
-  "assets/project/github/*.tmpl",
-  "assets/project/root/*.tmpl",
-]
-
-[tool.setuptools.exclude-package-data]
-reporivet = [
-  "assets/project/dev/__pycache__/*",
-  "assets/project/dev/*.pyc",
-  "assets/project/dev/*.pyo",
+  "assets/project/root/AGENTS.md.tmpl",
 ]

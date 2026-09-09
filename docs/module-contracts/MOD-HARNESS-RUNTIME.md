@@ -1,7 +1,7 @@
 ---
 id: MOD-HARNESS-RUNTIME
 kind: module-contract
-status: active
+status: superseded
 area: harness
 summary: Canonical package asset and copied repository-local runtime boundary
 owner: Reporivet maintainers
@@ -22,6 +22,8 @@ verification:
 ---
 
 # Repository-local harness runtime
+
+> Historical module contract. Superseded by the source-only entrypoint boundary in [`ARCHITECTURE.md`](../../ARCHITECTURE.md); the runtime body remains preserved for history.
 
 ## Boundary
 

@@ -4,8 +4,6 @@ import contextlib
 import io
 import json
 import os
-import stat
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,1162 +11,383 @@ from pathlib import Path
 from unittest import mock
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-SRC = REPOSITORY / "src"
-sys.path.insert(0, str(SRC))
+sys.path.insert(0, str(REPOSITORY / "src"))
 
 from reporivet import initializer
 from reporivet.cli import main as cli_main
-from reporivet.initializer import InitError, adopt_project
 
 
 class AuditAdoptionTests(unittest.TestCase):
-    maxDiff = None
+    def run_cli(self, *args: str) -> tuple[int, str, str]:
+        output, error = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+            code = cli_main(list(args))
+        return code, output.getvalue(), error.getvalue()
 
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            returncode = cli_main(list(args))
-        return subprocess.CompletedProcess(list(args), returncode, stdout.getvalue(), stderr.getvalue())
-
-    def write_existing_repository(self, root: Path) -> dict[str, bytes]:
-        files = {
-            "README.md": b"# Existing product\n",
-            "AGENTS.md": b"# Existing instructions\n\nKeep this exact.  \n",
-            "ARCHITECTURE.md": b"# Existing architecture\n",
-            "docs/README.md": b"# Existing docs\n\nCustom ending.  ",
-            ".github/workflows/ci.yml": b"name: existing\n",
-            "package.json": b'{"scripts":{"test":"node test.js"}}\n',
-            "package-lock.json": b'{"lockfileVersion":3}\n',
-            "src/main.js": b'console.log("ok")\n',
-            "tests/test.js": b"// test\n",
-        }
-        for relative, payload in files.items():
-            path = root / relative
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(payload)
-        return files
-
-    def install_runtime_only(self, root: Path) -> None:
-        harness = root / "dev/harness.py"
-        harness.parent.mkdir(parents=True, exist_ok=True)
-        harness.write_text(
-            initializer.read_asset(
-                "dev/harness.py",
-                {"HARNESS_VERSION": initializer.__version__},
-            ),
-            encoding="utf-8",
-        )
-        harness.chmod(harness.stat().st_mode | 0o111)
-        audit = root / "dev/audit"
-        audit.write_text(
-            initializer.read_asset(
-                "dev/wrapper.sh.tmpl",
-                {
-                    "HARNESS_VERSION": initializer.__version__,
-                    "COMMAND": "audit",
-                },
-            ),
-            encoding="utf-8",
-        )
-        audit.chmod(audit.stat().st_mode | 0o111)
-
-    def write_legacy_config(self, root: Path, *, kind: str) -> bytes:
-        config = root / "dev/harness.toml"
-        config.parent.mkdir(parents=True, exist_ok=True)
-        payload = f'''version = 1
-
-[project]
-name = "Legacy Fixture"
-summary = "An existing project-owned configuration."
-kind = "{kind}"
-primary_language = "TypeScript"
-runtime = "Node.js"
-baseline = "draft"
-configuration = "review"
-default_branch = "main"
-
-[commands]
-bootstrap = []
-run = []
-check = []
-verify = []
-smoke = []
-architecture = []
-'''.encode("utf-8")
-        config.write_bytes(payload)
-        return payload
-
-    def tree_snapshot(self, root: Path) -> tuple[tuple[str, str, int, bytes | str | None], ...]:
-        entries: list[tuple[str, str, int, bytes | str | None]] = []
-        root_mode = stat.S_IMODE(root.lstat().st_mode)
-        entries.append((".", "directory", root_mode, None))
-        for current_text, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
-            current = Path(current_text)
-            for name in sorted(directory_names):
-                path = current / name
-                relative = path.relative_to(root).as_posix()
-                mode = stat.S_IMODE(path.lstat().st_mode)
-                if path.is_symlink():
-                    entries.append((relative, "symlink", mode, os.readlink(path)))
-                else:
-                    entries.append((relative, "directory", mode, None))
-            for name in sorted(file_names):
-                path = current / name
-                relative = path.relative_to(root).as_posix()
-                mode = stat.S_IMODE(path.lstat().st_mode)
-                if path.is_symlink():
-                    entries.append((relative, "symlink", mode, os.readlink(path)))
-                else:
-                    entries.append((relative, "file", mode, path.read_bytes()))
-        return tuple(sorted(entries))
-
-    def test_package_audit_is_byte_stable_read_only_and_does_not_execute_commands(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
+    def test_audit_is_stable_read_only_and_never_executes_manifest_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            external = Path(external_directory).resolve()
-            self.write_existing_repository(root)
-            (root / ".git").mkdir()
-            (root / ".git" / "config").write_text("repository metadata\n", encoding="utf-8")
-            (root / "node_modules" / "dependency").mkdir(parents=True)
-            (root / "node_modules" / "dependency" / "index.js").write_text("dependency\n", encoding="utf-8")
-            secret = external / "outside.txt"
-            secret.write_text("DO_NOT_REPORT_EXTERNAL_CONTENT\n", encoding="utf-8")
-            (root / "linked-outside.txt").symlink_to(secret)
-            sentinel = root / "audit-must-not-run-project-command"
-            package = root / "package.json"
-            package.write_text(
-                json.dumps(
-                    {
-                        "scripts": {
-                            "test": f"python -c 'from pathlib import Path; Path({str(sentinel)!r}).write_text(\"ran\")'"
-                        }
-                    },
-                    separators=(",", ":"),
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            before = self.tree_snapshot(root)
+            (root / "src").mkdir()
+            (root / "src/main.py").write_text("not output\n")
+            sentinel = root / "ran"
+            (root / "package.json").write_text(json.dumps({"scripts": {"test": f"touch {sentinel}"}}))
+            before = tuple(sorted(path.relative_to(root).as_posix() for path in root.rglob("*")))
             first = self.run_cli("audit", "--root", str(root))
             second = self.run_cli("audit", "--root", str(root))
-            after = self.tree_snapshot(root)
-
-            self.assertEqual(first.returncode, 0, first.stderr)
-            self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertEqual(first.stdout.encode("utf-8"), second.stdout.encode("utf-8"))
-            self.assertEqual(before, after)
+            self.assertEqual(first[0], 0, first[2])
+            self.assertEqual(first[1], second[1])
+            self.assertEqual(before, tuple(sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))))
             self.assertFalse(sentinel.exists())
-            self.assertEqual(secret.read_bytes(), b"DO_NOT_REPORT_EXTERNAL_CONTENT\n")
-            self.assertNotIn("DO_NOT_REPORT_EXTERNAL_CONTENT", first.stdout)
-            self.assertNotIn(str(root), first.stdout)
-            self.assertNotIn(str(external), first.stdout)
-            self.assertNotRegex(first.stdout, r'"(?:generated_at|timestamp|run_id)"')
+            self.assertNotIn("touch", first[1])
+            report = json.loads(first[1])
+            self.assertEqual(report["schema"], "reporivet.audit/v2")
+            self.assertTrue(any(item["category"] == "source-root" for item in report["findings"]))
 
-            report = json.loads(first.stdout)
-            self.assertEqual(report["schema"], "reporivet.audit/v1")
-            findings = report["findings"]
-            self.assertEqual(
-                findings,
-                sorted(findings, key=lambda item: (item["category"], item["path"], item["status"], item["detail"])),
-            )
-            statuses = {finding["status"] for finding in findings}
-            self.assertLessEqual(statuses, {"confirmed", "inferred", "unknown", "conflict", "skipped"})
-            by_path = {(finding["category"], finding["path"], finding["status"]) for finding in findings}
-            self.assertIn(("instruction", "AGENTS.md", "confirmed"), by_path)
-            self.assertIn(("durable-document", "README.md", "confirmed"), by_path)
-            self.assertIn(("manifest", "package.json", "confirmed"), by_path)
-            self.assertIn(("lockfile", "package-lock.json", "confirmed"), by_path)
-            self.assertIn(("ci", ".github/workflows/ci.yml", "confirmed"), by_path)
-            self.assertIn(("source-path", "src", "confirmed"), by_path)
-            self.assertIn(("test-path", "tests", "confirmed"), by_path)
-            self.assertIn(("skipped-path", ".git", "skipped"), by_path)
-            self.assertIn(("skipped-path", "node_modules", "skipped"), by_path)
-            self.assertIn(("skipped-path", "linked-outside.txt", "skipped"), by_path)
-
-    def test_adoption_preserves_authority_is_idempotent_and_runtime_audit_matches_package(self) -> None:
+    def test_audit_marks_legacy_runtime_but_does_not_modify_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            originals = self.write_existing_repository(root)
+            runtime = root / "dev/harness.py"
+            runtime.parent.mkdir()
+            runtime.write_text("#!/usr/bin/env python3\n# reporivet:managed version=0.2.0\n")
+            original = runtime.read_bytes()
+            code, output, error = self.run_cli("audit", "--root", str(root))
+            self.assertEqual(code, 0, error)
+            self.assertIn("legacy", output)
+            self.assertEqual(original, runtime.read_bytes())
 
-            result = self.run_cli("define", "--root", str(root), "--adopt")
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual((root / "README.md").read_bytes(), originals["README.md"])
-            self.assertEqual((root / "ARCHITECTURE.md").read_bytes(), originals["ARCHITECTURE.md"])
-            self.assertEqual(
-                (root / ".github/workflows/ci.yml").read_bytes(),
-                originals[".github/workflows/ci.yml"],
-            )
-            self.assertEqual((root / "package.json").read_bytes(), originals["package.json"])
-            self.assertEqual((root / "package-lock.json").read_bytes(), originals["package-lock.json"])
-            self.assertTrue((root / "AGENTS.md").read_bytes().startswith(originals["AGENTS.md"]))
-            self.assertTrue((root / "docs/README.md").read_bytes().startswith(originals["docs/README.md"]))
-            config = (root / "dev/harness.toml").read_text(encoding="utf-8")
-            self.assertIn('configuration = "review"', config)
-            self.assertTrue((root / "docs/product-specs/project-definition.draft.md").is_file())
-            self.assertTrue((root / "dev/audit").is_file())
-
-            before_second_adoption = self.tree_snapshot(root)
-            second = self.run_cli("define", "--root", str(root), "--adopt")
-            after_second_adoption = self.tree_snapshot(root)
-            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-            self.assertEqual(before_second_adoption, after_second_adoption)
-
-            package_audit = self.run_cli("audit", "--root", str(root))
-            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-            environment = os.environ.copy()
-            environment.pop("PYTHONPATH", None)
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertEqual(package_audit.stdout.encode("utf-8"), runtime_audit.stdout.encode("utf-8"))
-
-    def test_legacy_web_adoption_preserves_kind_and_default_documents(self) -> None:
+    def test_init_and_upgrade_preserve_user_bytes_and_only_write_entrypoints(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            self.write_existing_repository(root)
-            config_bytes = self.write_legacy_config(root, kind="web")
-
-            audit = self.run_cli("audit", "--root", str(root))
-            self.assertEqual(audit.returncode, 0, audit.stderr)
-            proposed = {
-                finding["path"]
-                for finding in json.loads(audit.stdout)["findings"]
-                if finding["category"] == "proposed-addition"
-                and finding["status"] == "inferred"
-            }
-            self.assertTrue(
-                {
-                    "docs/DESIGN.md",
-                    "docs/FRONTEND.md",
-                    "docs/RELIABILITY.md",
-                }.issubset(proposed)
-            )
-
-            adoption = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(adoption.returncode, 0, adoption.stdout + adoption.stderr)
-            self.assertEqual((root / "dev/harness.toml").read_bytes(), config_bytes)
-            for relative in (
-                "docs/DESIGN.md",
-                "docs/FRONTEND.md",
-                "docs/RELIABILITY.md",
-            ):
-                self.assertTrue((root / relative).is_file(), relative)
-
-    def test_audit_doctor_and_docs_check_agree_on_missing_optional_document(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            initialized = self.run_cli(
-                "init",
-                "--root",
-                str(root),
-                "--project-kind",
-                "library",
-                "--capability",
-                "product-sense",
-                "--skip-check",
-            )
-            self.assertEqual(
-                initialized.returncode,
-                0,
-                initialized.stdout + initialized.stderr,
-            )
-            optional = root / "docs/PRODUCT_SENSE.md"
-            optional.unlink()
-
-            package_audit = self.run_cli("audit", "--root", str(root))
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            doctor = self.run_cli("doctor", "--root", str(root))
-            docs_check = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "docs-check"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-            findings = json.loads(package_audit.stdout)["findings"]
-            self.assertTrue(
-                any(
-                    finding["category"] == "proposed-addition"
-                    and finding["status"] == "inferred"
-                    and finding["path"] == "docs/PRODUCT_SENSE.md"
-                    for finding in findings
-                )
-            )
-            self.assertEqual(doctor.returncode, 2)
-            self.assertIn("missing docs/PRODUCT_SENSE.md", doctor.stderr)
-            self.assertEqual(docs_check.returncode, 2)
-            self.assertIn(
-                "missing required file: docs/PRODUCT_SENSE.md",
-                docs_check.stderr,
-            )
-
-    def test_malformed_documents_config_is_audit_conflict_before_adoption_or_commands(self) -> None:
-        malformed = {
-            "version": (
-                "version = 1",
-                "version = 2",
-                "unsupported dev/harness.toml version; expected version = 1",
-            ),
-            "schema": ("schema = 2", "schema = 1", "[documents].schema must be 2"),
-            "boolean": (
-                "frontend = false",
-                'frontend = "yes"',
-                "[documents].frontend must be true or false",
-            ),
-            "quality-score": (
-                "quality_score = false",
-                "quality_score = true",
-                "[documents].quality_score must remain false",
-            ),
-        }
-        for label, (current, replacement, expected_error) in malformed.items():
-            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory).resolve()
-                initialized = self.run_cli(
-                    "init",
-                    "--root",
-                    str(root),
-                    "--project-kind",
-                    "library",
-                    "--skip-check",
-                )
-                self.assertEqual(
-                    initialized.returncode,
-                    0,
-                    initialized.stdout + initialized.stderr,
-                )
-                sentinel = root / "configured-command-ran"
-                config = root / "dev/harness.toml"
-                text = config.read_text(encoding="utf-8")
-                text = text.replace(current, replacement, 1)
-                text = text.replace(
-                    "check = []",
-                    f"check = [[\"touch\", {json.dumps(str(sentinel))}]]",
-                    1,
-                )
-                config.write_text(text, encoding="utf-8")
-                before = self.tree_snapshot(root)
-
-                package_audit = self.run_cli("audit", "--root", str(root))
-                runtime_audit = subprocess.run(
-                    [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                    cwd=root,
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                )
-                adoption = self.run_cli("define", "--root", str(root), "--adopt")
-                command = subprocess.run(
-                    [sys.executable, "-I", str(root / "dev/harness.py"), "check"],
-                    cwd=root,
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                )
-
-                self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-                self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-                self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-                document_conflicts = [
-                    finding
-                    for finding in json.loads(package_audit.stdout)["findings"]
-                    if finding["category"] == "document-configuration"
-                    and finding["status"] == "conflict"
-                    and finding["path"] == "dev/harness.toml"
-                ]
-                self.assertEqual(len(document_conflicts), 1)
-                self.assertIn(expected_error, document_conflicts[0]["detail"])
-                self.assertEqual(adoption.returncode, 2)
-                self.assertIn("adoption audit found conflicts", adoption.stderr)
-                self.assertEqual(command.returncode, 2)
-                self.assertIn(expected_error, command.stderr)
-                self.assertFalse(sentinel.exists())
-                self.assertEqual(before, self.tree_snapshot(root))
-
-    def test_invalid_utf8_config_is_audit_conflict_before_adoption_or_commands(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            initialized = self.run_cli(
-                "init",
-                "--root",
-                str(root),
-                "--project-kind",
-                "library",
-                "--skip-check",
-            )
-            self.assertEqual(
-                initialized.returncode,
-                0,
-                initialized.stdout + initialized.stderr,
-            )
-            config = root / "dev/harness.toml"
-            config.write_bytes(b"\xff\xfe")
-            before = self.tree_snapshot(root)
-
-            package_audit = self.run_cli("audit", "--root", str(root))
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            adoption = self.run_cli("define", "--root", str(root), "--adopt")
-            command = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "check"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-            self.assertTrue(
-                any(
-                    finding["status"] == "conflict"
-                    and finding["path"] == "dev/harness.toml"
-                    for finding in json.loads(package_audit.stdout)["findings"]
-                )
-            )
-            self.assertEqual(adoption.returncode, 2)
-            self.assertIn("adoption audit found conflicts", adoption.stderr)
-            self.assertEqual(command.returncode, 2)
-            self.assertIn("cannot read dev/harness.toml", command.stderr)
-            self.assertNotIn("Traceback", command.stderr)
-            self.assertEqual(before, self.tree_snapshot(root))
-
-    def test_legacy_config_rejects_unenforced_explicit_capability_before_writes(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_bytes = self.write_legacy_config(root, kind="library")
-            before = self.tree_snapshot(root)
-
-            result = self.run_cli(
-                "init",
-                "--root",
-                str(root),
-                "--project-kind",
-                "library",
-                "--capability",
-                "product-sense",
-                "--skip-check",
-            )
-
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("cannot persist explicit document capabilities", result.stderr)
-            self.assertIn("has no [documents] table", result.stderr)
-            self.assertEqual(before, self.tree_snapshot(root))
-            self.assertEqual((root / "dev/harness.toml").read_bytes(), config_bytes)
-            self.assertFalse((root / "docs/PRODUCT_SENSE.md").exists())
-
-    def test_optional_document_targets_are_preflighted_before_any_writes(self) -> None:
-        for case in ("directory", "symlink", "invalid-utf8"):
-            with (
-                self.subTest(case=case),
-                tempfile.TemporaryDirectory() as directory,
-                tempfile.TemporaryDirectory() as external_directory,
-            ):
-                root = Path(directory).resolve()
-                external = Path(external_directory).resolve()
-                target = root / "docs/DESIGN.md"
-                target.parent.mkdir(parents=True)
-                if case == "directory":
-                    target.mkdir()
-                elif case == "symlink":
-                    outside = external / "DESIGN.md"
-                    outside.write_text("# External design\n", encoding="utf-8")
-                    target.symlink_to(outside)
-                else:
-                    target.write_bytes(b"\xff\xfe")
-                before = self.tree_snapshot(root)
-                external_before = self.tree_snapshot(external)
-
-                result = self.run_cli(
-                    "init",
-                    "--root",
-                    str(root),
-                    "--project-kind",
-                    "web",
-                    "--skip-check",
-                )
-
-                self.assertEqual(result.returncode, 2)
-                self.assertIn("docs/DESIGN.md", result.stderr)
-                self.assertEqual(before, self.tree_snapshot(root))
-                self.assertEqual(external_before, self.tree_snapshot(external))
-                self.assertFalse((root / "AGENTS.md").exists())
-                self.assertFalse((root / "dev").exists())
-
-    def test_adoption_preflights_unreadable_optional_document_before_snapshots(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.write_existing_repository(root)
-            self.write_legacy_config(root, kind="web")
-            target = root / "docs/DESIGN.md"
-            target.write_text("# Existing design\n", encoding="utf-8")
-            before = self.tree_snapshot(root)
-            original_read_bytes = Path.read_bytes
-
-            def unreadable_optional(path: Path) -> bytes:
-                if path == target:
-                    raise PermissionError("simulated unreadable optional document")
-                return original_read_bytes(path)
-
-            with mock.patch.object(Path, "read_bytes", unreadable_optional):
-                adoption = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(adoption.returncode, 2)
-            self.assertIn("cannot read optional document target as UTF-8", adoption.stderr)
-            self.assertIn("docs/DESIGN.md", adoption.stderr)
-            self.assertNotIn("Traceback", adoption.stderr)
-            self.assertEqual(before, self.tree_snapshot(root))
-
-    def test_configured_commands_are_redacted_without_reproducing_arguments(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.install_runtime_only(root)
-            config = root / "dev/harness.toml"
-            config.write_text(
-                """version = 1
-
-[project]
-configuration = "ready"
-
-[commands]
-bootstrap = [["sh", "-c", "true;/Users/hakseong/ABSOLUTE_SENTINEL"]]
-run = [["curl", "--token", "TOPSECRET_SENTINEL"]]
-check = []
-verify = []
-smoke = []
-architecture = []
-""",
-                encoding="utf-8",
-            )
-
-            package_audit = self.run_cli("audit", "--root", str(root))
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-            for sentinel in ("/Users/hakseong/ABSOLUTE_SENTINEL", "TOPSECRET_SENTINEL"):
-                self.assertNotIn(sentinel, package_audit.stdout)
-            command_details = [
-                finding["detail"]
-                for finding in json.loads(package_audit.stdout)["findings"]
-                if finding["category"] == "command" and finding["path"].count("/") == 2
-            ]
-            self.assertTrue(command_details)
-            self.assertTrue(
-                all(
-                    detail.startswith("configured argv command; argc=") and detail.endswith("; content=redacted")
-                    for detail in command_details
-                )
-            )
-
-    def test_invalid_configuration_type_is_reported_as_conflict_json_by_package_and_runtime(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.install_runtime_only(root)
-            (root / "dev/harness.toml").write_text(
-                """version = 1
-
-[project]
-configuration = ["ready"]
-
-[commands]
-bootstrap = []
-run = []
-check = []
-verify = []
-smoke = []
-architecture = []
-""",
-                encoding="utf-8",
-            )
-
-            package_audit = self.run_cli("audit", "--root", str(root))
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-            self.assertNotIn("Traceback", runtime_audit.stderr)
-            report = json.loads(package_audit.stdout)
-            self.assertTrue(
-                any(
-                    finding["path"] == "dev/harness.toml"
-                    and finding["status"] == "conflict"
-                    and finding["category"] == "command"
-                    for finding in report["findings"]
-                )
-            )
-
-    def test_invalid_utf8_configuration_is_conflict_json_across_audit_entry_points(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.install_runtime_only(root)
-            (root / "dev/harness.toml").write_bytes(b"\xff\xfe\x00")
-            environment = os.environ.copy()
-            environment["PYTHON"] = sys.executable
-
-            package_audit = self.run_cli("audit", "--root", str(root))
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            wrapper_audit = subprocess.run(
-                [str(root / "dev/audit")],
-                cwd=root,
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            for result in (package_audit, runtime_audit, wrapper_audit):
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertNotIn("Traceback", result.stderr)
-            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-            self.assertEqual(package_audit.stdout, wrapper_audit.stdout)
-            report = json.loads(package_audit.stdout)
-            self.assertTrue(
-                any(
-                    finding["path"] == "dev/harness.toml"
-                    and finding["status"] == "conflict"
-                    and finding["category"] == "command"
-                    for finding in report["findings"]
-                )
-            )
-
-    def test_nonregular_configuration_blocks_adoption_before_writes(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.install_runtime_only(root)
-            config = root / "dev/harness.toml"
-            config.mkdir()
-            before = self.tree_snapshot(root)
-
-            audit = self.run_cli("audit", "--root", str(root))
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            adoption = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(audit.returncode, 0, audit.stderr)
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertEqual(audit.stdout, runtime_audit.stdout)
-            self.assertEqual(adoption.returncode, 2)
-            self.assertEqual(before, self.tree_snapshot(root))
-            self.assertFalse((root / "docs/product-specs/project-definition.draft.md").exists())
-            report = json.loads(audit.stdout)
-            self.assertTrue(
-                any(
-                    finding["path"] == "dev/harness.toml"
-                    and finding["status"] == "conflict"
-                    and finding["category"] == "command"
-                    for finding in report["findings"]
-                )
-            )
-
-    def test_nonregular_command_inputs_are_conflicts_without_tracebacks(self) -> None:
-        for relative in ("package.json", "pyproject.toml"):
-            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory).resolve()
-                self.install_runtime_only(root)
-                (root / relative).mkdir()
-
-                package_audit = self.run_cli("audit", "--root", str(root))
-                runtime_audit = subprocess.run(
-                    [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                    cwd=root,
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                )
-
-                self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-                self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-                self.assertNotIn("Traceback", runtime_audit.stderr)
-                self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-                report = json.loads(package_audit.stdout)
-                self.assertTrue(
-                    any(
-                        finding["path"] == relative
-                        and finding["status"] == "conflict"
-                        and finding["category"] == "command"
-                        for finding in report["findings"]
-                    )
-                )
-
-    @unittest.skipIf(os.name == "nt", "POSIX permissions are required")
-    def test_unreadable_command_inputs_are_conflicts_without_tracebacks(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.install_runtime_only(root)
-            pyproject = root / "pyproject.toml"
-            managed = root / "dev/check"
-            pyproject.write_text("[project]\nname = 'fixture'\n", encoding="utf-8")
-            managed.write_text("#!/bin/sh\n", encoding="utf-8")
-            pyproject.chmod(0)
-            managed.chmod(0)
-            try:
-                package_audit = self.run_cli("audit", "--root", str(root))
-                runtime_audit = subprocess.run(
-                    [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                    cwd=root,
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                )
-            finally:
-                pyproject.chmod(0o600)
-                managed.chmod(0o600)
-
-            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertNotIn("Traceback", runtime_audit.stderr)
-            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-            conflicts = {
-                finding["path"]
-                for finding in json.loads(package_audit.stdout)["findings"]
-                if finding["status"] == "conflict"
-            }
-            self.assertIn("pyproject.toml", conflicts)
-            self.assertIn("dev/check", conflicts)
-
-    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO support is required")
-    def test_fifo_command_input_is_not_opened(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.install_runtime_only(root)
-            os.mkfifo(root / "package.json")
-            environment = os.environ.copy()
-            environment["PYTHONDONTWRITEBYTECODE"] = "1"
-            environment["PYTHONPATH"] = str(SRC)
-
-            package_audit = subprocess.run(
-                [sys.executable, "-m", "reporivet", "audit", "--root", str(root)],
-                cwd=REPOSITORY,
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=5,
-            )
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "audit"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-                timeout=5,
-            )
-
-            self.assertEqual(package_audit.returncode, 0, package_audit.stderr)
-            self.assertEqual(runtime_audit.returncode, 0, runtime_audit.stderr)
-            self.assertEqual(package_audit.stdout, runtime_audit.stdout)
-            report = json.loads(package_audit.stdout)
-            self.assertTrue(
-                any(
-                    finding["path"] == "package.json"
-                    and finding["status"] == "conflict"
-                    and finding["category"] == "command"
-                    for finding in report["findings"]
-                )
-            )
-
-    def test_docs_only_adoption_creates_review_state_configuration(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            readme = root / "README.md"
-            readme.write_text("# Existing documentation-only repository\n", encoding="utf-8")
-            original = readme.read_bytes()
-
-            result = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual(readme.read_bytes(), original)
-            self.assertIn(
-                'configuration = "review"',
-                (root / "dev/harness.toml").read_text(encoding="utf-8"),
-            )
-
-    def test_incidental_marker_prose_is_preserved_and_receives_separate_managed_blocks(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            (root / "src").mkdir()
-            (root / "src/main.py").write_text("print('existing')\n", encoding="utf-8")
-            agents_original = (
-                "# Existing instructions\n\n"
-                "Document the literals `<!-- reporivet:start -->` and `<!-- reporivet:end -->` here.\n"
-            ).encode("utf-8")
-            catalog_original = (
-                "# Existing docs\n\n"
-                "Document `<!-- reporivet:catalog:start -->` and `<!-- reporivet:catalog:end -->` inline.\n"
-            ).encode("utf-8")
-            (root / "AGENTS.md").write_bytes(agents_original)
-            (root / "docs").mkdir()
-            (root / "docs/README.md").write_bytes(catalog_original)
-
-            before = self.run_cli("audit", "--root", str(root))
-            result = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(before.returncode, 0, before.stderr)
-            before_findings = json.loads(before.stdout)["findings"]
-            self.assertTrue(
-                any(
-                    finding["path"] == "AGENTS.md"
-                    and finding["category"] == "proposed-addition"
-                    and finding["status"] == "inferred"
-                    for finding in before_findings
-                )
-            )
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            (root / "README.md").write_bytes(b"# Existing\r\nKeep exact.  \r\n")
+            code, output, error = self.run_cli("init", "--root", str(root), "--name", "Fixture")
+            self.assertEqual(code, 0, output + error)
+            self.assertEqual((root / "README.md").read_bytes(), b"# Existing\r\nKeep exact.  \r\n")
+            self.assertFalse((root / "dev").exists())
+            self.assertFalse((root / "docs").exists())
             agents = (root / "AGENTS.md").read_bytes()
-            catalog = (root / "docs/README.md").read_bytes()
-            self.assertTrue(agents.startswith(agents_original))
-            self.assertTrue(catalog.startswith(catalog_original))
-            self.assertEqual(
-                (root / "AGENTS.md").read_text(encoding="utf-8").splitlines().count("<!-- reporivet:start -->"),
-                1,
-            )
-            self.assertEqual(
-                (root / "docs/README.md")
-                .read_text(encoding="utf-8")
-                .splitlines()
-                .count("<!-- reporivet:catalog:start -->"),
-                1,
-            )
+            code, output, error = self.run_cli("upgrade", "--root", str(root))
+            self.assertEqual(code, 0, output + error)
+            self.assertTrue((root / "AGENTS.md").read_bytes().startswith(agents[:agents.index(b"<!-- reporivet:entrypoints:start -->")]))
 
-    def test_fenced_marker_examples_are_preserved_and_do_not_claim_ownership(self) -> None:
+    def test_unreadable_utf8_agents_refuses_without_side_effects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            (root / "src").mkdir()
-            (root / "src/main.py").write_text("print('existing')\n", encoding="utf-8")
-            originals = {
-                "AGENTS.md": (
-                    "# Existing instructions\n\n"
-                    "```markdown\n"
-                    "<!-- reporivet:start -->\n"
-                    "example agent block\n"
-                    "<!-- reporivet:end -->\n"
-                    "```\n"
-                ).encode("utf-8"),
-                "docs/README.md": (
-                    "# Existing docs\n\n"
-                    "~~~markdown\n"
-                    "<!-- reporivet:catalog:start -->\n"
-                    "example catalog block\n"
-                    "<!-- reporivet:catalog:end -->\n"
-                    "~~~\n"
-                ).encode("utf-8"),
-            }
-            for relative, payload in originals.items():
-                path = root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(payload)
+            agents = root / "AGENTS.md"
+            agents.write_bytes(b"\xff\xfe")
+            before = agents.read_bytes()
+            code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 2)
+            self.assertIn("UTF-8", error)
+            self.assertEqual(before, agents.read_bytes())
 
-            before = self.run_cli("audit", "--root", str(root))
-            adoption = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(before.returncode, 0, before.stderr)
-            self.assertEqual(adoption.returncode, 0, adoption.stdout + adoption.stderr)
-            findings = json.loads(before.stdout)["findings"]
-            for relative in originals:
-                self.assertTrue(
-                    any(
-                        finding["path"] == relative
-                        and finding["category"] == "proposed-addition"
-                        and finding["status"] == "inferred"
-                        for finding in findings
-                    ),
-                    relative,
-                )
-                self.assertTrue((root / relative).read_bytes().startswith(originals[relative]))
-            self.assertIn("example agent block", (root / "AGENTS.md").read_text(encoding="utf-8"))
-            self.assertIn(
-                "example catalog block",
-                (root / "docs/README.md").read_text(encoding="utf-8"),
-            )
-
-            docs_index = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "docs-index"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            docs_check = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "docs-index", "--check"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            self.assertEqual(docs_index.returncode, 0, docs_index.stdout + docs_index.stderr)
-            self.assertEqual(docs_check.returncode, 0, docs_check.stdout + docs_check.stderr)
-            for relative, payload in originals.items():
-                self.assertTrue((root / relative).read_bytes().startswith(payload), relative)
-
-    def test_adoption_and_docs_index_preserve_crlf_authority_outside_managed_blocks(self) -> None:
+    def test_malformed_managed_markers_refuse_without_partial_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            (root / "src").mkdir()
-            (root / "src/main.py").write_text("print('existing')\n", encoding="utf-8")
-            originals = {
-                "AGENTS.md": b"# Existing instructions\r\n\r\nKeep exact.  \r\n",
-                ".gitignore": b"# Existing ignores\r\ncustom-output/\r\n",
-                "docs/README.md": b"# Existing docs\r\n\r\nKeep catalog preface exact.  \r\n",
-            }
-            for relative, payload in originals.items():
-                path = root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(payload)
+            agents = root / "AGENTS.md"
+            agents.write_text("prefix\n<!-- reporivet:entrypoints:start -->\nmissing end\n")
+            before = agents.read_bytes()
+            code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 2)
+            self.assertIn("malformed managed markers", error)
+            self.assertEqual(before, agents.read_bytes())
+            self.assertFalse((root / "CLAUDE.md").exists())
 
-            adoption = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(adoption.returncode, 0, adoption.stdout + adoption.stderr)
-            for relative, payload in originals.items():
-                self.assertTrue((root / relative).read_bytes().startswith(payload), relative)
-
-            docs_index = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "docs-index"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            docs_check = subprocess.run(
-                [sys.executable, "-I", str(root / "dev/harness.py"), "docs-index", "--check"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            self.assertEqual(docs_index.returncode, 0, docs_index.stdout + docs_index.stderr)
-            self.assertEqual(docs_check.returncode, 0, docs_check.stdout + docs_check.stderr)
-            for relative, payload in originals.items():
-                self.assertTrue((root / relative).read_bytes().startswith(payload), relative)
-
-    def test_adoption_refuses_unmarked_canonical_command_before_writing(self) -> None:
+    def test_atomic_transaction_rolls_back_prior_write_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            (root / "src").mkdir()
-            (root / "src/main.py").write_text("print('existing')\n", encoding="utf-8")
-            (root / "dev").mkdir()
-            (root / "dev/check").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            before = self.tree_snapshot(root)
-
-            result = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("adoption audit found conflicts", result.stderr)
-            self.assertIn("dev/check", result.stderr)
-            self.assertEqual(before, self.tree_snapshot(root))
-            report = json.loads(result.stdout)
-            self.assertTrue(
-                any(
-                    finding["path"] == "dev/check" and finding["status"] == "conflict"
-                    for finding in report["findings"]
-                )
-            )
-
-    def test_adoption_refuses_malformed_shared_or_catalog_blocks_without_partial_output(self) -> None:
-        cases = {
-            "agents": ("AGENTS.md", "prefix\n<!-- reporivet:start -->\nmissing end\n"),
-            "catalog": ("docs/README.md", "# Docs\n<!-- reporivet:catalog:start -->\nmissing end\n"),
-        }
-        for label, (relative, content) in cases.items():
-            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory).resolve()
-                (root / "src").mkdir()
-                (root / "src/main.py").write_text("print('existing')\n", encoding="utf-8")
-                path = root / relative
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(content, encoding="utf-8")
-                before = self.tree_snapshot(root)
-
-                result = self.run_cli("define", "--root", str(root), "--adopt")
-
-                self.assertEqual(result.returncode, 2)
-                self.assertIn("adoption audit found conflicts", result.stderr)
-                self.assertEqual(before, self.tree_snapshot(root))
-                self.assertFalse((root / "dev/harness.py").exists())
-                self.assertFalse((root / "docs/product-specs/project-definition.draft.md").exists())
-
-    def test_adoption_refuses_repository_symlinks_without_reading_or_writing_external_paths(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
-            root = Path(directory).resolve()
-            external = Path(external_directory).resolve()
-            (root / "src").mkdir()
-            (root / "src/main.py").write_text("print('existing')\n", encoding="utf-8")
-            (root / "docs").mkdir()
-            external_specs = external / "product-specs"
-            external_specs.mkdir()
-            outside = external_specs / "outside.md"
-            outside.write_text("outside authority\n", encoding="utf-8")
-            (root / "docs/product-specs").symlink_to(external_specs, target_is_directory=True)
-            before = self.tree_snapshot(root)
-            external_before = self.tree_snapshot(external)
-
-            audit = self.run_cli("audit", "--root", str(root))
-            adoption = self.run_cli("define", "--root", str(root), "--adopt")
-
-            self.assertEqual(audit.returncode, 0, audit.stderr)
-            self.assertNotIn("outside authority", audit.stdout)
-            self.assertEqual(adoption.returncode, 2)
-            self.assertIn("docs/product-specs", adoption.stderr)
-            self.assertEqual(before, self.tree_snapshot(root))
-            self.assertEqual(external_before, self.tree_snapshot(external))
-
-    def test_adoption_rolls_back_exact_tree_after_a_write_failure(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            self.write_existing_repository(root)
-            before = self.tree_snapshot(root)
-            original_write_managed = initializer.write_managed
+            agents = root / "AGENTS.md"
+            claude = root / "CLAUDE.md"
+            agents.write_text("user\n")
+            before = agents.read_bytes()
+            original = initializer._atomic_write
             calls = 0
 
-            def fail_after_first_managed_write(*args: object, **kwargs: object) -> None:
+            def fail_second(operation: object) -> None:
                 nonlocal calls
-                original_write_managed(*args, **kwargs)
                 calls += 1
-                if calls == 1:
-                    raise OSError("injected adoption write failure")
+                if calls == 2:
+                    raise OSError("injected write failure")
+                original(operation)
 
-            with mock.patch.object(initializer, "write_managed", side_effect=fail_after_first_managed_write):
-                with contextlib.redirect_stdout(io.StringIO()):
-                    with self.assertRaisesRegex(InitError, "adoption failed and was rolled back"):
-                        adopt_project(root=root, dry_run=False)
+            with mock.patch.object(initializer, "_atomic_write", side_effect=fail_second):
+                code, output, error = self.run_cli("init", "--root", str(root), "--claude")
+            self.assertEqual(code, 2)
+            self.assertIn("rolled back", error)
+            self.assertEqual(before, agents.read_bytes())
+            self.assertFalse(claude.exists())
 
-            self.assertEqual(calls, 1)
-            self.assertEqual(before, self.tree_snapshot(root))
-
-    def test_adoption_rollback_preserves_concurrent_user_edit_and_reports_path(self) -> None:
+    def test_fenced_and_inline_markers_are_not_managed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            self.write_existing_repository(root)
-            original_apply = initializer._apply_mutation_entry
-            edited: Path | None = None
+            agents = root / "AGENTS.md"
+            original = "```markdown\n<!-- reporivet:entrypoints:start -->\nexample\n<!-- reporivet:entrypoints:end -->\n```\ninline <!-- reporivet:entrypoints:start -->\n"
+            agents.write_text(original)
+            code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 0, output + error)
+            result = agents.read_text()
+            self.assertIn(original, result)
+            self.assertEqual(result.count("<!-- reporivet:entrypoints:start -->"), 3)
 
-            def edit_after_first_file_write(entry: object) -> None:
-                nonlocal edited
-                original_apply(entry)
-                if getattr(entry, "postimage").kind != "file":
-                    return
-                edited = root / getattr(entry, "relative")
-                edited.write_text("concurrent adoption edit\n", encoding="utf-8")
-                raise OSError("injected adoption failure after user edit")
+    def test_non_markdown_separators_cannot_create_marker_ownership(self) -> None:
+        separators = "\v\f\x1c\x1d\x1e\x85\N{LINE SEPARATOR}\N{PARAGRAPH SEPARATOR}"
+        for separator in separators:
+            for name, start, end in (
+                ("AGENTS.md", initializer.AGENTS_START, initializer.AGENTS_END),
+                ("CLAUDE.md", initializer.CLAUDE_START, initializer.CLAUDE_END),
+            ):
+                for inline_marker in ("start", "end"):
+                    for command in ("init", "upgrade"):
+                        with self.subTest(separator=repr(separator), name=name, inline=inline_marker, command=command), tempfile.TemporaryDirectory() as directory:
+                            root = Path(directory).resolve()
+                            self.assertEqual(self.run_cli("init", "--root", str(root), "--claude")[0], 0)
+                            opening = "User-owned inline example" + separator + start if inline_marker == "start" else start
+                            closing = "User-owned inline example" + separator + end if inline_marker == "end" else end
+                            (root / name).write_bytes(f"{opening}\nMUST_KEEP_USER_BODY\n{closing}\n".encode())
+                            before = {p: (p.read_bytes(), p.stat().st_mode) for p in (root / "AGENTS.md", root / "CLAUDE.md")}
+                            code, output, error = self.run_cli(command, "--root", str(root), "--claude")
+                            self.assertEqual(code, 2, output + error)
+                            self.assertIn("malformed managed markers", error)
+                            for path, image in before.items():
+                                self.assertEqual((path.read_bytes(), path.stat().st_mode), image)
 
-            with mock.patch.object(initializer, "_apply_mutation_entry", side_effect=edit_after_first_file_write):
-                stdout = io.StringIO()
-                with contextlib.redirect_stdout(stdout):
-                    with self.assertRaisesRegex(InitError, "rollback incomplete") as caught:
-                        adopt_project(root=root, dry_run=False)
+    def test_non_markdown_separators_cannot_close_example_fences(self) -> None:
+        for separator in "\v\f\x1c\x1d\x1e\x85\N{LINE SEPARATOR}\N{PARAGRAPH SEPARATOR}":
+            for fence in ("```", "~~~"):
+                for spoof in ("example" + separator + fence, fence + separator):
+                    for name, start, end in (
+                        ("AGENTS.md", initializer.AGENTS_START, initializer.AGENTS_END),
+                        ("CLAUDE.md", initializer.CLAUDE_START, initializer.CLAUDE_END),
+                    ):
+                        with self.subTest(separator=repr(separator), spoof=repr(spoof), name=name), tempfile.TemporaryDirectory() as directory:
+                            root = Path(directory).resolve()
+                            original = f"{fence}\n{spoof}\n{start}\nMUST_KEEP_USER_BODY\n{end}\n{fence}\n".encode()
+                            (root / name).write_bytes(original)
+                            code, output, error = self.run_cli("init", "--root", str(root), "--claude")
+                            self.assertEqual(code, 0, output + error)
+                            self.assertTrue((root / name).read_bytes().startswith(original))
+                            before = {p: p.read_bytes() for p in (root / "AGENTS.md", root / "CLAUDE.md")}
+                            code, output, error = self.run_cli("upgrade", "--root", str(root), "--claude")
+                            self.assertEqual(code, 0, output + error)
+                            for path, content in before.items():
+                                self.assertEqual(path.read_bytes(), content)
 
-            self.assertIsNotNone(edited)
-            assert edited is not None
-            self.assertEqual(edited.read_text(encoding="utf-8"), "concurrent adoption edit\n")
-            self.assertIn(edited.relative_to(root).as_posix(), str(caught.exception))
+    def test_inline_fence_openers_do_not_hide_root_markers(self) -> None:
+        for separator in "\v\f\x1c\x1d\x1e\x85\N{LINE SEPARATOR}\N{PARAGRAPH SEPARATOR}":
+            for fence in ("```", "~~~"):
+                with self.subTest(separator=repr(separator), fence=fence):
+                    prefix = "User example" + separator + fence + "\n"
+                    block = initializer.AGENTS_START + "\nold\n" + initializer.AGENTS_END
+                    self.assertEqual(
+                        initializer._managed_span(prefix + block, initializer.AGENTS_START, initializer.AGENTS_END),
+                        (len(prefix), len(prefix + block)),
+                    )
 
-    def test_audit_and_adoption_refuse_a_root_below_a_symlinked_parent(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as external_directory:
-            parent = Path(directory).resolve()
-            external = Path(external_directory).resolve()
-            repository = external / "repository"
-            repository.mkdir()
-            self.install_runtime_only(repository)
-            sentinel = repository / "EXTERNAL-SENTINEL.md"
-            sentinel.write_text("external authority\n", encoding="utf-8")
-            linked_parent = parent / "linked-parent"
-            linked_parent.symlink_to(external, target_is_directory=True)
-            requested_root = linked_parent / "repository"
-            before = self.tree_snapshot(repository)
-            environment = os.environ.copy()
-            environment["PYTHON"] = sys.executable
+    def test_markdown_line_endings_preserve_exact_managed_span_and_suffix(self) -> None:
+        for newline in ("\n", "\r", "\r\n"):
+            for start, end in ((initializer.AGENTS_START, initializer.AGENTS_END), (initializer.CLAUDE_START, initializer.CLAUDE_END)):
+                for suffix in ("", newline + "user suffix  " + newline):
+                    with self.subTest(newline=repr(newline), start=start, suffix=repr(suffix)):
+                        prefix = newline.join(("user prefix", "```", start, "example", end, "``` \t", ""))
+                        block = newline.join((start, "old", end))
+                        original = prefix + block + suffix
+                        self.assertEqual(initializer._managed_span(original, start, end), (len(prefix), len(prefix + block)))
+                        replacement = start + "\nnew\n" + end
+                        self.assertEqual(initializer._upsert(original.encode(), replacement, start, end), (prefix + replacement + suffix).encode())
 
-            audit = self.run_cli("audit", "--root", str(requested_root))
-            adoption = self.run_cli("define", "--root", str(requested_root), "--adopt")
-            runtime_audit = subprocess.run(
-                [sys.executable, "-I", str(requested_root / "dev/harness.py"), "audit"],
-                cwd=parent,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            wrapper_audit = subprocess.run(
-                [str(requested_root / "dev/audit")],
-                cwd=parent,
-                env=environment,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+    def test_fence_info_may_contain_the_other_fence_character(self) -> None:
+        for fence, info in (("~~~", "info`x`"), ("```", "info~x~")):
+            with self.subTest(fence=fence), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                agents = root / "AGENTS.md"
+                original = (f"{fence} {info}\n{initializer.AGENTS_START}\nexample\n{initializer.AGENTS_END}\n{fence}\n").encode()
+                agents.write_bytes(original)
+                code, output, error = self.run_cli("init", "--root", str(root))
+                self.assertEqual(code, 0, output + error)
+                before = agents.read_bytes()
+                self.assertTrue(before.startswith(original))
+                self.assertEqual(self.run_cli("doctor", "--root", str(root))[0], 0)
+                self.assertEqual(self.run_cli("upgrade", "--root", str(root))[0], 0)
+                self.assertEqual(before, agents.read_bytes())
 
-            for result in (audit, adoption, runtime_audit, wrapper_audit):
-                self.assertEqual(result.returncode, 2)
-                self.assertEqual(result.stdout, "")
-                self.assertIn("symlinked project root or parent", result.stderr)
-                self.assertNotIn("EXTERNAL-SENTINEL.md", result.stderr)
-            self.assertEqual(before, self.tree_snapshot(repository))
-
-    def test_audit_refuses_a_symlinked_root(self) -> None:
+    def test_reinit_and_upgrade_are_noop_for_same_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            parent = Path(directory).resolve()
-            root = parent / "repository"
-            root.mkdir()
-            (root / "README.md").write_text("# Existing\n", encoding="utf-8")
-            alias = parent / "repository-link"
-            alias.symlink_to(root, target_is_directory=True)
+            root = Path(directory).resolve()
+            code, output, error = self.run_cli("init", "--root", str(root), "--name", "Stable")
+            self.assertEqual(code, 0, output + error)
+            before_agents = (root / "AGENTS.md").stat().st_mtime_ns
+            before = (root / "AGENTS.md").read_bytes()
+            code, output, error = self.run_cli("init", "--root", str(root), "--name", "Stable")
+            self.assertEqual(code, 0, output + error)
+            self.assertEqual(before, (root / "AGENTS.md").read_bytes())
+            self.assertEqual(before_agents, (root / "AGENTS.md").stat().st_mtime_ns)
+            code, output, error = self.run_cli("upgrade", "--root", str(root))
+            self.assertEqual(code, 0, output + error)
+            self.assertEqual(before, (root / "AGENTS.md").read_bytes())
+            self.assertEqual(before_agents, (root / "AGENTS.md").stat().st_mtime_ns)
 
-            result = self.run_cli("audit", "--root", str(alias))
+    def test_dry_run_and_preview_do_not_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            code, output, error = self.run_cli("init", "--root", str(root), "--dry-run")
+            self.assertEqual(code, 0, output + error)
+            self.assertFalse((root / "AGENTS.md").exists())
+            self.assertIn("Mutation plan fingerprint:", output)
 
-            self.assertEqual(result.returncode, 2)
-            self.assertEqual(result.stdout, "")
-            self.assertIn("symlinked project root", result.stderr)
-            self.assertEqual((root / "README.md").read_text(encoding="utf-8"), "# Existing\n")
+    def test_audit_stops_at_entry_budget_and_reports_truncation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for index in range(600):
+                (root / f"entry-{index:04d}.txt").write_text("x\n")
+            report = initializer.audit_project(root=root).as_dict()
+            observed = [item for item in report["findings"] if item["status"] == "confirmed" and item["category"] == "observed-path"]
+            exclusions = [item for item in report["findings"] if item["category"] == "exclusion"]
+            self.assertLessEqual(len(observed), initializer.MAX_OBSERVED_PATHS)
+            self.assertTrue(any("work/exclusion budget reached" in item["detail"] for item in exclusions))
+            self.assertLessEqual(len(exclusions), initializer.MAX_EXCLUSIONS + 1)
+
+    def test_partial_markers_and_unclosed_fences_fail_without_writes(self) -> None:
+        start, end = initializer.AGENTS_START, initializer.AGENTS_END
+        samples = (
+            start + " trailing\nold\n" + end + " trailing\n",
+            start[:-4] + "\nold\n" + end[:-4] + "\n",
+            "   " + start + "\nold\n   " + end + "\n",
+            "```markdown\nunfinished example\n",
+        )
+        for text in samples:
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                agents = root / "AGENTS.md"
+                agents.write_bytes(text.encode())
+                code, output, error = self.run_cli("init", "--root", str(root), "--claude")
+                self.assertEqual(code, 2, output + error)
+                self.assertEqual(agents.read_bytes(), text.encode())
+                self.assertFalse((root / "CLAUDE.md").exists())
+                self.assertNotIn("Applied", output)
+
+    def test_post_replace_cleanup_failure_restores_current_and_prior_operations(self) -> None:
+        for divergence in (False, True):
+            with self.subTest(divergence=divergence), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
+                agents.write_bytes(b"agent user\r\n")
+                claude.write_bytes(b"provider user\r\n")
+                agents.chmod(0o640)
+                claude.chmod(0o600)
+                before = {p: (p.read_bytes(), p.stat().st_mode) for p in (agents, claude)}
+                real_unlink = Path.unlink
+                cleanups = 0
+
+                def cleanup(path: Path, *args: object, **kwargs: object) -> None:
+                    nonlocal cleanups
+                    real_unlink(path, *args, **kwargs)
+                    if path.name.startswith(".reporivet-write-"):
+                        cleanups += 1
+                        if cleanups == 2:
+                            if divergence:
+                                claude.write_bytes(b"concurrent user edit\n")
+                            raise OSError("post-replacement cleanup failure")
+
+                with mock.patch.object(Path, "unlink", cleanup):
+                    code, output, error = self.run_cli("init", "--root", str(root), "--claude")
+                self.assertEqual(code, 2)
+                self.assertNotIn("Applied", output)
+                self.assertEqual((agents.read_bytes(), agents.stat().st_mode), before[agents])
+                if divergence:
+                    self.assertEqual(claude.read_bytes(), b"concurrent user edit\n")
+                    self.assertIn("rollback incomplete", error)
+                    self.assertIn("CLAUDE.md", error)
+                else:
+                    self.assertEqual((claude.read_bytes(), claude.stat().st_mode), before[claude])
+                    self.assertIn("rolled back", error)
+
+    def test_rendering_cannot_adopt_a_later_user_preimage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            agents = root / "AGENTS.md"
+            agents.write_bytes(b"original user\n")
+            real_asset = initializer.read_asset
+
+            def concurrent_render(*args: object, **kwargs: object) -> str:
+                result = real_asset(*args, **kwargs)
+                agents.write_bytes(b"concurrent user\n")
+                return result
+
+            with mock.patch.object(initializer, "read_asset", side_effect=concurrent_render):
+                code, output, error = self.run_cli("init", "--root", str(root), "--claude")
+            self.assertEqual(code, 2)
+            self.assertIn("preimage changed", error)
+            self.assertEqual(agents.read_bytes(), b"concurrent user\n")
+            self.assertFalse((root / "CLAUDE.md").exists())
+
+    def test_observation_budget_limits_actual_directory_iteration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for index in range(initializer.MAX_VISITED_ENTRIES + 30):
+                (root / f"item-{index}").touch()
+            real_scandir = os.scandir
+            visited = 0
+
+            @contextlib.contextmanager
+            def counted(path: Path):
+                nonlocal visited
+                with real_scandir(path) as scan:
+                    def entries():
+                        nonlocal visited
+                        for entry in scan:
+                            visited += 1
+                            yield entry
+                    yield entries()
+
+            with mock.patch.object(initializer.os, "scandir", counted):
+                initializer.audit_project(root=root)
+            self.assertLessEqual(visited, initializer.MAX_VISITED_ENTRIES)
+
+    def test_generated_names_remain_inert_and_stable(self) -> None:
+        for name in ("{{OBSERVED_PATH_ROWS}}", "[name](https://example.invalid)", "한글 & <name>"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                (root / "README.md").write_text("existing\n")
+                code, output, error = self.run_cli("init", "--root", str(root), "--name", name)
+                self.assertEqual(code, 0, output + error)
+                before = (root / "AGENTS.md").read_bytes()
+                self.assertEqual(self.run_cli("doctor", "--root", str(root))[0], 0)
+                self.assertEqual(self.run_cli("upgrade", "--root", str(root))[0], 0)
+                self.assertEqual(before, (root / "AGENTS.md").read_bytes())
+
+    def test_unusual_root_name_does_not_inject_managed_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / ("name\n" + initializer.AGENTS_END)
+            code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 0, output + error)
+            self.assertEqual(self.run_cli("doctor", "--root", str(root))[0], 0)
+            before = (root / "AGENTS.md").read_bytes()
+            self.assertEqual(self.run_cli("upgrade", "--root", str(root))[0], 0)
+            self.assertEqual(before, (root / "AGENTS.md").read_bytes())
+
+    def test_generated_unicode_labels_remain_readable_and_doctor_checks_them(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            filename = "한 글 [x]!<tag>\\\\`"
+            (root / filename).write_text("ok\n")
+            code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 0, output + error)
+            generated = (root / "AGENTS.md").read_text()
+            self.assertIn("한 글", generated)
+            self.assertIn("%ED%95%9C%20%EA%B8%80", generated)
+            self.assertNotIn("[x]", generated)
+            (root / filename).unlink()
+            code, output, error = self.run_cli("doctor", "--root", str(root))
+            self.assertEqual(code, 2)
+            self.assertIn("target is missing", error)
+
+    def test_malformed_link_is_a_diagnostic_error_not_a_traceback(self) -> None:
+        for link in ("http://[bad", "./bad%00name"):
+            with self.subTest(link=link), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                (root / "AGENTS.md").write_text(initializer.AGENTS_START + "\n[bad](" + link + ")\n" + initializer.AGENTS_END)
+                code, output, error = self.run_cli("doctor", "--root", str(root))
+                self.assertEqual(code, 2, output + error)
+                self.assertIn("ERROR", error)
 
 
 if __name__ == "__main__":

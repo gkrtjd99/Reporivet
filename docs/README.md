@@ -1,90 +1,51 @@
 # Reporivet Knowledge Map
 
-This directory is the version-controlled record system for product intent, architecture, design, execution plans, decisions, quality, security, reliability, generated facts, and curated references.
+This directory records current product intent, architecture, quality, security, source plans, decisions, experiments, and historical context. It does not impose a document schema on initialized projects.
 
 ## Reading protocol
 
-1. Read root [`AGENTS.md`](../AGENTS.md).
-2. Run `./dev/context` with the most specific known path, area, or plan.
-3. Check [`exec-plans/active/`](exec-plans/active/) for matching complex work.
-4. Follow the selected plan's context and Task Packet rather than scanning all documents.
-5. Expand the search only when evidence shows the current context is insufficient.
-
-With no `--plan`, context reports that no plan is selected; inspect [`exec-plans/active/`](exec-plans/active/) and rerun with `--plan PLAN-...` when a matching plan exists. It does not select or reveal an active plan automatically.
+1. Read root [`AGENTS.md`](../AGENTS.md), or the selected execution environment's entrypoint.
+2. Read [`PRODUCT.md`](PRODUCT.md) and the current product specification.
+3. Read [`../ARCHITECTURE.md`](../ARCHITECTURE.md), [`QUALITY.md`](QUALITY.md), and [`SECURITY.md`](SECURITY.md).
+4. Check [`exec-plans/active/`](exec-plans/active/) for matching complex work.
+5. Read only the source-of-truth documents and code needed by the current task; distinguish observed paths from authority.
 
 ## Stable entry points
 
 | Need | Read |
 |---|---|
-| Product purpose and current requirements | [`PRODUCT.md`](PRODUCT.md), [`product-specs/`](product-specs/) |
+| Product purpose and current requirements | [`PRODUCT.md`](PRODUCT.md), [`product-specs/SPEC-REPORIVET-003-agent-entrypoints.md`](product-specs/SPEC-REPORIVET-003-agent-entrypoints.md) |
 | Current architecture and dependency direction | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) |
-| Engineering principles and durable design decisions | [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md), [`design-docs/`](design-docs/) |
-| Quality expectations and gaps | [`QUALITY.md`](QUALITY.md) |
+| Quality expectations and evaluation limits | [`QUALITY.md`](QUALITY.md) |
 | Security boundaries and controls | [`SECURITY.md`](SECURITY.md) |
-| Reliability and operations, when applicable | `RELIABILITY.md`, [`runbooks/`](runbooks/) |
-| Project definition draft and operating protocol | `product-specs/project-definition.draft.md` when present, [`references/project-definition-protocol.md`](references/project-definition-protocol.md) |
-| Complex work, Product Trace, and Task Packets | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/) |
-| Module ownership and derived path map | [`module-contracts/`](module-contracts/), [`generated/code-map.md`](generated/code-map.md) |
-| Verification Run and Gate evidence | `.harness/runs/<run>-verify/report.md`, [`QUALITY.md`](QUALITY.md), [`SECURITY.md`](SECURITY.md) |
+| Engineering principles | [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md) |
+| Current complex work and manual plan policy | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/) |
+| Entrypoint migration | [`references/entrypoint-migration.md`](references/entrypoint-migration.md) |
+| Agent navigation evaluation | [`references/agent-navigation-evaluation.md`](references/agent-navigation-evaluation.md) |
 | Durable decisions | [`decisions/`](decisions/) |
-| Known follow-ups and debt | [`exec-plans/tech-debt-tracker.md`](exec-plans/tech-debt-tracker.md) |
-| Generated facts | [`generated/`](generated/) |
-| Curated external material | [`references/`](references/) |
+| Historical execution | [`exec-plans/completed/`](exec-plans/completed/) |
 
 ## Route by change type
 
 | Change | Minimum context |
 |---|---|
-| New product definition or first milestone | Project-definition protocol, persisted draft, current product specs |
-| Existing-repository adoption | Audit output, current authority files, security and ownership design |
-| User-visible behavior | Product overview, relevant product spec, current flow, tests |
-| UX or interaction | Product overview and CLI interaction contract, relevant design document |
-| Module or dependency boundary | Architecture, matching module contract/code-map row, related ADR, architecture checks |
-| Public API or persistent data | Product, architecture, security, ADRs, approved ExecPlan |
-| Production operations | Reliability, runbook, deployment configuration, approved ExecPlan |
-| Local bug | Reproduction, nearby code and tests; create a plan only if scope grows |
-| Documentation correction | Authoritative code or configuration plus affected current-state document |
+| Product behavior | Product overview, current product specification, relevant source and tests |
+| Entrypoint or file ownership | Architecture, security, initializer and focused tests |
+| User-visible behavior | Product overview, relevant source, reproduction, and tests |
+| Complex work | [`PLANS.md`](PLANS.md) and the matching active plan |
+| Documentation correction | Authoritative source or configuration plus affected current-state document |
+| Agent navigation evaluation | Evaluation protocol, controlled fixture, fresh prompt, and observable command evidence |
 
 ## Document authority and lifecycle
 
-- `AGENTS.md` remains the compact portable routing contract; this source repository authors it in the `CLAUDE.md` portable block and projects it with `./dev/agent-contract-sync`. Generated targets keep AGENTS canonical.
-- Current-state documents describe implemented reality and verified intent and are updated when either changes.
-- Confirmed, Proposed, Open, and Sources evidence stay distinct during definition; only confirmed declarations satisfy traceability. Stable `JRN-*`, `REQ-P0-*`, and `AC-*` identifiers connect product intent, plans, tasks, and criterion evidence under [`PLANS.md`](PLANS.md).
-- Module contracts exist only for justified durable boundaries; `generated/code-map.md` is derived and non-authoritative.
-- Structured Verification Run artifacts are inspectable evidence; raw command logs remain ignored and disposable.
-- Active ExecPlans are living, restartable execution records.
-- Completed plans and accepted decisions are historical records; supersede them rather than rewriting history.
-- Generated documents identify their generator and are never edited manually.
-- A durable document is added only when knowledge is long-lived, shared across changes, and too detailed for an existing source of truth.
+- `AGENTS.md` remains a compact portable routing contract. This source repository authors its portable block in `CLAUDE.md` and projects it with `./dev/agent-contract-sync`; generated targets do not receive the helper or this source-only file.
+- Current-state documents describe implemented reality and verified intent. User-owned target documents remain authoritative for their own meaning.
+- Observed paths are non-authoritative evidence. A path's existence does not prove that its contents are current requirements or a runnable command.
+- Active ExecPlans are living source records manually copied from the template. Completed plans and accepted decisions are historical records; supersede them rather than rewriting their bodies.
+- Evaluation notes distinguish actual before/after observations from hypotheses and do not claim semantic routing or general performance from a bounded fixture. PLAN-0007's prior-template observations remain historical and are not evidence for the current UX template.
+- `init`/`upgrade --dry-run` previews are escaped human unified diffs from one immutable operation and may contain instruction content; `audit` remains content-free. Fingerprints identify a plan but are not approval or locking.
 - Retirement requires an explicit plan action, replacement or rationale, and removal of current references.
 
-<!-- reporivet:catalog:start -->
+## Historical material
 
-Generated by `./dev/docs-index`. Do not edit this block manually.
-
-### Product specifications
-
-| ID | Status | Area | Summary | Document |
-|---|---|---|---|---|
-| `SPEC-REPORIVET-001` | active | harness | Observable structure and lifecycle of a generated repository harness | [`SPEC-REPORIVET-001-generated-project.md`](product-specs/SPEC-REPORIVET-001-generated-project.md) |
-| `SPEC-REPORIVET-002` | active | harness | Repository-native definition, adoption, traceability, verification, Gate, and migration behavior | [`SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md`](product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md) |
-
-### Design documents
-
-| ID | Status | Area | Summary | Document |
-|---|---|---|---|---|
-| `DESIGN-REPORIVET-001` | active | harness | Separation between the installed initializer and independent repository-local runtime | [`DESIGN-REPORIVET-001-initializer-and-runtime.md`](design-docs/DESIGN-REPORIVET-001-initializer-and-runtime.md) |
-| `DESIGN-REPORIVET-002` | active | harness | Design of project definition, adoption, traceability, Verification Run, Gate, and evidence-bound closure | [`DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md`](design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md) |
-| `DESIGN-CORE-001` | active | repository | Durable engineering defaults for agent-readable, maintainable software | [`core-beliefs.md`](design-docs/core-beliefs.md) |
-
-### Decisions
-
-| ID | Status | Area | Summary | Document |
-|---|---|---|---|---|
-| `ADR-0001` | accepted | harness | Keep Reporivet as a repository-native document-first harness with an independent copied runtime | [`ADR-0001-repository-native-harness-boundary.md`](decisions/ADR-0001-repository-native-harness-boundary.md) |
-
-### Runbooks
-
-- None.
-
-<!-- reporivet:catalog:end -->
+The previous runtime-centered specifications, designs, module contract, and migration note remain in this repository as historical records with supersession banners. They are not current product authority. The accepted ADR-0001 body is preserved unchanged; the current boundary is ADR-0002.

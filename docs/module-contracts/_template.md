@@ -34,4 +34,4 @@ State why this durable multi-file boundary needs a contract and cite the actual,
 
 ## Verification
 
-Run the frontmatter `verification` commands and `./dev/code-map --check`.
+Run the frontmatter `verification` commands and review the exact candidate with the responsible owner. Do not infer ownership from a generated map.

@@ -3,26 +3,26 @@
 
 ## Purpose
 
-Initialize and safely maintain repository-local, document-first operating harnesses for coding agents.
+Initialize and safely maintain a small repository-local entrypoint for coding agents.
 
 This file is a short map and operating contract. Durable knowledge belongs in the linked, version-controlled artifacts.
 
 ## Start here
 
-1. Run `./dev/context` with `--path`, `--area`, or `--plan` when one is known.
-2. Read [`docs/README.md`](docs/README.md) for the knowledge map.
-3. Check [`docs/exec-plans/active/`](docs/exec-plans/active/) for matching complex work.
-4. Read only the source-of-truth documents and code needed by the current task.
+1. Read [`docs/README.md`](docs/README.md) for the source knowledge map.
+2. Read [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/SPEC-REPORIVET-003-agent-entrypoints.md`](docs/product-specs/SPEC-REPORIVET-003-agent-entrypoints.md) for current requirements.
+3. Read [`ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/QUALITY.md`](docs/QUALITY.md), and [`docs/SECURITY.md`](docs/SECURITY.md).
+4. Check [`docs/exec-plans/active/`](docs/exec-plans/active/) for matching complex work, then read only the source-of-truth documents and code needed by the current task.
 
 Do not preload all documentation, dependencies, generated output, caches, or raw logs.
 
 ## Sources of truth
 
-- Product intent and current requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/`](docs/product-specs/)
-- Project-definition procedure: [`docs/references/project-definition-protocol.md`](docs/references/project-definition-protocol.md)
+- Product intent and current requirements: [`docs/PRODUCT.md`](docs/PRODUCT.md) and [`docs/product-specs/SPEC-REPORIVET-003-agent-entrypoints.md`](docs/product-specs/SPEC-REPORIVET-003-agent-entrypoints.md)
 - Current system structure: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Quality and evaluation boundary: [`docs/QUALITY.md`](docs/QUALITY.md)
+- Security and file-ownership boundary: [`docs/SECURITY.md`](docs/SECURITY.md)
 - Design principles and durable design documents: [`docs/design-docs/core-beliefs.md`](docs/design-docs/core-beliefs.md) and [`docs/design-docs/`](docs/design-docs/)
-- Quality, security, and reliability: [`docs/QUALITY.md`](docs/QUALITY.md), [`docs/SECURITY.md`](docs/SECURITY.md), and `docs/RELIABILITY.md` when present
 - Planning policy and active work: [`docs/PLANS.md`](docs/PLANS.md), [`docs/exec-plans/active/`](docs/exec-plans/active/)
 - Historical execution and decisions: [`docs/exec-plans/completed/`](docs/exec-plans/completed/), [`docs/decisions/`](docs/decisions/)
 
@@ -32,7 +32,7 @@ When current sources conflict, stop and report the conflict. Do not silently cho
 
 Small, local, reversible changes may proceed without a durable plan. Create an ExecPlan for cross-cutting, risky, long-running, multi-agent, public-contract, persistent-data, security, infrastructure, or deployment changes.
 
-Use `./dev/new-plan "<title>" --area <area>`. Tasks live inside that plan; do not create a second task registry, state database, packet directory, or orchestration layer.
+Copy [`docs/exec-plans/_template.md`](docs/exec-plans/_template.md) manually for a new source plan. Tasks live inside that plan; do not create a second task registry, state database, packet directory, or orchestration layer.
 
 ## Agent operating roles
 
@@ -47,6 +47,9 @@ Roles are defined by responsibility, not runtime identity. Each Task Packet stat
 - Read-only exploration, review, test analysis, and log analysis may run in parallel. Parallel writes require all of: disjoint write paths, separate Git worktrees, frozen shared interfaces, Main-owned integration, and fresh verification of the integrated commit.
 - 공유 계약은 병렬 수행 동안 고정한다. 변경이 필요하면 영향 작업을 멈추고 경계 소유자(Main: Task 간, Lead: parent 내부)가 계약을 조정한 뒤 재배정한다. parent 범위·계약·권한 변경은 Main에게 반환한다. 이 절차는 host/project의 더 제한적인 병렬 정책을 완화하지 않으며, 독립 경계를 만들 수 없으면 순차 수행한다.
 - Verifier는 반례·실패 경로·회귀를 능동적으로 찾고 테스트 자체의 가정도 의심한다. 수정 후에는 새 exact candidate를 재검증한다. 결함에는 위반한 요구사항·trigger·영향과 재현 또는 구체적인 코드 근거를 제시한다. 우려·취향·미검증 영역은 결함과 구분하고 결함 개수를 강제하지 않는다.
+- Verifier는 각 수락 기준을 `PASS`(증거로 충족 확인), `FAIL`(위반 또는 필요한 동작 누락), `UNPROVEN`(확보한 증거로 충족 여부 미확인)으로 판정하고 근거를 연결한다. 의도·추정·다른 검사의 성공만으로 `UNPROVEN`을 `PASS`로 바꾸지 않는다. 필수 수락 기준에 `FAIL` 또는 `UNPROVEN`이 남으면 완료 수락을 추천하지 않는다. 최종 수락 권한은 Main 또는 human reviewer에게 남는다.
+- 결함 보고에는 기존 테스트·검사가 해당 실패 경로를 왜 검출하지 못하는지 설명한다. 관련 검사를 확인하지 못했다면 그 한계를 명시한다.
+- 수선 시 Main 또는 지정 Lead는 확인된 결함과 재현 근거를 하나의 요청으로 취합하고, 가능하면 기존 Implementer를 재개한다. 요청에는 현재 후보, 수정 허용 경로, 실패 근거, 재검증 대상을 포함한다. 원인이 불명확하면 추가 구현 전에 범위를 제한한 진단을 수행한다. 기존 시간·재시도 예산과 같은 접근법 두 번 실패 시 중단 조건은 유지한다.
 - Focused task checks provide fast feedback; Main owns the final canonical verification target and acceptance decision. Results stay concise and identify the exact target, environment, commands, verification scope, evidence, blockers, and whether a verdict is a recommendation or approval.
 
 Memory is auxiliary context and never overrides current project sources of truth or higher-priority execution instructions.
@@ -76,23 +79,17 @@ Record out-of-scope discoveries in the active plan or [`docs/exec-plans/tech-deb
 
 ## Deterministic commands
 
-- Setup: `./dev/bootstrap`
-- Definition status/validation/finalization: `./dev/define`
-- Read-only repository inventory: `./dev/audit`
-- Derived path map: `./dev/code-map`
-- Routed context: `./dev/context`
-- Fast feedback: `./dev/check`
-- Canonical completion gate: `./dev/verify`
-- Observable smoke checks: `./dev/smoke`
-- Tracked-secret guard: `./dev/security-check`
-- Document catalog: `./dev/docs-index`
-- Maintenance candidates: `./dev/garden`
+- Source checks: `PYTHON=python3 ./dev/check`
+- Portable contract projection: `./dev/agent-contract-sync` (source repository only)
+- Portable contract drift check: `./dev/agent-contract-sync --check` (read-only)
 
-The committed [`dev/harness.toml`](dev/harness.toml) is authoritative. Missing configured tools fail visibly; checks must not disappear because of the local environment.
+`dev/check` runs the source unit/integration/distribution tests, source contract drift check, Python syntax compilation, and `git diff --check`. It fails visibly when a required command fails; no target runtime, Gate, or automatic plan closure is installed.
 
 ## Done means
 
-A change is complete only when observable behavior and non-goals are satisfied, the integrated commit passes applicable verification, independent review is complete when required, current-state documents match reality, Documentation Impact is resolved, decisions and follow-ups are recorded, and the Main Agent or human reviewer accepts the evidence.
+A change is complete only when observable behavior and non-goals are satisfied, the exact integrated candidate passes applicable verification, independent review is complete when required, current-state documents match reality, Documentation Impact is resolved, decisions and follow-ups are recorded, and the Main Agent or human reviewer accepts the evidence.
+
+An exact candidate is a commit SHA or a base commit with nonignored file hashes, modes, and a deletion list. A fingerprint identifies the reviewed state; it is not approval by itself. Do not create a commit merely to satisfy evidence formatting.
 
 An agent saying “done” is not completion evidence.
 <!-- reporivet:end -->

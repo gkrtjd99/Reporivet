@@ -1,7 +1,7 @@
 ---
 id: SPEC-REPORIVET-001
 kind: product-spec
-status: active
+status: superseded
 area: harness
 summary: Observable structure and lifecycle of a generated repository harness
 applies_to:
@@ -11,6 +11,8 @@ supersedes: []
 ---
 
 # Generated repository harness
+
+> Historical specification. Superseded by [`SPEC-REPORIVET-003-agent-entrypoints.md`](SPEC-REPORIVET-003-agent-entrypoints.md); its runtime-centered body is preserved for release history and is not current target behavior.
 
 ## Observable structure
 

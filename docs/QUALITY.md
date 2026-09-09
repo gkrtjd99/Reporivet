@@ -3,83 +3,38 @@ id: QUALITY
 kind: quality
 status: active
 area: repository
-summary: Current quality model, verification statuses, Gate policy, release checks, and residual risks
-applies_to:
-  - "**"
+summary: 기계적 안전성 검사와 실제 agent 탐색 평가의 분리
 ---
 
 # Quality
 
-## Quality model
+품질의 핵심은 새 agent가 프로젝트의 올바른 근거·코드·검사 방법을 찾아 활용하는 것이다. 고정 문서 schema 통과는 그 증거가 아니다. 기계적으로 확인할 수 있는 파일 안전성과 실제 행동 평가는 서로 대체하지 않는다.
 
-Quality means a repository is changed safely, remains understandable after sessions and package installation state change, fails visibly when required evidence is unavailable, preserves inspectable artifacts for non-green outcomes, and can be upgraded without losing project-owned knowledge.
+## 기계적 검사
 
-## Verification layers
+`PYTHON=python3 ./dev/check`는 이 소스의 canonical 검사 명령이다. target에는 설치되지 않는다.
 
-| Layer | Purpose | Canonical command | Evidence |
-|---|---|---|---|
-| Syntax | Compile Python sources and tests | `python3 -m compileall -q src tests` | Zero exit status |
-| Regression | Exercise initializer and copied runtime end to end | `python3 -m unittest discover -s tests -v` | Full unit/integration/regression result |
-| Repository fast feedback | Structural checks plus configured fast commands | `./dev/check` | Catalog, document, plan, architecture preflight, and project output |
-| Completion gate | One fixed shared Verification Run | `./dev/verify` | `.harness/runs/<run>-verify/` manifest, Gate, report, checks, and logs |
-| Distribution | Build/install/uninstall the wheel and exercise generated projects | Distribution regression and release procedure | Complete asset inventory and package-independent operation |
+- 전체 unittest: 생성 범위, 링크/marker, 기존 bytes/mode 보존, read-only 동작, symlink/nonregular/legacy 거부, preimage 재검사와 rollback, immutable before/after unified diff·no-op·terminal escape preview.
+- Source contract sync: provider 바깥 내용 제외와 정확한 bytes 투영. 문서 내용의 의미는 판단하지 않는다.
+- Distribution: 네트워크 없이 wheel build/inventory/install/실제 CLI/uninstall을 수행한다. 설치 또는 실행하지 않은 것을 테스트 이름만으로 통과했다고 주장하지 않는다.
+- Syntax 및 diff: source compile, `git diff --check`.
 
-## Verification Run status
+빌드용 pip/setuptools가 없는 환경은 실패로 보고하며 테스트를 skip하여 성공처럼 보이게 하지 않는다. 새 환경이 필요하면 고유 임시 경로를 만들며 다른 작업의 venv를 삭제·재생성하지 않는다.
 
-One canonical run executes security, docs-index, documentation, plan, architecture, project, and optional smoke checks in that order. Each check records one of:
+## 실제 agent 탐색
 
-- `pass`: the declared check completed successfully.
-- `fail`: candidate behavior did not satisfy a required check.
-- `error`: the check could not produce reliable evidence because of configuration or infrastructure.
-- `skipped`: an optional check was correctly not configured.
-- `unknown`: evidence could not be determined and must not be treated as pass.
+[평가 절차](references/agent-navigation-evaluation.md)를 따른다. 같은 fixture 내용과 작업에 대해 적용 전/후를 별도 fresh session으로 수행한다. 근거 문서와 코드 선택, 실제 검사 명령/exit/output, 과거·제안·현재 구분을 기록한다. PLAN-0007에서 관찰한 이전 template 생성물의 결과는 현재 UX template의 향상 근거로 재사용하지 않는다.
 
-A required `fail` determines verification failure even when another required stage errors. Otherwise a required `error` or `unknown` determines an error outcome. Optional smoke may be `skipped`; malformed configured smoke is a required error. Artifacts are finalized as far as possible for all outcomes.
+일회성·단일 모델·작은 fixture의 결과는 보편적 성능 보장이 아니다. 적용 전에도 성공했다면 성공률 향상이라고 주장하지 않는다. 자기 보고 경로는 관찰 가능한 명령/결과와 구분한다. 평가 권한은 프롬프트로 제한되며 OS sandbox를 제공했다고 주장하지 않는다.
 
-## Gate semantics
+## 독립 검토
 
-Changed paths use `contained`, `wide`, `irreversible`, or `unknown` risk. Verdict priority is:
+경로/소유권/transaction/packaged asset/CI 변경은 별도 context에서 exact candidate를 반증한다. 수락 기준, trigger, 영향, 재현 근거를 제시하고 수정 후 새 후보를 재검증한다. 테스트의 가정도 검토한다. 독립 검토를 수행하지 않았다면 명시한다.
 
-1. Required check failure: `BLOCK`.
-2. Required error/unknown, malformed Gate policy, or target mismatch/error: `INCONCLUSIVE`.
-3. Protected, unknown, wide, irreversible, or policy-required dirty state: `REVIEW`.
-4. Clean explicit contained target with all required checks passing: `PASS`.
+## 완료와 릴리즈
 
-In shadow mode, deterministic `PASS` and `REVIEW` return zero; `BLOCK` returns one and `INCONCLUSIVE` returns two. In enforce mode, only `PASS` returns zero. A REVIEW verdict is evidence for human judgment, not an automatic approval.
+Main은 대상 base와 변경 fingerprint 또는 commit, 환경, 실제 명령/결과, 독립 검토와 문서 영향을 기록한다. 자체 Gate나 `close-plan`은 사용하지 않는다. 문서 이동은 의미적 승인이나 검사 성공을 대신하지 않는다. CI는 소스 제품 검사를 실행하며 배포하지 않는다. 이 버전의 공개 게시나 이전 release 교체는 별도 권한이다.
 
-## Test ownership
+## 알려진 한계
 
-Focused modules own distinct behavior:
-
-- `tests/test_reporivet.py`: initialization, ownership, wrappers, doctor, CI, security integration, and upgrades.
-- `tests/test_definition.py`: definition start, resume, validation, finalization, and rollback.
-- `tests/test_audit_adoption.py`: deterministic read-only audit, authority-preserving adoption, path safety, and rollback.
-- `tests/test_traceability.py`: product/spec/plan/task/evidence links and legacy-plan compatibility.
-- `tests/test_code_map.py`: justified contracts, deterministic maps, drift, and context routing.
-- `tests/test_verification_run.py`: fixed stages, statuses, artifacts, target evidence, recursion rejection, and Gate matrix.
-- `tests/test_gate_close_plan.py`: PASS/REVIEW/BLOCK/INCONCLUSIVE closure, one-run binding, path safety, and transaction recovery.
-- `tests/test_distribution.py`: wheel inventory, isolated install, generated verify/doctor, uninstall, repository-local commands, and closure.
-
-## Review expectations
-
-Changes to ownership, replacement behavior, path handling, command execution, parsing, target evidence, Gate policy, closure, packaged assets, or CI require regression tests and an independent context that attempts to falsify the acceptance claim. Explanations without commands or artifacts are not evidence.
-
-## Local 0.2.0 release gate
-
-1. Compile source and tests and run the full regression suite.
-2. Run strict security, catalog, documentation, plan, architecture, and repository checks.
-3. Build a `0.2.0` wheel with no build isolation, dependency resolution, or network access.
-4. Confirm every package asset is present and bytecode, cache, Skill, target bundle, model, and daemon surfaces are absent.
-5. Install the local wheel into a fresh virtual environment without an index.
-6. Run installed CLI help, fresh initialization/definition/audit, generated verification, and initializer doctor.
-7. Uninstall Reporivet and rerun repository-local definition, audit, context, planning, checks, verification, closure, and gardening fixtures.
-8. Independently review the exact clean candidate and run one final canonical Verification Run with explicit base/head/target evidence.
-
-This is a local release-ready boundary only. It does not publish a wheel or create a GitHub release.
-
-## Known gaps
-
-- Generated wrappers are POSIX shell scripts; Windows-native wrappers are not covered.
-- Frontmatter and Markdown parsing intentionally supports the committed schema rather than arbitrary YAML/Markdown.
-- Structural evidence does not replace semantic product, architecture, security, or REVIEW judgment.
-- Optional smoke evidence is project-specific and remains skipped when no command is configured.
+대규모/비정형 저장소, 반복 시행, 다중 모델, 실제 코드 수정 작업의 일반적 효과는 별도 근거가 필요하다. 범위 제한 inventory와 기계적 링크 점검은 완전한 Markdown 파서나 semantic judge가 아니다. 초기화 도구가 프로젝트 자체의 테스트/CI/보안 검사를 대신하지 않는다.

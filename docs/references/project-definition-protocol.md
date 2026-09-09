@@ -1,13 +1,17 @@
 ---
 id: REF-REPORIVET-003
 kind: reference
-status: active
+status: superseded
 owner: main
 area: product
 updated: 2026-08-30
 ---
 
 # Project Definition Protocol
+
+> Historical protocol. Superseded for current Reporivet behavior by [`SPEC-REPORIVET-003-agent-entrypoints.md`](../product-specs/SPEC-REPORIVET-003-agent-entrypoints.md); retained as historical procedure context.
+>
+> 본문의 제거된 template와 과거 상대 경로는 [v0.2.0 원본](https://github.com/gkrtjd99/Reporivet/blob/v0.2.0/docs/references/project-definition-protocol.md)에서 확인한다. 현재 동작이나 생성 파일의 지침으로 사용하지 않는다.
 
 ## Purpose and authority
 

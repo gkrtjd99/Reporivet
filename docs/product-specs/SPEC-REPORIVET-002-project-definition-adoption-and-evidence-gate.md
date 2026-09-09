@@ -1,7 +1,7 @@
 ---
 id: SPEC-REPORIVET-002
 kind: product-spec
-status: active
+status: superseded
 area: harness
 summary: Repository-native definition, adoption, traceability, verification, Gate, and migration behavior
 applies_to:
@@ -12,6 +12,8 @@ supersedes: []
 ---
 
 # Project definition, adoption, and evidence Gate
+
+> Historical specification. Superseded by [`SPEC-REPORIVET-003-agent-entrypoints.md`](SPEC-REPORIVET-003-agent-entrypoints.md); its definition, Gate, and runtime body is preserved without rewriting.
 
 ## Confirmed traceability
 
