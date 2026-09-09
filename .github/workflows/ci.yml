@@ -53,29 +53,5 @@ jobs:
             printf 'REPORIVET_HEAD_SHA=%s\n' "$head_sha"
             printf 'REPORIVET_TARGET=%s\n' "$target"
           } >> "$GITHUB_ENV"
-      - name: Bootstrap
-        run: ./dev/bootstrap
-      - name: Verify
-        run: ./dev/verify
-      - name: Append verification report
-        if: always()
-        shell: bash
-        run: |
-          report=
-          for candidate in .harness/runs/*-verify/report.md; do
-            if [ -f "$candidate" ]; then
-              report=$candidate
-            fi
-          done
-          if [ -n "$report" ]; then
-            cat "$report" >> "$GITHUB_STEP_SUMMARY"
-          else
-            printf 'No Reporivet verification report was produced.\n' >> "$GITHUB_STEP_SUMMARY"
-          fi
-      - name: Upload verification evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: reporivet-verification-runs
-          path: .harness/runs/
-          if-no-files-found: warn
+      - name: Source checks
+        run: ./dev/check

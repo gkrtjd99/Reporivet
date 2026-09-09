@@ -1,13 +1,15 @@
 ---
 id: REF-REPORIVET-002
 kind: reference
-status: active
+status: superseded
 owner: main
 area: harness
 updated: 2026-08-29
 ---
 
 # HarnessEngineeringSkill Migration Matrix
+
+> Historical migration input. Superseded as current product guidance by [`SPEC-REPORIVET-003-agent-entrypoints.md`](../product-specs/SPEC-REPORIVET-003-agent-entrypoints.md); upstream context and the original matrix remain preserved.
 
 ## Upstream reference
 

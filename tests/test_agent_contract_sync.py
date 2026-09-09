@@ -229,7 +229,7 @@ class AgentContractSyncTests(unittest.TestCase):
         self.assertFalse(forbidden & {path.name for path in assets.rglob("*")})
         target = self.root.parent / "generated"
         result = subprocess.run(
-            [sys.executable, "-m", "reporivet", "init", "--root", str(target), "--name", "Fixture", "--project-kind", "cli"],
+            [sys.executable, "-m", "reporivet", "init", "--root", str(target), "--name", "Fixture"],
             env={**os.environ, "PYTHONPATH": str(REPOSITORY / "src"), "PYTHON": sys.executable},
             capture_output=True, text=True, timeout=30,
         )

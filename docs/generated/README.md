@@ -1,5 +1,5 @@
-# Generated Documentation
+# Repository Facts
 
-Files in this directory are reproducible facts generated from source, schemas, tests, or tooling.
+This source repository does not maintain a generated code map or generated target document catalog. Observed paths and navigation evidence are kept in the current source documents and controlled evaluation fixture; they are evidence, not authority.
 
-Every generated file must identify its generator near the top. Do not edit generated output manually. Change the source or generator, regenerate, and verify drift in CI.
+Do not add generated output to initialized targets. A future generated artifact requires an explicit product decision, source of truth, owner, and review of its maintenance cost.

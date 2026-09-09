@@ -1,7 +1,7 @@
 ---
 id: DESIGN-REPORIVET-001
 kind: design-doc
-status: active
+status: superseded
 area: harness
 summary: Separation between the installed initializer and independent repository-local runtime
 applies_to:
@@ -13,6 +13,8 @@ supersedes: []
 ---
 
 # Initializer and repository-local runtime
+
+> Historical design. Superseded by [`ADR-0002-entrypoint-only-boundary.md`](../decisions/ADR-0002-entrypoint-only-boundary.md) and [`SPEC-REPORIVET-003-agent-entrypoints.md`](../product-specs/SPEC-REPORIVET-003-agent-entrypoints.md); the body remains preserved.
 
 ## Context
 

@@ -3,80 +3,44 @@ id: SECURITY
 kind: security
 status: active
 area: security
-summary: Current trust boundaries, filesystem protections, command execution, evidence handling, and security limits
-applies_to:
-  - "src/**"
-  - "dev/**"
-  - "tests/**"
+summary: 진입점 갱신의 파일 소유권과 읽기·쓰기 경계
 ---
 
 # Security
 
-## Trust boundaries
+## 신뢰 경계
 
-- The caller chooses the target root and grants ordinary filesystem permissions there.
-- Packaged templates and generated runtime code are trusted local release artifacts.
-- Existing repository files, paths, definition evidence, and metadata are untrusted input until validated.
-- Human or Main owns semantic definition answers, conflict resolution, and REVIEW acceptance. Commands perform structural validation only.
-- `audit` is read-only inventory and must not execute project commands. Adoption writes only after a conflict-free audit.
-- Commands in `dev/harness.toml` are trusted project configuration and execute with the caller's environment and permissions.
-- Git history, explicit base/head/target values, and worktree cleanliness provide integrity evidence; they are not authorization.
-- CI uses repository content with `contents: read`; uploaded run artifacts remain potentially sensitive operational output.
+호출자가 대상 root와 운영체제 권한을 선택한다. 기존 경로·instruction bytes·파일 이름은 신뢰하지 않는다. installed package는 로컬 산출물이며 프로젝트 명령, Python 모듈, 원격 콘텐츠를 실행하지 않는다. Audit은 파일 내용/자격증명을 출력하지 않는 제한된 경로 관찰이다. 경로명 자체에도 민감한 정보가 있을 수 있으므로 결과를 공유하기 전 검토한다.
 
-## Protected assets
+## 보호 대상
 
-| Asset | Protection |
-|---|---|
-| Project-owned documents and definition draft | Create-if-missing semantics; no upgrade overwrite |
-| Final product specifications and plans | Structural validation, stable IDs, lifecycle rules, transactional finalization/closure |
-| `dev/harness.toml` | Project-owned bytes; upgrade never rewrites it |
-| Canonical managed paths | Preflight collision, symlink, expected-type, and regular-file checks; explicit ownership marker; full-plan and per-write preimage validation |
-| Shared files | Paired managed block markers; fenced examples are preserved without granting ownership, while malformed actual markers fail |
-| Configured commands | Argument arrays, no shell interpolation, explicit executable and recursion checks |
-| Verification manifest, Gate, report, and check JSON | One run root, sanitized command metadata, manifest hashing, target binding |
-| Raw logs | Stored under ignored `.harness/runs/`; review before sharing and never commit |
-| Local secrets and personal state | Managed `.gitignore` prevention plus tracked-file scanning with narrow reviewed exceptions |
-| Completed plans and decisions | Historical lifecycle; supersede rather than silently rewrite |
+- Target 쓰기는 AGENTS와 명시적으로 선택한 CLAUDE 관리 블록으로 제한한다.
+- 관리 블록 밖의 bytes와 기존 파일 mode를 보존한다. 기존 README/SDD 문서/설정/CI/dev 경로는 수정하지 않는다.
+- 경로 정규화 전에 symlink component를 검사한다. root/parent/대상 파일의 symlink, nonregular/FIFO, 잘못된 marker와 invalid UTF-8은 안전하게 거부한다.
+- fenced marker 예시는 소유권을 부여하지 않는다. 실제 malformed/partial marker는 조용히 수선하거나 본문을 지우지 않는다.
+- 렌더 전에 immutable preimage를 고정한다. user edit 이후 이미지를 새 preimage로 채택해 덮어쓰지 않는다.
+- 원래 파일을 truncate하지 않고 완성된 임시 bytes/mode로 교체하며, 새 파일은 존재하면 실패하는 방식으로 생성한다.
+- 실패 시 자기 postimage와 일치하는 대상만 되돌린다. concurrent 변경은 보존하고 복구 불완전을 명시한다.
+- 경로와 project name을 Markdown으로 렌더링할 때 control/marker/링크 주입을 막는다. 임의 파일명을 shell command로 만들지 않는다.
 
-## Required controls
+## 기존 버전 전환
 
-- Resolve the target root and reject non-directory, symlinked, out-of-root, or nonregular paths before reading or writing sensitive entries.
-- Refuse partial managed markers, unmarked canonical command collisions, FIFO/nonregular inputs, and expected file/directory type mismatches before any adoption or initialization write.
-- Render preview and apply from the same canonical repository-relative mutation entries, comparing rendered output only with immutable initial staging images, never later live state. Validate every type/mode/content-hash preimage before mutation and revalidate each target immediately before its write. Prepare complete temporary bytes and modes before replacing an existing transaction file; never truncate that original in place.
-- Invoke initializer-managed runtime subprocesses with Python `-I` so target-directory and environment Python import paths cannot execute modules during staging, including dry-run. This is import-path hardening, not a process sandbox.
-- Definition finalization checks all preimages and each write, creates missing specification/plan paths exclusively, and derives postimages from rendered bytes and intended creation modes before writing. Post-write user state is never adopted as transaction-owned content.
-- Include generated code-map and catalog postimages in the transaction rather than leaving follow-up writes outside rollback. Restore a touched path only while it still matches the transaction postimage; preserve and report concurrent divergence.
-- Keep audit deterministic and byte-stable; do not run configured or detected project commands during inventory.
-- Preserve existing README, instruction, architecture, CI, and configuration authority during adoption.
-- Keep Confirmed, Proposed, Open, and Sources evidence separate; blocking Open items and contradictions prevent finalization.
-- Execute configured project commands only as argument arrays committed in `dev/harness.toml`; keep built-in validation and local Git-evidence operations on fixed runtime-owned argument arrays, and reject direct or shell-hidden recursive verification.
-- Run `./dev/security-check` before project commands in `check` and `verify`; force-added sensitive paths and high-confidence secret signatures fail.
-- Use `[policy].security_allow_tracked` only for narrowly reviewed non-secret fixtures.
-- Use only explicit local `REPORIVET_BASE_SHA`, `REPORIVET_HEAD_SHA`, `REPORIVET_TARGET`, plan base, and observed HEAD evidence. Never fetch, assume a remote, or fabricate a parent.
-- Treat missing, malformed, mismatched, or unknown target evidence conservatively; it cannot produce PASS.
-- Preserve run artifacts on candidate failure and infrastructure error without copying raw argv or raw logs into structured reports.
-- Keep CI actions pinned to immutable SHAs, retain `contents: read`, use full checkout history, verify the explicit head, invoke the gate once, and upload `.harness/runs/` with `if: always()`.
-- Never require or collect account credentials, API keys, telemetry identifiers, LLM tokens, or model-service access.
-- Never fetch or execute remote content during initialization, definition, audit, adoption, local verification, or distribution tests.
+실제 v0.2 version/managed runtime/operating block을 확인하면 init/upgrade는 write 전 거부한다. 자동 삭제, runtime 재실행, 설정 변환, release 교체를 하지 않는다. [전환 안내](references/entrypoint-migration.md)를 따른다. 평범한 프로젝트의 동명 dev 설정만으로 Reporivet 소유권을 주장하지 않는다. v0.3 entrypoint 제거가 필요하면 정확한 두 managed marker pair(`<!-- reporivet:entrypoints:start -->` / `<!-- reporivet:entrypoints:end -->`, `<!-- reporivet:entrypoints:claude:start -->` / `<!-- reporivet:entrypoints:claude:end -->`)만 별도 검토로 제거하고, 혼합 파일의 사용자 본문과 AGENTS↔CLAUDE 연결은 함께 보존·정리한다.
 
-## Gate and closure controls
+## 미리보기와 기밀성
 
-Required check failure produces `BLOCK`; required error/unknown or target mismatch produces `INCONCLUSIVE`; neither can be overridden. Protected, unknown, wide, irreversible, or policy-required dirty conditions produce `REVIEW`, which requires a genuine safe human reason before closure. Structural PASS or REVIEW acceptance does not certify semantic correctness or authorize deployment/publication.
+`init`/`upgrade --dry-run`은 immutable before/after에서 만든 실제 unified diff를 terminal escape와 함께 사람이 읽을 수 있게 출력한다. 이는 실행 가능한 patch가 아니며, fingerprint도 승인·잠금·재실행 결과를 보장하지 않는다. Preview에는 관리 블록의 기존 instruction 본문과 주변 문맥이 포함될 수 있으므로 외부 공유 전 비밀·개인정보를 검토한다. `audit`은 반대로 파일 내용을 출력하지 않는 제한된 경로 관찰이다. 두 출력의 content privacy와 audit 계약을 혼동하지 않는다.
 
-`close-plan` verifies one clean current commit once, binds the manifest hash and Gate verdict to the plan, and guards both active and completed paths during post-move rollback. Unchanged transaction postimages are restored to exact bytes and mode; concurrent edits are preserved and reported. Verification artifacts remain for diagnosis.
+## 기계적 점검과 의미적 승인
 
-## Security-sensitive change gates
+Doctor는 경로/관리 구조의 오류를 알릴 뿐 agent 능력이나 보안·제품 의미를 승인하지 않는다. 현재와 과거 문서의 구분, 충돌 해결, 명령 실행 권한과 작업 완료 판단은 사용자/agent의 실제 근거 검토에 남는다. 자동 Gate·승인 대체 점수는 없다.
 
-Path traversal, symlink semantics, file replacement, audit/adoption, command execution, secrets, authentication, authorization, network access, Git evidence, Gate policy, CI permissions, or artifact publication require an approved ExecPlan, dedicated tests, and independent review.
+## Source 운영
 
-## Operator responsibility
+소스 CI의 action pin과 `contents: read`를 유지한다. 테스트는 자기 고유 임시 경로만 쓰며 기존 다른 작업의 환경을 삭제·재생성하지 않는다. 경로·소유권·file replacement·packaging·CI 변경에는 회귀와 독립 검토가 필요하다. 실제 agent 평가는 통제된 fixture와 최소 권한으로 수행하고 원시 transcript에 비밀값이 없는지 확인한다.
 
-The runtime cannot redact secrets emitted by arbitrary project commands. Keep credentials out of command output, use least-privilege environments, review `.harness/runs/` before sharing, and inspect ignored/tracked state during adoption. Rotate and revoke any exposed credential and remove sensitive history as required; ignore rules and scanning are defense-in-depth only.
+## 한계와 보고
 
-Mutation staging and postimage guards do not provide OS, container, process, permission, or adversarial concurrency isolation. The caller's ordinary filesystem authority remains the trust boundary. Preview fingerprints describe current planned bytes; they are not approvals, capabilities, or a substitute for reviewing the target and diff.
+파일 검사/preimage guard는 OS-level 완전한 race/process sandbox가 아니다. Git 상태나 preview fingerprint는 권한 부여가 아니다. 이 제품은 secret scanner나 프로젝트 CI를 설치하지 않는다. 기존 ignore/보안 도구는 프로젝트가 유지하며 비밀이 노출됐다면 폐기·회전한다. 이 소스의 과거 `.harness` 로그와 임시환경은 삭제하지 않고 기존 `.gitignore`를 보존한다. 이는 과거 raw log의 우발적인 추적·공개를 막기 위한 것으로, 새 run 상태나 runtime을 생성한다는 뜻이 아니다.
 
-A person accepting REVIEW must inspect the report, changed paths, protected matches, recovery path, and relevant raw logs, then provide their own reason. An agent must not generate that acceptance on their behalf.
-
-## Reporting
-
-Follow [the public repository security policy](/.github/SECURITY.md). Do not publish exploit details, credentials, private repository content, raw verification logs, or personal data in an issue.
+제보는 [보안 정책](../.github/SECURITY.md)을 따른다. 자격증명·비공개 저장소 내용·원시 로그를 공개 issue에 게시하지 않는다.

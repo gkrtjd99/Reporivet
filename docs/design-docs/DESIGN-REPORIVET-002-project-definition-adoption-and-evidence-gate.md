@@ -1,7 +1,7 @@
 ---
 id: DESIGN-REPORIVET-002
 kind: design-doc
-status: active
+status: superseded
 area: harness
 summary: Design of project definition, adoption, traceability, Verification Run, Gate, and evidence-bound closure
 applies_to:
@@ -14,6 +14,8 @@ supersedes: []
 ---
 
 # Project definition, adoption, and evidence Gate
+
+> Historical design. Superseded by [`ADR-0002-entrypoint-only-boundary.md`](../decisions/ADR-0002-entrypoint-only-boundary.md) and [`SPEC-REPORIVET-003-agent-entrypoints.md`](../product-specs/SPEC-REPORIVET-003-agent-entrypoints.md); the body remains preserved.
 
 ## Context and goals
 

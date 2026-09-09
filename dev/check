@@ -1,6 +1,17 @@
 #!/usr/bin/env sh
-# reporivet:managed version=0.2.0
+# Source repository checks; not a generated harness asset.
 set -eu
-SCRIPT_DIR=$(dirname -- "$0")
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PYTHON=${PYTHON:-python3}
-exec "$PYTHON" "$SCRIPT_DIR/harness.py" "check" "$@"
+cd "$ROOT"
+"$PYTHON" -c 'import sys; sys.version_info >= (3, 11) or sys.exit("dev/check: Python 3.11 이상이 필요합니다. PYTHON으로 지원 interpreter를 지정하세요.")'
+
+PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}src" "$PYTHON" -m unittest discover -s tests -v
+"$PYTHON" ./dev/agent_contract_sync.py --check
+"$PYTHON" -m compileall -q src tests
+if command -v git >/dev/null 2>&1; then
+  git diff --check
+else
+  printf '%s\n' 'dev/check: required command not found: git' >&2
+  exit 127
+fi

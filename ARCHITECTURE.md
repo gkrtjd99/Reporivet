@@ -3,134 +3,54 @@ id: ARCHITECTURE
 kind: architecture
 status: active
 area: repository
-summary: Current package, template, generated-runtime, definition, and verification architecture
-applies_to:
-  - "src/**"
-  - "tests/**"
-  - "dev/**"
+summary: Installed CLI와 runtime 없는 Markdown target의 경계
 ---
 
 # Architecture
 
-This document describes implemented reality. Proposed structure belongs in an active ExecPlan until it exists and is verified.
-
-## Runtime profile
-
-- Project kind: Python command-line initializer.
-- Primary language: Python 3.11 or newer.
-- Runtime dependencies: Python standard library only.
-- Distribution: a Python wheel exposing the `reporivet` console command.
-- Generated command surface: POSIX wrappers around one copied standard-library runtime.
-
-## Repository map
-
-| Path | Responsibility | Public boundary |
-|---|---|---|
-| `src/reporivet/cli.py` | CLI parsing and command dispatch | `reporivet init`, `define`, `audit`, `upgrade`, `doctor` |
-| `src/reporivet/initializer.py` | Safe inventory, rendering, ownership-aware writes, adoption, upgrades, and diagnostics | Python package internals |
-| `src/reporivet/assets/project/` | Versioned templates and canonical generated runtime | Packaged data consumed by the initializer |
-| `src/reporivet/assets/project/dev/harness.py` | Definition, audit, context, documents, plans, traceability, checks, Verification Run, Gate, closure, and gardening | Copied as `dev/harness.py` |
-| `tests/` | Package, generated-runtime, security, evidence, closure, and distribution regression tests | `python3 -m unittest discover -s tests -v` |
-| `dev/` | This repository's dogfooded generated-runtime entry points | `./dev/*` |
-| `docs/` | Current-state, protocol, specification, design, planning, and historical knowledge | Read through `docs/README.md` |
-
-## Components and dependency direction
-
-| Component | Owns | May depend on | Must not depend on |
-|---|---|---|---|
-| CLI | User-facing arguments and exit codes | Initializer public functions | Generated target state |
-| Initializer | Inventory, ownership, templates, adoption, upgrades | Standard library, packaged assets | Host plugins, LLM APIs, or external state |
-| Packaged assets | Target repository contract and runtime source | Declared template variables | Initializer process state |
-| Generated runtime | Definition validation, audit, routing, plans, checks, evidence, Gate, and closure | Standard library, repository files, Git, configured tools | Installed `reporivet` package after generation |
-| Tests | Observable behavior and safety invariants | Public CLI and generated runtime | Network services, credentials, or model evaluation |
-
-Dependency direction is:
+## 제품 경계
 
 ```text
-installed CLI -> initializer/package inventory -> rendered repository assets
-repository wrapper -> dev/harness.py -> repository files, local Git, configured commands
+installed reporivet CLI
+    → 제한된 read-only 경로 관찰
+    → AGENTS / 선택적 CLAUDE 관리 블록의 안전한 갱신
+
+target agent
+    → 일반 Markdown 탐색
+    → 프로젝트의 기존 명세·코드·검사 도구
 ```
 
-The reverse edge from a generated repository to the installed package is forbidden.
+Target에는 Reporivet runtime이나 설정을 설치하지 않는다. agent의 일상 작업이 installed package를 호출해야 하는 역방향 의존성도 없다. 모델·원격 서비스·task database를 추가하지 않는다.
 
-## Package-side flows
+## Source map
 
-### Initialization
+| 경로 | 책임 |
+|---|---|
+| `src/reporivet/cli.py` | init/audit/upgrade/doctor의 인자와 exit code |
+| `src/reporivet/initializer.py` | inventory, marker 소유권, preimage/postimage, 생성·갱신·점검 |
+| `src/reporivet/assets/project/root/AGENTS.md.tmpl` | 짧은 비권위적 탐색 안내 |
+| `tests/` | 제품의 기계적 안전성·생성·배포 회귀 |
+| `tests/fixtures/navigation/` | 실제 agent 탐색 대조용 서로 다른 문서 구조 |
+| `dev/check` | 이 소스 저장소의 검사 실행; target에 배포하지 않음 |
+| `dev/agent_contract_sync.py` | 이 소스의 CLAUDE portable block을 AGENTS에 투영 |
+| `docs/` | 이 제품의 현재 요구사항·결정·실험·작업 역사 |
 
-1. Resolve or create the target root.
-2. Inspect repository markers and infer a provisional runtime profile and command set.
-3. Refuse symlinked paths and project-owned collisions at canonical managed paths.
-4. Upsert only bounded managed blocks in `AGENTS.md` and `.gitignore`.
-5. Create project-owned documents and `dev/harness.toml` only when missing.
-6. Create or refresh only files carrying a `reporivet:managed` marker.
-7. Generate document catalogs and run structural checks unless explicitly skipped.
-8. For existing implementations, create `PLAN-0000` and require command review.
+## 읽기와 쓰기
 
-### Definition, audit, and adoption
+관찰은 깊이·개수가 제한된 실제 경로 목록이며 문서의 의미를 추론하거나 project command를 실행하지 않는다. 파일 이름이 명령이나 Markdown 문법으로 해석되지 않도록 렌더링한다. 관리 블록 밖 프로젝트 지침이 의미적 경로와 소유권을 유지한다. 생성된 안내도 경로 관찰을 authority나 자동 routing으로 바꾸지 않는다.
 
-- `reporivet define --root <path>` explicitly creates the repository harness and project-owned definition draft; `init` and `upgrade` do not start definition implicitly.
-- `reporivet audit --root <path>` inventories authority, manifests, commands, source/test paths, conflicts, and proposed additions without writing files or executing project commands.
-- `reporivet define --root <path> --adopt` audits first, refuses conflicts before writes, preserves existing README, instructions, architecture, CI, and configuration, and leaves inferred commands in review state.
+`init`/`upgrade`의 dry-run은 쓰기 전에 준비한 동일 immutable operation의 before/after bytes로 실제 unified diff를 만든다. 변경이 없으면 명시적인 no-op을 출력한다. 이 diff는 terminal에서 사람이 검토하는 escaped preview일 뿐 그대로 적용하는 patch가 아니다. audit은 반대로 파일 내용을 출력하지 않는 경로 관찰이므로, preview가 instruction 본문을 노출할 수 있는 것과 구분한다. fingerprint는 operation을 식별하는 보조 정보이며 승인 토큰·잠금·다음 실행 결과의 보장이 아니다.
 
-### Upgrade and doctor
+Mutation은 쓰기 대상의 원래 bytes/type/mode/hash를 고정하고 그 이미지로부터 결과를 렌더링한다. 적용 직전 모든 preimage와 개별 write의 preimage를 확인한다. 새 파일은 기존 파일을 덮어쓰지 않는 방식으로 만들고, 기존 파일은 완성된 임시 파일로 교체한다. 중간 실패 시 일치하는 자기 postimage만 복구하고 concurrent 변경은 보존·보고한다. 이것은 OS 수준의 완전한 동시성 격리가 아니다.
 
-`upgrade` refreshes marked managed files and blocks and creates newly introduced missing scaffolds. It never rewrites current-state documents, specifications, plans, decisions, runbooks, or project-owned `dev/harness.toml`. New configurations receive explicit conservative `[gate]` defaults. Existing configurations without `[gate]` keep their exact bytes; the runtime applies conservative shadow defaults in memory and `doctor` emits an advisory.
+## 제품 검증과 source 검사
 
-## Repository-local runtime flow
+`doctor`의 기계적 결과와 실제 agent 탐색 품질을 구분한다. source의 `./dev/check`와 CI는 unit/integration/distribution 검사를 실행할 뿐 target의 작업을 승인하지 않는다. [탐색 평가](docs/references/agent-navigation-evaluation.md)는 별도의 새 agent 세션과 통제된 fixture를 사용하며 실행 engine을 제품에 포함하지 않는다.
 
-1. `./dev/define status|validate|finalize` computes persisted progress, structurally validates evidence, and transactionally produces a final specification plus one first-slice ExecPlan. It does not invent product answers.
-2. `./dev/audit` reproduces the deterministic read-only repository inventory without importing the installed package.
-3. `./dev/code-map` derives a non-authoritative map from actual, configured, or confirmed planned paths. `./dev/context --path|--area|--plan` routes to matching authority, module contracts, maps, specifications, and active plans.
-4. `./dev/check` provides fast structural and configured-command feedback.
-5. One `./dev/verify` invocation creates exactly one `.harness/runs/<utc-run-id>-verify/` and runs security, catalog, documentation, plan, architecture, project, and optional smoke checks in fixed order.
-6. Checks record `pass`, `fail`, `error`, `skipped`, or `unknown`. The run preserves `manifest.json`, `gate.json`, `report.md`, per-check JSON, and available logs even when the candidate fails or infrastructure errors.
-7. Gate evaluates only explicit local base/head/target evidence and changed paths. It emits `PASS`, `REVIEW`, `BLOCK`, or `INCONCLUSIVE` under shadow or enforce mode; it never fetches, assumes a remote, or infers a parent.
-8. `./dev/close-plan` binds a clean current `HEAD` to the plan base, invokes the canonical verification implementation exactly once, records the run/hash/verdict/SHA/criterion evidence, and moves the plan transactionally. `REVIEW` requires a genuine human reason; `BLOCK` and `INCONCLUSIVE` cannot be overridden.
-9. `./dev/garden` reports maintenance candidates without deleting or rewriting content.
+## 기존 버전과 역사
 
-## CI and evidence
-
-Generated and dogfood verification workflows retain immutable action SHAs and `contents: read`, fetch full history through checkout, select the explicit PR head or push head, export explicit base/head/target evidence, invoke `./dev/verify` once after bootstrap, append the latest report to the step summary, and upload `.harness/runs/` on success or failure. An all-zero push base is treated as unavailable rather than replaced with an inferred parent.
-
-## Persistent data and external systems
-
-The initializer writes only to the selected project root. It has no database, daemon, telemetry service, GitHub API client, secret store, plugin protocol, model client, or LLM API dependency.
-
-Configured project commands execute only as argument arrays committed in `dev/harness.toml`. Built-in validation and local Git-evidence operations use fixed argument arrays owned by the copied runtime. Both inherit the caller's local environment and permissions. Verification artifacts are ignored local/CI evidence, not an external state system.
-
-## Mechanical invariants
-
-- Package version comes from `reporivet.__version__`; wheel metadata and managed markers must agree.
-- Canonical package runtime and dogfood runtime differ only by the rendered version token; every managed wrapper is rendered from one `PYTHON`-aware template and remains executable.
-- Upgrade preserves `dev/harness.toml` byte-for-byte.
-- The regression suite covers definition/resume, audit/adoption, traceability, routing, Verification Run, Gate, closure, CI, ownership, and security boundaries.
-- Wheel tests require a complete packaged-asset inventory with no bytecode, Skill bundle, target bundle, model, or daemon surface.
-- An isolated installed CLI can generate and diagnose a project; after uninstall, repository-local definition, audit, context, planning, checks, verification, closure, and gardening continue to work.
-
-## Ownership and fail-closed conventions
-
-The installed initializer and copied repository runtime have separate lifetimes. Project-owned files are created only when absent. Harness-owned files carry `reporivet:managed` in their first lines and are rendered from canonical package assets. Shared ownership uses bounded paired markers; malformed or fenced lookalikes do not grant ownership. Unmarked canonical path collisions, symlink traversal, and nonregular inputs are errors. Potentially destructive ambiguity, unsafe paths, malformed evidence, and target mismatch fail closed rather than guessing. Configured argv execution uses no shell interpolation; command detection remains separate from approval.
-
-## Gate precedence and closure
-
-Required failure takes precedence over required infrastructure error. Gate classifies explicit changed paths as `contained`, `wide`, `irreversible`, or `unknown` and returns, in order:
-
-1. `BLOCK` for a required check failure.
-2. `INCONCLUSIVE` for required error/unknown, malformed policy, or target mismatch/error.
-3. `REVIEW` for protected, unknown, wide, irreversible, or policy-required dirty conditions.
-4. `PASS` only for a clean, confirmed, contained target with every required check passing.
-
-Shadow mode allows deterministic `PASS` and `REVIEW` to return success while preserving the verdict. Enforce mode allows only `PASS`. Neither mode can override `BLOCK` or `INCONCLUSIVE`. The runtime flow above owns the single shared run and transactional evidence-bound closure. Detailed trade-offs remain in [`DESIGN-REPORIVET-002`](docs/design-docs/DESIGN-REPORIVET-002-project-definition-adoption-and-evidence-gate.md).
+v0.2의 copied runtime·고정 schema·Gate·closure 계약은 [ADR-0002](docs/decisions/ADR-0002-entrypoint-only-boundary.md)로 supersede한다. 이전 target은 자동 migration하지 않는다. Legacy runtime·marker·CI 의존성의 제거는 target maintainer가 별도 소유하고, 기존 문서·명령·CI 영향과 compatibility를 검토한 뒤 수행한다. [전환 절차](docs/references/entrypoint-migration.md)는 source repository root에서 읽는 안내와 checkout 안에서 실행할 수 있는 migration 문서를 구분한다. 기존 release/tag/assets와 completed 계획은 그대로 보존한다.
 
 ## Source-only contract projection
 
-In this source repository only, `CLAUDE.md` authors one standalone paired `reporivet:portable:start` / `reporivet:portable:end` block. `dev/agent-contract-sync` invokes the single standard-library helper `dev/agent_contract_sync.py` using the `PYTHON` override and projects the intervening UTF-8 bytes as the entire `AGENTS.md`. Provider instructions outside the block are excluded. Edit the source block, then sync; `--check` reports drift without changing bytes, modes, or mtimes and is exercised by the existing test suite.
-
-The helper rejects unsafe root/parent and contract paths, malformed or fenced markers, and invalid UTF-8 before writing. Drift replacement uses a completed same-directory temporary file, preserves the existing mode, rechecks source and target preimages, and leaves unchanged output untouched. These checks do not provide full OS-level concurrent isolation. This wrapper and helper are not package assets or target commands; generated targets keep their independent AGENTS authority.
-
-## Known limits
-
-- Generated shell wrappers target POSIX environments.
-- Command inference is intentionally provisional and requires explicit review.
-- Markdown/frontmatter validators support the committed schema, not arbitrary YAML or semantic product judgment.
-- Remote publication and old-repository lifecycle operations are outside the package and this release work.
+이 소스에서는 `CLAUDE.md`의 `reporivet:portable:start/end` 블록을 작성하고 `./dev/agent-contract-sync`로 AGENTS에 투영한다. `--check`는 bytes drift를 읽기 전용으로 검사한다. 이 helper는 target에 배포되지 않으며 선택적 target CLAUDE는 AGENTS를 가리키는 얇은 연결일 뿐이다. 일반 target에 source의 문서 체계나 agent 역할을 강제하지 않는다.

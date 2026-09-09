@@ -1,0 +1,18 @@
+{
+  "atlas": {
+    "README.md": "# Atlas\n\n세션 서비스의 작은 진단용 저장소입니다.\n",
+    "handbook/start.md": "# 유지보수 안내\n\n현재 세션 동작은 [규칙](../policies/session-rules.md), 구현은 [모듈](../components/session.py)을 확인합니다.\n로컬 검사는 저장소 루트에서 `python3 -B quality/check_session.py`입니다. 과거 문서는 현재 요구사항이 아닙니다.\n",
+    "policies/session-rules.md": "# 현재 세션 규칙\n\n2026-09-08 적용: 비활성 세션의 만료는 30분입니다. 과거 45분 정책을 대체합니다. 사용자 작업은 만료 시 재인증되어야 합니다.\n",
+    "archive/session-rules.md": "# 과거 기록 — 폐기됨\n\n2025년 만료값은 45분입니다. 현재 기준으로 사용하지 마세요.\n",
+    "components/session.py": "SESSION_MINUTES = 45\n",
+    "quality/check_session.py": "from pathlib import Path\nimport runpy\nvalue = runpy.run_path(str(Path(__file__).resolve().parents[1] / \"components/session.py\"))[\"SESSION_MINUTES\"]\nprint(f\"session_minutes: expected=30 actual={value}\")\nraise SystemExit(0 if value == 30 else 1)\n"
+  },
+  "birch": {
+    "README.md": "# Birch\n\n요청 만료 처리 예제입니다.\n",
+    "engineering/knowledge/current.md": "# 운영 지식 진입점\n\n[승인된 결정](../../decisions/request-timeout.md)이 현재 요구입니다. [구현](../../server/timeouts.py)을 대조하세요.\n실제 검사는 루트에서 `python3 -B bin/verify_timeout.py`로 실행합니다. `notes/old-timeout.md`는 이 결정으로 대체됐습니다.\n",
+    "decisions/request-timeout.md": "# 승인된 요청 만료 결정\n\n현재 API 요청 만료 한도는 120초입니다. 2026-09-08부터 적용하며 과거 300초 설계를 대체합니다. 값 변경은 외부 동작에 영향을 주므로 근거를 확인해야 합니다.\n",
+    "notes/old-timeout.md": "# 이전 설계 — superseded\n\n요청 만료는 300초였습니다. 이 문서는 decisions/request-timeout.md로 대체됐습니다.\n",
+    "server/timeouts.py": "REQUEST_TIMEOUT_SECONDS = 300\n",
+    "bin/verify_timeout.py": "from pathlib import Path\nimport runpy\nvalue = runpy.run_path(str(Path(__file__).resolve().parents[1] / \"server/timeouts.py\"))[\"REQUEST_TIMEOUT_SECONDS\"]\nprint(f\"request_timeout_seconds: expected=120 actual={value}\")\nraise SystemExit(0 if value == 120 else 1)\n"
+  }
+}

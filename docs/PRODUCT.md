@@ -3,80 +3,44 @@ id: PRODUCT
 kind: product
 status: active
 area: product
-summary: Current users, capabilities, requirements, and non-goals of Reporivet
-applies_to:
-  - "src/**"
-  - "tests/**"
+summary: 기존 프로젝트 근거를 찾도록 돕는 runtime 없는 agent 진입점
 ---
 
 # Product
 
 ## Purpose
 
-Reporivet initializes and safely maintains a repository-local, document-first operating environment for coding agents. It supports explicit project definition, read-only inventory and adoption, restartable implementation, and evidence-bound completion. A generated project remains understandable and operable from version-controlled repository artifacts after the installed package is removed.
+Reporivet은 프로젝트의 기존 문서·코드·검사 방법을 agent가 찾아 쓰도록 짧은 진입점을 안전하게 구성한다. 다음 미출시 버전은 0.3.0.dev1이다. 공개 v0.2.0의 고정 문서 schema·copied runtime·Gate·계획 종료 모델은 [ADR-0002](decisions/ADR-0002-entrypoint-only-boundary.md)로 대체한다.
 
 ## Users and jobs
 
-- A developer starting a project needs a structured definition that separates confirmed facts, proposals, open questions, and sources.
-- A maintainer adopting existing code needs a deterministic audit and additive installation that preserves repository authority.
-- A Main Agent needs a small entry map, explicit sources of truth, one living ExecPlan, bounded Task Packets, traceability, and evidence-bound completion.
-- A Sub Agent needs exact read/write scope, acceptance IDs, verification commands, and stop conditions.
-- A release or verification maintainer needs one canonical run, inspectable artifacts, an explicit Git target, conservative risk judgment, and package-removal evidence.
+- 문서가 다양한 경로에 흩어진 저장소의 maintainer는 기존 지식을 복제하지 않고 진입점을 정리한다.
+- 새 agent는 AGENTS 또는 실행 환경의 연결 문서에서 시작해 실제 근거·코드·검사 명령을 찾는다.
+- 이미 Spec Kit/OpenSpec/Kiro 또는 자체 문서 체계가 있으면 그것을 그대로 사용한다. 이미 잘 연결되어 있으면 Reporivet을 추가하지 않아도 된다.
 
-## Current capabilities
+## Product boundary
 
-- Initialize a new or existing project through `reporivet init` without overwriting project-owned authority.
-- Start or resume a fourteen-section project definition with `reporivet define`, persisted progress, stable `JRN-*`, `REQ-P0-*`, and `AC-*` identifiers, and separate Confirmed, Proposed, Open, and Sources evidence.
-- Validate and transactionally finalize confirmed definition evidence into one product specification and one first-slice ExecPlan.
-- Inventory an existing repository deterministically through `reporivet audit` or `./dev/audit` without writes or project-command execution.
-- Adopt through `reporivet define --adopt`, preserving README, instructions, architecture, CI, configuration, and other authority while keeping inferred commands in review.
-- Generate a short `AGENTS.md`, current-state documents, durable templates, one-plan Task Packets, technical-debt tracking, and repository-local command entry points.
-- Validate opt-in product-to-plan-to-task-to-evidence traceability while leaving historical non-opt-in plans unchanged.
-- Create module contracts only for justified boundaries, generate a non-authoritative actual-path code map, and route context by path, area, or plan.
-- Run exactly one shared Verification Run per `./dev/verify`, preserving check JSON, logs, `manifest.json`, `gate.json`, and `report.md` on success, candidate failure, or infrastructure error.
-- Evaluate explicit local target evidence and changed paths under conservative Gate policy with `PASS`, `REVIEW`, `BLOCK`, and `INCONCLUSIVE` verdicts in shadow or enforce mode.
-- Close a plan only against one clean verified commit and persist the run ID, manifest SHA-256, verdict, verified SHA, criterion evidence, and any genuine human REVIEW reason.
-- Generate CI that verifies an explicit head/base target once and uploads `.harness/runs/` on success or failure.
-- Diagnose ownership and configuration through `reporivet doctor`, and report maintenance candidates through `garden` without automatic deletion.
-- Preserve repository-local definition, audit, context, planning, checks, verification, closure, and gardening after uninstalling Reporivet.
-- Block common secret, personal, raw-log, cache, infrastructure-state, and build-output files and reject force-added tracked sensitive material.
+Installed CLI는 `init`, `audit`, `upgrade`, `doctor`만 제공한다. target에는 AGENTS의 한정된 관리 블록과 선택적인 CLAUDE 연결만 작성한다. 프로젝트 문서군·설정·명령·CI·작업 상태를 생성하거나 대체하지 않는다. 패키지 제거 후에도 일반 Markdown과 프로젝트 자체 도구로 운영할 수 있다.
 
-Detailed journey, P0 requirement, and acceptance authority for definition, adoption, traceability, evidence, Gate, and migration is [`SPEC-REPORIVET-002`](product-specs/SPEC-REPORIVET-002-project-definition-adoption-and-evidence-gate.md).
+관찰된 파일 경로는 비권위적 참고 자료다. 어떤 문서가 현재 요구사항인지, 어떤 제안이 승인됐는지, 어떤 검사가 충분한지는 사용자와 agent가 근거를 읽어 판단한다. 생성된 경로 목록은 사용자를 별도 경로로 자동 routing하지 않는다. 관리 블록 밖의 사용자 지침은 프로젝트 소유이며 그곳에 의미적 routing을 직접 기록할 수 있다.
 
-## Requirements and invariants
+## Requirements
 
-- **REQ-OWN-1:** Project-owned documents and `dev/harness.toml` are created only when absent and are never overwritten by upgrade.
-- **REQ-MAN-1:** Upgradable files and shared blocks carry explicit managed ownership markers.
-- **REQ-DEF-1:** Commands validate persisted definition structure; they do not invent semantic product answers or promote proposals to facts.
-- **REQ-AUD-1:** Audit is deterministic, read-only, path-safe, and does not execute project commands.
-- **REQ-CMD-1:** Configured completion commands are argument arrays and missing tools fail visibly rather than disappearing.
-- **REQ-PLAN-1:** Complex work remains restartable from one ExecPlan and the repository without chat history or another task system.
-- **REQ-TRACE-1:** Confirmed opt-in traceability must connect product journeys and P0 requirements to criteria, tasks, evidence, and the verified commit.
-- **REQ-AGENT-1:** Main owns scope, integration, document lifecycle, verification target, and completion; Sub work remains bounded.
-- **REQ-VERIFY-1:** `./dev/verify` is the only completion gate and produces one shared run with deterministic check and Gate artifacts.
-- **REQ-GIT-1:** Gate and closure use only explicit local base/head/target evidence; they never infer a parent, assume a remote, or fetch.
-- **REQ-CLOSE-1:** Missing or mismatched evidence cannot produce PASS, and BLOCK or INCONCLUSIVE cannot be overridden.
-- **REQ-PORT-1:** The copied generated runtime has no dependency on the initializer package after generation.
-- **REQ-SAFE-1:** Initialization and adoption refuse symlinked, nonregular, or unmarked canonical command collisions before writes.
-- **REQ-SAFE-2:** Ignore and tracked-file controls protect local secrets and artifacts while preserving source, examples, migrations, and lockfiles.
+- **REQ-ENTRY:** 기존 파일 이름·배치·내용을 유지하면서 실제 경로로 연결한다. 문서 이름, frontmatter, ExecPlan schema를 강제하지 않는다.
+- **REQ-OWN:** target 쓰기는 명시적인 AGENTS/선택적 CLAUDE 관리 블록으로 제한한다. 사용자 본문 bytes와 기존 mode를 보존한다. `upgrade`에서 CLAUDE 연결을 preview/apply하려면 두 실행 모두 `--claude`를 명시한다.
+- **REQ-SAFE:** symlink/nonregular/잘못된 marker/동시 변경을 보수적으로 처리한다. 렌더링은 immutable preimage에 결속하고 rollback은 자기 postimage만 복원한다.
+- **REQ-READ:** audit/doctor/preview는 target에 쓰지 않고 프로젝트 명령·파일 내용을 실행하지 않는다. 관찰 범위와 제외를 명시한다. audit은 내용 비출력이고 preview는 검토를 위해 본문이 포함될 수 있다.
+- **REQ-PREVIEW:** init/upgrade dry-run은 immutable operation의 실제 before/after unified diff와 no-op을 표시한다. terminal 제어·방향 문자는 escaped human preview로 표시하며 출력은 적용 가능한 patch가 아니다. fingerprint는 승인·잠금·다음 실행 결과를 보장하지 않는다.
+- **REQ-CHECK:** doctor는 기계적 경로·소유권 점검이다. 의미적 문서 정확성·agent 능력·작업 완료를 판정하지 않는다.
+- **REQ-EVAL:** 진입점 품질은 실제 fresh agent의 근거 선택·작업 결과로 확인한다. 적용 전후 대조와 한계를 기록하고 향상이 없으면 그대로 보고한다. 이전 평가의 template 대상과 현재 UX template의 근거를 섞지 않는다.
+- **REQ-MIGRATE:** 이전 runtime형 target은 자동 삭제/변환 없이 쓰기 전 거부한다. 기존 v0.2 release와 사용자 문서를 보존한다.
 
-## CLI interaction and internationalization
-
-CLI commands use explicit subcommands, visible exit codes, and actionable errors. `--dry-run` does not create or modify a target path. Definition starts only when explicitly requested; initialization and upgrade do not invent product work. Audit is deterministic and read-only, and adoption audits before writing and fails closed on authority conflicts. Commands compute progress and validate structure; a human or Main supplies semantic answers and resolves conflicts. Generated entry points use stable names under `dev/` so agents do not invent project commands.
-
-The CLI emits plain UTF-8 text and accepts Unicode project names, summaries, areas, plan titles, and safe REVIEW reasons. Generated operational documents use stable English headings for predictable parsing; project content may use any UTF-8 language.
+세부 수락 조건은 [SPEC-REPORIVET-003](product-specs/SPEC-REPORIVET-003-agent-entrypoints.md)에 있다.
 
 ## Non-goals
 
-- Running or supervising autonomous agents, model judges, or an LLM evaluation service.
-- Providing a task database, lease service, scheduler, daemon, journal, replay engine, plugin, MCP bridge, or external control plane.
-- Generating host-specific Skill/runtime target bundles or maintaining duplicate completion gates.
-- Automatically deciding semantic product quality, resolving requirement conflicts, or manufacturing REVIEW acceptance through a confidence score, semantic interviewer, or automatic human-approval substitute.
-- Creating, reviewing, merging, or publishing GitHub changes or packages.
-- Backing up, archiving, deprecating through an external write, deleting, or otherwise operating the former repository.
-- Rewriting historical completed plans or project-owned authority to retrofit new behavior.
+고정 문서 생성, 제품 정의 인터뷰/명세 작성 자동화, Task 분해·추적성 schema, Gate·완료 승인, copied runtime, command 실행 engine, secret scanner, CI 생성, agent 실행/감독 서비스, 모델 평가 API, telemetry, 원격 게시·배포는 제품 책임이 아니다. 프로젝트의 기존 도구와 운영 책임을 존중한다.
 
-## Open questions
+## Language and limits
 
-- Native Windows wrapper generation is not implemented.
-- Additional project profiles should be added only when repeated repository evidence cannot be expressed in `dev/harness.toml`.
+파일은 UTF-8로 다루고 경로와 사용자 입력이 Markdown 구조를 깨지 않도록 처리한다. 제한된 inventory는 임의 구조의 완전한 의미적 이해가 아니다. 실험 fixture의 성공은 다른 모델·대규모 저장소·실제 업무 성능을 보장하지 않는다.
