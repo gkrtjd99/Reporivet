@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-0010
 kind: exec-plan
-status: active
+status: completed
 owner: main
 area: comparative-validation
 created: 2026-09-09
@@ -24,7 +24,9 @@ base_commit: "226b15af1b8ccf1d82ba410322a214f1f593cc7e"
 - [x] B1/B2 수선 후보 C2의 canonical 59 tests와 독립 안전성 재검증을 통과했다.
 - [x] 동일 조건의 실제 개발 pilot 4개와 Main의 외부 oracle 검증을 완료했다.
 - [x] 비용 기준에 미달한 pilot을 반올림해 통과시키지 않고 효용 우위를 UNPROVEN으로 유지했다.
-- [x] 조건 미충족으로 PR 생성·push·merge를 하지 않았다.
+- [x] C2 보고 시점에는 조건 미충족으로 PR 생성·push·merge를 하지 않았다.
+- [x] 후속 사용자 명시 승인에 따라 별도 게시 검토·정확 후보 CI 후 PR #3을 merge했다.
+- [x] Merge 후 main CI와 로컬 tree 일치·clean을 확인하고 M4 근거를 수락했다.
 
 ## Context and Orientation
 
@@ -291,7 +293,7 @@ Verifier가 확인한 한계도 유지한다. Oracle의 17/20 사례는 독립�
 | AC-4 | T2 | PASS | 경계·제거 기능·준비 공정성·oracle·계산 독립 검토 및 재실행 | C2 / 네 fixture postimages | 담당 검토 범위 PASS | Main 검토 근거 수락; 제품 우위 아님 |
 | AC-5 | Main | UNPROVEN | 게시 전제 미충족으로 source commit/push·PR·merge 미실행 | C2 | 미게시 추천 | merge 미승인; 조건부 권한 경계 준수 |
 
-## Outcomes and Retrospective — 최종
+## Outcomes and Retrospective — C2 보고 시점
 
 B1/B2 수선과 검증, 실제 개발 pilot 및 독립 비교 검토를 마쳤다. 그러나 사용자 조건인 **“기존 main보다 훨씬 좋음”은 입증하지 못했으므로 PR·merge하지 않는다.** 개선 방향의 관찰치를 없던 것으로 취급하지도, 문턱 미달을 반올림·평균·다른 지표로 바꿔 통과시키지도 않는다. 비교 실행 완료와 제품 우수성·게시 수락은 별개다.
 
@@ -299,7 +301,7 @@ B1/B2 수선과 검증, 실제 개발 pilot 및 독립 비교 검토를 마쳤�
 
 최종 원본 후보는 C2와 같은 제품·기존 문서·테스트에 이 계획의 결과 기록만 더한 상태다. LAB의 `final-source-manifest.json`은 base + 전체 nonignored 파일 hashes/modes + 삭제목록으로 이를 식별한다. 자기 hash를 자기 문서 안에 넣는 대신 외부 manifest로 식별하며 fingerprint는 승인 자체가 아니다. 최종 원본 검사 기록은 `final-source-check.log`이고 Main의 마지막 확인에 사용한다.
 
-## Follow-ups — 현재
+## Follow-ups — C2 보고 시점
 
 - **B1/B2, owner Main: 해결.** C2의 전체 검사·독립 재검증·Main 수락으로 제거 조건을 충족했다. 과거 main과 기존 target을 소급 수정하거나 migration하지 않았다.
 - **AC-3, owner Main: UNPROVEN.** 동일 예산의 이번 pilot 기준 미달로 추가 반복·게시를 중단했다. 향후 평가를 재개하려면 목적·표본·환경·비용 지표를 관찰 전에 다시 명시한 범위가 필요하다. 이번 수치를 유리하게 해석하려고 기존 기준을 소급 변경하지 않는다.
@@ -316,19 +318,38 @@ B1/B2 수선과 검증, 실제 개발 pilot 및 독립 비교 검토를 마쳤�
 
 ### T5 — Main의 게시 및 독립 검토 통합
 
-- State: active
+- State: completed
 - Task type: support
 - Depends on: T1–T4 및 후속 사용자 승인.
 - Execution constraints: Git/GitHub/검증 능력; Main만 source 계획·index·branch·commit·원격 PR/merge를 변경; 별도 읽기 전용 Verifier는 10분, 재위임/Skill/설치/원격 쓰기 금지. Main 게시 예산 30분, 같은 접근법 두 번 실패 시 중단.
 - Outcome: 명시 승인된 현재 전체 entrypoint-only 후보의 PR 및 merge 증거.
-- Allowed writes: 이 계획과 수락 후 completed 경로 이동, 현재 고정 후보 전체의 의도적 staging/commit/push, 해당 PR 본문·merge. 임시 검증 증거는 기존 LAB만 사용.
+- Allowed writes: 이 계획과 수락 후 completed 경로 이동, 빈 active 디렉터리 보존용 `.gitkeep`, 현재 고정 후보 전체의 의도적 staging/commit/push, 해당 PR 본문·merge와 실제 merge 결과를 기록하는 문서-only 후속 PR. 임시 검증 증거는 기존 LAB만 사용.
 - Protected paths: 새 제품 변경, 관련 없는 사용자 파일·설정, 기존 release/target 및 권한 정책.
 - Non-goals: 위 공통 Non-goals, 성능 실험 재채점·확증 주장.
 - Acceptance: M4-AC1–4. 원래 AC-3은 게시의 필수 확증 조건에서 분리하지만 판정은 UNPROVEN으로 보존한다.
 - Verify: source canonical, 독립 전체 변경 검토, staged tree 대조, 원격 CI·merge SHA·로컬 clean 확인.
 - Stop conditions: 새 결함·예상하지 않은 후보 변경·CI 실패·원격 통합 충돌·권한 부족.
-- Result: 게시 전 M4-AC1/2 근거를 수락했다. 이전 최종 후보와의 차이는 Main의 이 계획 기록뿐이다. Python 3.13.15 canonical 59 tests가 통과했다. 별도 문맥의 전체 변경 검토는 새 blocker를 발견하지 않았고 58 tests, offline wheel/sdist build·inventory, 계약 drift·diff를 확인했다. 검토 시작/종료의 계획 제외 fingerprint는 `39f30156bdc760254c0e01c592b4d51ba89ecdd74d69cc2ccf17b4715dec527b`로 동일했다. 설치/네트워크 금지인 Verifier가 미실행한 distribution install/uninstall은 Main canonical에서 통과했다. 실제 Python 3.11 CI는 아직 UNPROVEN이며 성공을 확인하기 전 merge하지 않는다. 게시 전후 exact candidate와 CI 기록은 PR 및 후속 결과에 연결한다.
+- Result: 게시 전 M4-AC1/2 근거를 수락했다. 이전 최종 후보와의 차이는 Main의 이 계획 기록뿐이다. Python 3.13.15 canonical 59 tests가 통과했다. 별도 문맥의 전체 변경 검토는 새 blocker를 발견하지 않았고 58 tests, offline wheel/sdist build·inventory, 계약 drift·diff를 확인했다. 검토 시작/종료의 계획 제외 fingerprint는 `39f30156bdc760254c0e01c592b4d51ba89ecdd74d69cc2ccf17b4715dec527b`로 동일했다. 설치/네트워크 금지인 Verifier가 미실행한 distribution install/uninstall은 Main canonical에서 통과했다. 이후 실제 Linux/Python 3.11 PR CI가 성공했고, 같은 exact head를 정상 merge했다. Merge 후 main CI도 성공했으며 로컬 main을 fast-forward한 뒤 tree 일치·clean을 확인했다. 아래 M4 최종 근거를 Main이 수락하여 T5를 완료한다.
 
 ### M4 결정의 이유와 경계
 
 기존 영구 source 정책·Git·gh·dev/check를 그대로 사용한다. 변경하지 않는 대안도 안전하지만 사용자는 현재 제품 목표에 맞는 개선을 수락했다. 19.8169%를 20%로 반올림하거나 작업 평균으로 확증을 주장하는 대안은 증거 왜곡이므로 제외했다. 게시 자체를 승인한 사용자 결정과 실험 판정을 분리해, 유용한 변경을 통합하면서 검증 한계를 숨기는 실패를 방지한다. 새로운 보안/기능 결함이나 CI 실패가 생기면 merge를 중단하며, 장기 효용은 새 사전 설계 실험이 있을 때만 재평가한다.
+
+## M4 최종 수락과 완료 근거
+
+- 제품 PR: [#3](https://github.com/gkrtjd99/Reporivet/pull/3), `MERGED`, 2026-09-09T04:53:15Z.
+- Exact PR head: `f1402802c939119389fbe99eae7cf3a0b014c245`; base: `226b15af1b8ccf1d82ba410322a214f1f593cc7e`.
+- [PR CI](https://github.com/gkrtjd99/Reporivet/actions/runs/34312645799): Linux/Python 3.11 `verify` SUCCESS. 로컬 canonical도 Python 3.13.15에서 59 tests PASS.
+- Merge SHA: `e4aa3b9fcf794eef834273d8fecda10271e6f1b3`.
+- [Merge 후 main CI](https://github.com/gkrtjd99/Reporivet/actions/runs/34312711299): SUCCESS.
+- Main은 `git diff --exit-code f1402802c939119389fbe99eae7cf3a0b014c245 HEAD`로 merge tree와 검토 후보의 완전 일치를 확인했다. 로컬 main은 원격 main으로 fast-forward했고 작업 트리는 clean이었다.
+- Merge에는 `--match-head-commit`을 사용했고, 보호 우회·force push·release·패키지 배포·기존 target migration은 하지 않았다. 원격 base는 검토한 SHA 그대로였다.
+
+| Acceptance criterion | Result | Evidence | Reviewer recommendation | Main/human approval |
+|---|---|---|---|---|
+| M4-AC1 | PASS | 이전 후보 대조·명시적 staging·게시 파일 독립 검토 | 담당 범위 PASS | Main 수락 |
+| M4-AC2 | PASS | 별도 게시 검토, 로컬 59 tests와 exact PR CI | CI 확인 전 조건부 추천; 실제 CI로 미검증 부분 해소 | Main 수락 |
+| M4-AC3 | PASS | PR #3 MERGED, exact head/base·정상 merge·CI | 새 blocker 없음 | 후속 사용자 승인 + Main 실행 수락 |
+| M4-AC4 | PASS | merge SHA·main CI·tree 일치·로컬 clean 확인 | 원격 실행 확인은 Main 담당 | Main 확인·수락 |
+
+원래 AC-3의 **UNPROVEN**은 그대로다. 완료는 보편적 성능 우위의 인증이 아니라, 후속 사용자 승인에 따른 제품 통합과 근거 확인의 완료를 의미한다. M4 수락 후 이 계획을 completed로 이동한다. 이 문서 이동·실제 merge 근거 기록은 작은 문서-only 후속 PR로 남겨 제품 merge 전에 미래 결과를 완료했다고 기록하지 않는다. 빈 active 디렉터리는 `.gitkeep`으로 보존한다. 제품·테스트·CI를 추가 변경하지 않으므로 이 기록을 위해 제품 작업을 재개하지 않는다.
