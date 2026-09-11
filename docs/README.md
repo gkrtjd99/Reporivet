@@ -4,11 +4,7 @@ This directory records current product intent, architecture, quality, security, 
 
 ## Reading protocol
 
-1. Read root [`AGENTS.md`](../AGENTS.md), or the selected execution environment's entrypoint.
-2. Read [`PRODUCT.md`](PRODUCT.md) and the current product specification.
-3. Read [`../ARCHITECTURE.md`](../ARCHITECTURE.md), [`QUALITY.md`](QUALITY.md), and [`SECURITY.md`](SECURITY.md).
-4. Check [`exec-plans/active/`](exec-plans/active/) for matching complex work.
-5. Read only the source-of-truth documents and code needed by the current task; distinguish observed paths from authority.
+현재 작업에 해당하는 아래 경로를 선택한다. 관련 문서가 가리키는 명세·코드·검사를 필요한 범위에서 읽는다. 모든 문서를 미리 읽거나 진입점을 반복해서 읽을 필요는 없다.
 
 ## Stable entry points
 
@@ -27,14 +23,16 @@ This directory records current product intent, architecture, quality, security, 
 
 ## Route by change type
 
-| Change | Minimum context |
-|---|---|
-| Product behavior | Product overview, current product specification, relevant source and tests |
-| Entrypoint or file ownership | Architecture, security, initializer and focused tests |
-| User-visible behavior | Product overview, relevant source, reproduction, and tests |
-| Complex work | [`PLANS.md`](PLANS.md) and the matching active plan |
-| Documentation correction | Authoritative source or configuration plus affected current-state document |
-| Agent navigation evaluation | Evaluation protocol, controlled fixture, fresh prompt, and observable command evidence |
+| 하려는 변경 | 먼저 볼 문서 | 이어서 볼 근거 |
+|---|---|---|
+| CLI 동작이나 생성 결과 변경 | [`PRODUCT.md`](PRODUCT.md), [`product-specs/SPEC-REPORIVET-003-agent-entrypoints.md`](product-specs/SPEC-REPORIVET-003-agent-entrypoints.md) | 관련 구현과 테스트 |
+| 파일 쓰기·관리 블록·소유권 변경 | [`SECURITY.md`](SECURITY.md), [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | 파일 갱신 구현과 안전성 테스트 |
+| 구조·의존성·설계 변경 | [`../ARCHITECTURE.md`](../ARCHITECTURE.md), [`design-docs/index.md`](design-docs/index.md) | 관련 설계 원칙과 결정 |
+| 검사 방법이나 완료 기준 확인 | [`QUALITY.md`](QUALITY.md) | 실제 검사 스크립트와 테스트 |
+| 복잡하거나 위험한 변경 계획 | [`PLANS.md`](PLANS.md) | 관련 현재 문서와 진행 중 계획 |
+| 문서 내용 수정 | 수정 대상 문서의 원본 근거 | 영향을 받는 링크·관련 문서 |
+| 에이전트 탐색 평가 | [`references/agent-navigation-evaluation.md`](references/agent-navigation-evaluation.md) | 평가 프로토콜과 제어된 fixture |
+| 과거 결정의 이유 조사 | 관련 [`decisions/`](decisions/) 또는 [`exec-plans/completed/`](exec-plans/completed/) | 현재 문서에서 대체 여부 확인 |
 
 ## Document authority and lifecycle
 
