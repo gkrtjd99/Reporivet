@@ -8,11 +8,13 @@
 
 ```text
 AGENTS.md 또는 선택한 실행 환경의 진입 문서
-    → 프로젝트가 이미 가진 문서·명세·코드·검사 방법
+    → 프로젝트가 이미 가진 문서·명세·코드·검사 방법 (필요한 범위만 점진적 탐색)
     → agent가 근거를 읽고 기존 도구로 작업
 ```
 
 Reporivet은 문서 이름·디렉터리·frontmatter를 강제하지 않습니다. `handbook/`, `openspec/`, `specs/`, README 등 기존 경로를 제한된 범위에서 관찰해 안내를 추가합니다. **경로가 존재한다는 사실은 현재 요구사항이라는 뜻이 아닙니다.** 현재 근거와 읽기 순서는 프로젝트 소유자가 관리 블록 밖에 기록합니다.
+
+인위적인 에이전트 조직도(Main/Subagent 계층), 모델 라우팅, 프롬프트 오케스트레이션 프레임워크를 강제하지 않습니다. 에이전트가 전체 문서를 무차별적으로 사전 로딩(pre-loading)하거나 맹목적으로 작업을 하위 에이전트에 외주 주지 않고, 작업에 필요한 근거를 직접 단계적으로 탐색할 수 있도록 돕는 린한 목차형 진입점(Lean Table of Contents)을 지향합니다.
 
 이미 진입점이 잘 연결돼 있다면 추가하지 않아도 됩니다. Spec Kit·OpenSpec·Kiro 등의 명세·작업 절차를 대체하거나 같은 상태를 두 번 관리하지 않습니다.
 
@@ -23,7 +25,7 @@ project/
 └── 기존 문서·코드·설정·CI       # 이름·배치·내용 그대로 유지
 ```
 
-Target runtime·wrapper·harness.toml·버전 marker·고정 docs 문서군·ExecPlan schema·Gate·작업 상태·CI·`.gitignore`는 생성하지 않습니다. 패키지를 제거해도 일반 Markdown과 프로젝트 자체 도구로 사용할 수 있습니다.
+Target runtime·wrapper·harness.toml·버전 marker·고정 docs 문서군·ExecPlan schema·Gate·작업 상태·에이전트 조직도·CI·`.gitignore`는 생성하지 않습니다. 패키지를 제거해도 일반 Markdown과 프로젝트 자체 도구로 사용할 수 있습니다.
 
 ## 처음 사용하기
 
@@ -104,8 +106,8 @@ PYTHON=python3 ./dev/check
 
 이 소스에서만 CLAUDE portable block을 편집하고 `./dev/agent-contract-sync`로 AGENTS에 투영합니다. Target에는 source 전용 sync helper나 이 소스의 문서 구조를 배포하지 않습니다.
 
-- [현재 요구사항](docs/PRODUCT.md) · [상세 명세](docs/product-specs/SPEC-REPORIVET-003-agent-entrypoints.md)
-- [구조와 소유권](ARCHITECTURE.md) · [품질](docs/QUALITY.md) · [보안과 한계](docs/SECURITY.md)
+- [문서 지도](docs/README.md) · [현재 요구사항](docs/PRODUCT.md) · [상세 명세](docs/product-specs/SPEC-REPORIVET-003-agent-entrypoints.md)
+- [구조와 소유권](ARCHITECTURE.md) · [품질](docs/QUALITY.md) · [보안과 한계](docs/SECURITY.md) · [계획 정책](docs/PLANS.md)
 - [전환·파일 관리](docs/references/entrypoint-migration.md) · [탐색 평가](docs/references/agent-navigation-evaluation.md)
 - [현재 제품 경계 결정](docs/decisions/ADR-0002-entrypoint-only-boundary.md)
 
