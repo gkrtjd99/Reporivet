@@ -34,6 +34,18 @@ This directory records current product intent, architecture, quality, security, 
 | 에이전트 탐색 평가 | [`references/agent-navigation-evaluation.md`](references/agent-navigation-evaluation.md) | 평가 프로토콜과 제어된 fixture |
 | 과거 결정의 이유 조사 | 관련 [`decisions/`](decisions/) 또는 [`exec-plans/completed/`](exec-plans/completed/) | 현재 문서에서 대체 여부 확인 |
 
+## Optional operating guides
+
+아래는 프로젝트 소유자가 필요한 경우에만 채택하는 참고 자료다. Reporivet의 실행 기능이나 기본 정책이 아니며, `init`/`upgrade`가 target에 복사하거나 자동 로딩하지 않는다. 소스의 기존 진입점에서 이 지도를 통해 필요한 문서 하나만 선택한다.
+
+| 필요한 내용 | 선택해서 읽을 문서 |
+|---|---|
+| 문서 기반 작업·계약 인계·검증·재개 | [Document-driven native work](references/document-driven-native-work.md) |
+| 현재 하네스를 유지한 모델·effort 선택과 gateway 매핑 확인 | [Model and effort routing](references/model-effort-routing.md) |
+| Jev의 좁은 판단, 실패 처리, 관찰 평가 | [Jev decision guidance](references/jev-decision-guidance.md) |
+
+프로젝트에서 채택할 내용은 기존 문서의 소유권과 권한에 맞게 검토한다. 제품 경계는 계속 [ADR-0002](decisions/ADR-0002-entrypoint-only-boundary.md)와 [현재 명세](product-specs/SPEC-REPORIVET-003-agent-entrypoints.md)가 정한다.
+
 ## Document authority and lifecycle
 
 - `AGENTS.md` remains a compact portable routing contract. This source repository authors its portable block in `CLAUDE.md` and projects it with `./dev/agent-contract-sync`; generated targets do not receive the helper or this source-only file.
