@@ -4,6 +4,8 @@ import contextlib
 import io
 import json
 import os
+import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -102,12 +104,12 @@ class AuditAdoptionTests(unittest.TestCase):
             original = initializer._atomic_write
             calls = 0
 
-            def fail_second(operation: object) -> None:
+            def fail_second(operation: object, **kwargs: object) -> None:
                 nonlocal calls
                 calls += 1
                 if calls == 2:
                     raise OSError("injected write failure")
-                original(operation)
+                original(operation, **kwargs)
 
             with mock.patch.object(initializer, "_atomic_write", side_effect=fail_second):
                 code, output, error = self.run_cli("init", "--root", str(root), "--claude")
@@ -115,6 +117,109 @@ class AuditAdoptionTests(unittest.TestCase):
             self.assertIn("rolled back", error)
             self.assertEqual(before, agents.read_bytes())
             self.assertFalse(claude.exists())
+
+    def test_new_file_postimages_are_rolled_back_or_preserved_after_divergence(self) -> None:
+        for divergence in (False, True):
+            with self.subTest(divergence=divergence), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                agents, claude = root / "AGENTS.md", root / "CLAUDE.md"
+                real_rmdir = os.rmdir
+                calls = 0
+
+                def cleanup_then_fail(path: object, *args: object, **kwargs: object) -> None:
+                    nonlocal calls
+                    real_rmdir(path, *args, **kwargs)
+                    if not Path(path).name.startswith(".reporivet-write-"):
+                        return
+                    calls += 1
+                    if calls == 2:
+                        if divergence:
+                            agents.chmod(stat.S_IMODE(agents.stat().st_mode) ^ stat.S_IXUSR)
+                        raise OSError("failure after publishing and cleanup")
+
+                with mock.patch.object(initializer.os, "rmdir", side_effect=cleanup_then_fail):
+                    code, output, error = self.run_cli("init", "--root", str(root), "--claude")
+                self.assertEqual(code, 2, output + error)
+                self.assertFalse(claude.exists())
+                self.assertEqual(agents.exists(), divergence)
+                self.assertIn("rollback incomplete" if divergence else "rolled back", error)
+                self.assertFalse(any(p.name.startswith(".reporivet-write-") for p in root.iterdir()))
+
+    def test_concurrent_identical_creation_is_not_rolled_back(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            agents = root / "AGENTS.md"
+
+            def competing_creation(src: object, dst: object, *, src_dir_fd: int, follow_symlinks: bool) -> None:
+                descriptor = os.open(src, os.O_RDONLY, dir_fd=src_dir_fd)
+                try:
+                    mode = stat.S_IMODE(os.fstat(descriptor).st_mode)
+                    content = os.read(descriptor, 65536)
+                finally:
+                    os.close(descriptor)
+                target = Path(dst)
+                target.write_bytes(content)
+                target.chmod(mode)
+                raise FileExistsError("concurrent creation")
+
+            with mock.patch.object(initializer.os, "link", side_effect=competing_creation):
+                code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 2, output + error)
+            self.assertTrue(agents.exists())
+            self.assertIn("rollback incomplete", error)
+            self.assertFalse(any(p.name.startswith(".reporivet-write-") for p in root.iterdir()))
+
+    def test_replaced_staging_directory_cannot_change_symlink_target_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory).resolve()
+            root, victim = parent / "project", parent / "victim"
+            root.mkdir()
+            victim.mkdir(mode=0o755)
+            victim.chmod(0o755)
+            real_open = os.open
+            replacement = None
+
+            def replace_before_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+                nonlocal replacement
+                if isinstance(path, (str, Path)) and Path(path).name.startswith(".reporivet-write-"):
+                    replacement = Path(path)
+                    replacement.rmdir()
+                    replacement.symlink_to(victim, target_is_directory=True)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(initializer.os, "open", side_effect=replace_before_open):
+                code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 2, output + error)
+            self.assertEqual(stat.S_IMODE(victim.stat().st_mode), 0o755)
+            self.assertFalse((root / "AGENTS.md").exists())
+            if replacement is not None and replacement.is_symlink():
+                replacement.unlink()
+
+    def test_replaced_staging_directory_is_never_recursively_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory).resolve()
+            root, victim = parent / "project", parent / "victim"
+            root.mkdir()
+            victim.mkdir()
+            (victim / "valuable.txt").write_text("keep")
+            real_open = os.open
+            replacement = None
+
+            def replace_before_open(path: object, flags: int, *args: object, **kwargs: object) -> int:
+                nonlocal replacement
+                if isinstance(path, (str, Path)) and Path(path).name.startswith(".reporivet-write-"):
+                    replacement = Path(path)
+                    replacement.rmdir()
+                    victim.rename(replacement)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(initializer.os, "open", side_effect=replace_before_open):
+                code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 2, output + error)
+            self.assertIsNotNone(replacement)
+            self.assertEqual((replacement / "valuable.txt").read_text(), "keep")
+            self.assertFalse((root / "AGENTS.md").exists())
+            replacement.rename(victim)
 
     def test_fenced_and_inline_markers_are_not_managed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -233,6 +338,154 @@ class AuditAdoptionTests(unittest.TestCase):
             self.assertFalse((root / "AGENTS.md").exists())
             self.assertIn("Mutation plan fingerprint:", output)
 
+    def test_missing_root_preview_matches_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / "new"
+            args = ("init", "--root", str(root), "--name", "Fixture", "--claude")
+            code, preview, error = self.run_cli(*args, "--dry-run")
+            self.assertEqual(code, 0, error)
+            self.assertFalse(root.exists())
+            self.assertNotIn("directory unreadable", preview)
+            code, applied, error = self.run_cli(*args)
+            self.assertEqual(code, 0, error)
+            fingerprint = lambda output: next(line for line in output.splitlines() if line.startswith("Mutation plan fingerprint:"))
+            self.assertEqual(fingerprint(preview), fingerprint(applied))
+            for filename in ("AGENTS.md", "CLAUDE.md"):
+                expected = "\n".join("+" + line for line in (root / filename).read_text(encoding="utf-8").splitlines())
+                self.assertIn(expected, preview)
+
+    def test_missing_root_preview_refuses_if_root_appears(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / "new"
+            original = initializer._prepare
+
+            def appear(*args: object, **kwargs: object) -> object:
+                result = original(*args, **kwargs)
+                root.mkdir()
+                (root / "user.txt").write_text("preserve")
+                return result
+
+            with mock.patch.object(initializer, "_prepare", side_effect=appear):
+                code, output, error = self.run_cli("init", "--root", str(root), "--dry-run")
+            self.assertEqual(code, 2, output + error)
+            self.assertIn("appeared during preview", error)
+            self.assertEqual((root / "user.txt").read_text(), "preserve")
+            self.assertFalse((root / "AGENTS.md").exists())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX umask semantics")
+    def test_failed_init_removes_new_mode_zero_root(self) -> None:
+        script = (
+            "import os, sys; os.umask(0o777); "
+            "sys.path.insert(0, sys.argv[1]); "
+            "from reporivet.cli import main; sys.exit(main(sys.argv[2:]))"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / "new"
+            result = subprocess.run([sys.executable, "-c", script, str(REPOSITORY / "src"), "init", "--root", str(root)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertFalse(root.exists())
+
+    def test_failed_init_preserves_new_root_if_user_populates_or_replaces_it(self) -> None:
+        for scenario in ("populated", "replaced"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve() / "new"
+                def fail(*args: object, **kwargs: object) -> None:
+                    if scenario == "replaced":
+                        root.rename(root.with_name("original"))
+                        root.mkdir()
+                    else:
+                        (root / "user.txt").write_text("preserve")
+                    raise initializer.InitError("injected failure")
+                with mock.patch.object(initializer, "_prepare", side_effect=fail):
+                    code, output, error = self.run_cli("init", "--root", str(root))
+                self.assertEqual(code, 2, output + error)
+                self.assertTrue(root.is_dir())
+                if scenario == "populated":
+                    self.assertEqual((root / "user.txt").read_text(), "preserve")
+
+    def test_root_creation_permission_error_is_reported_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve() / "new"
+            with mock.patch.object(Path, "mkdir", side_effect=PermissionError("permission denied")):
+                code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 2, output + error)
+            self.assertIn("cannot create project root", error)
+            self.assertIn("permission denied", error)
+            self.assertNotIn("Traceback", output + error)
+            self.assertFalse(root.exists())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX permissions")
+    def test_unwritable_parent_reports_root_creation_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory).resolve() / "locked"
+            parent.mkdir()
+            parent.chmod(0o555)
+            try:
+                root = parent / "new"
+                env = dict(os.environ, PYTHONPATH=str(REPOSITORY / "src"), PYTHONDONTWRITEBYTECODE="1")
+                result = subprocess.run([sys.executable, "-B", "-m", "reporivet", "init", "--root", str(root)], env=env, capture_output=True, text=True)
+                if result.returncode == 0:
+                    self.skipTest("process can write to a mode-0555 directory")
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("cannot create project root", result.stderr)
+                self.assertNotIn("Traceback", result.stdout + result.stderr)
+                self.assertFalse(root.exists())
+            finally:
+                parent.chmod(0o755)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX raw-byte filenames")
+    def test_non_utf8_names_are_safely_omitted_from_audit_and_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            raw_path = os.fsencode(root) + b"/invalid-\xff.txt"
+            try:
+                fd = os.open(raw_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except (OSError, UnicodeError) as exc:
+                self.skipTest(f"filesystem does not support non-UTF-8 names: {exc}")
+            with os.fdopen(fd, "wb") as file:
+                file.write(b"private file content")
+            (root / "README.md").write_text("valid content")
+            env = dict(os.environ, PYTHONPATH=str(REPOSITORY / "src"), PYTHONIOENCODING="utf-8:strict", PYTHONDONTWRITEBYTECODE="1")
+            for command in (("audit",), ("init", "--dry-run")):
+                result = subprocess.run([sys.executable, "-B", "-m", "reporivet", *command, "--root", str(root)], env=env, capture_output=True)
+                stdout = result.stdout.decode("utf-8", "strict")
+                stderr = result.stderr.decode("utf-8", "strict")
+                self.assertEqual(result.returncode, 0, stdout + stderr)
+                self.assertIn("non-UTF-8 path omitted", stdout)
+                self.assertNotIn("invalid-", stdout + stderr)
+                self.assertNotIn("private file content", stdout + stderr)
+                self.assertFalse((root / "AGENTS.md").exists())
+            with open(raw_path, "rb") as file:
+                self.assertEqual(file.read(), b"private file content")
+
+    def test_surrogate_entry_is_omitted_before_path_access(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            entry = mock.Mock()
+            entry.name = "private-\udcff.txt"
+            scan = mock.MagicMock()
+            scan.__enter__.return_value = iter([entry])
+            with mock.patch.object(initializer.os, "scandir", return_value=scan):
+                paths, exclusions = initializer._observed_paths(root)
+            self.assertEqual(paths, [])
+            self.assertEqual(exclusions, [". (non-UTF-8 path omitted)"])
+            entry.is_symlink.assert_not_called()
+
+    @unittest.skipUnless(os.name == "posix", "POSIX surrogate-escaped command arguments")
+    def test_non_utf8_root_path_is_refused_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = str(Path(directory).resolve() / "private-\udcff")
+            env = dict(os.environ, PYTHONPATH=str(REPOSITORY / "src"), PYTHONIOENCODING="utf-8:strict", PYTHONDONTWRITEBYTECODE="1")
+            for command in (("audit",), ("init", "--dry-run"), ("init",)):
+                result = subprocess.run([sys.executable, "-B", "-m", "reporivet", *command, "--root", root], env=env, capture_output=True)
+                stdout = result.stdout.decode("utf-8", "strict")
+                stderr = result.stderr.decode("utf-8", "strict")
+                self.assertEqual(result.returncode, 2, stdout + stderr)
+                self.assertIn("project root path is not valid UTF-8", stderr)
+                self.assertNotIn("private-", stdout + stderr)
+                self.assertNotIn("Traceback", stdout + stderr)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
     def test_audit_stops_at_entry_budget_and_reports_truncation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -244,6 +497,65 @@ class AuditAdoptionTests(unittest.TestCase):
             self.assertLessEqual(len(observed), initializer.MAX_OBSERVED_PATHS)
             self.assertTrue(any("work/exclusion budget reached" in item["detail"] for item in exclusions))
             self.assertLessEqual(len(exclusions), initializer.MAX_EXCLUSIONS + 1)
+
+    def test_document_paths_are_not_crowded_out_by_ordinary_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "README.md").write_text("private document contents\n")
+            for index in range(90):
+                (root / f"item-{index:03d}.txt").write_text("ordinary content\n")
+
+            before = tuple(sorted(path.relative_to(root).as_posix() for path in root.rglob("*")))
+            code, output, error = self.run_cli("audit", "--root", str(root))
+            self.assertEqual(code, 0, error)
+            self.assertEqual(before, tuple(sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))))
+            self.assertNotIn("private document contents", output)
+            findings = json.loads(output)["findings"]
+            self.assertTrue(any(item["path"] == "docs/README.md" and item["category"] == "document" and item["status"] == "confirmed" for item in findings))
+            self.assertTrue(any("file observation limit reached" in item["detail"] for item in findings))
+
+            code, output, error = self.run_cli("init", "--root", str(root))
+            self.assertEqual(code, 0, output + error)
+            agents = (root / "AGENTS.md").read_text()
+            self.assertIn("[docs/README.md](./docs/README.md) (observed path; not authority)", agents)
+            self.assertNotIn("private document contents", agents)
+            observed, exclusions = initializer._observed_paths(root, include_instructions=False)
+            self.assertEqual(len(observed), initializer.MAX_OBSERVED_PATHS)
+            self.assertTrue(any(path.startswith("item-") for path in observed))
+            self.assertTrue(any("file observation limit reached" in item for item in exclusions))
+
+    def test_observation_balances_and_reallocates_category_quotas(self) -> None:
+        for document_count, other_count in ((60, 90), (3, 90), (90, 3)):
+            with self.subTest(documents=document_count, others=other_count), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                docs = root / "docs"
+                docs.mkdir()
+                for index in range(document_count):
+                    (docs / f"doc-{index:03d}.rst").touch()
+                for index in range(other_count):
+                    (root / f"item-{index:03d}.txt").touch()
+                observed, exclusions = initializer._observed_paths(root)
+                self.assertEqual(len(observed), min(initializer.MAX_OBSERVED_PATHS, document_count + other_count))
+                docs_seen = sum(path.startswith("docs/") for path in observed)
+                expected_documents = min(document_count, max(initializer.MAX_OBSERVED_PATHS // 2, initializer.MAX_OBSERVED_PATHS - other_count))
+                self.assertEqual(docs_seen, expected_documents)
+                self.assertTrue(all((root / path).is_file() for path in observed))
+                self.assertTrue(any("file observation limit reached" in item for item in exclusions))
+                self.assertEqual((observed, exclusions), initializer._observed_paths(root))
+
+    def test_document_heuristic_includes_non_docs_directory_formats(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "handbook").mkdir()
+            expected = ("README", "guide.rst", "handbook/start.mdx", "handbook/README.txt")
+            for relative in expected:
+                (root / relative).touch()
+            for index in range(90):
+                (root / f"item-{index:03d}.txt").touch()
+            observed, _ = initializer._observed_paths(root)
+            self.assertTrue(set(expected).issubset(observed))
 
     def test_partial_markers_and_unclosed_fences_fail_without_writes(self) -> None:
         start, end = initializer.AGENTS_START, initializer.AGENTS_END

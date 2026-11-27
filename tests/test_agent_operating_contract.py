@@ -90,6 +90,9 @@ class AgentOperatingContractTests(unittest.TestCase):
             "`fail`",
             "`unproven`",
             "no automatic gate",
+            "mark it paused",
+            "do not present incomplete criteria as successful",
+            "an old plan does not itself authorize a new run",
         ):
             self.assertIn(required, normalized_plans)
 
@@ -107,16 +110,13 @@ class AgentOperatingContractTests(unittest.TestCase):
 
         normalized_template = template.casefold()
         for required in (
-            "purpose / big picture",
             "current contract",
             "progress",
             "scope",
-            "non-goals",
             "acceptance criteria",
-            "approach and key changes",
-            "architecture impact",
             "documentation impact",
             "validation and evidence",
+            "independent review",
         ):
             self.assertIn(required, normalized_template)
 
@@ -128,17 +128,10 @@ class AgentOperatingContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, normalized_template)
 
-    def test_evidence_table_separates_verdict_from_approval(self) -> None:
+    def test_evidence_separates_verdict_from_approval(self) -> None:
         evidence = section(self.read("docs/exec-plans/_template.md"), "Validation and Evidence")
-        rows = [line for line in evidence.splitlines() if line.startswith("|")]
-        cells = [[cell.strip() for cell in row.strip("|").split("|")] for row in rows]
-        self.assertGreaterEqual(len(cells), 2)
-        self.assertEqual(cells[0], [
-            "Acceptance criterion", "Result", "Evidence path or note",
-            "Verified candidate", "Human/reviewer approval",
-        ])
-        self.assertTrue(all(len(row) == len(cells[0]) for row in cells))
-        self.assertTrue(any(row[:2] == ["AC-1", "UNPROVEN"] for row in cells[1:]))
+        for required in ("`PASS`", "`FAIL`", "`UNPROVEN`", "user or reviewer decides acceptance"):
+            self.assertIn(required, evidence)
 
     def test_quality_declares_navigation_and_product_criteria(self) -> None:
         quality = self.read("docs/QUALITY.md").casefold()

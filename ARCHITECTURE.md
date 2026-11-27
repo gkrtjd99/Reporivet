@@ -39,9 +39,13 @@ Target에는 Reporivet runtime이나 설정을 설치하지 않는다. agent의 
 
 관찰은 깊이·개수가 제한된 실제 경로 목록이며 문서의 의미를 추론하거나 project command를 실행하지 않는다. 파일 이름이 명령이나 Markdown 문법으로 해석되지 않도록 렌더링한다. 관리 블록 밖 프로젝트 지침이 의미적 경로와 소유권을 유지한다. 생성된 안내도 경로 관찰을 authority나 자동 routing으로 바꾸지 않는다.
 
+관찰한 파일에서 최대 80개를 선택할 때 문서처럼 보이는 경로와 그 외 경로에 각각 최대 40개를 우선 배정하고 남는 자리를 재배분한다. 이 경로·확장자 분류는 선택 균형을 위한 휴리스틱이지 중요도·문서 권위 판정이 아니다. 방문 예산 512개와 깊이 제한은 별개이므로 방문 전 제외된 경로의 선택은 보장하지 않는다. `audit`와 생성 안내에는 동일한 분류·할당 규칙이 적용되지만 진입점 파일 자체의 관찰 포함 여부는 다르다.
+
 `init`/`upgrade`의 dry-run은 쓰기 전에 준비한 동일 immutable operation의 before/after bytes로 실제 unified diff를 만든다. 변경이 없으면 명시적인 no-op을 출력한다. 이 diff는 terminal에서 사람이 검토하는 escaped preview일 뿐 그대로 적용하는 patch가 아니다. audit은 반대로 파일 내용을 출력하지 않는 경로 관찰이므로, preview가 instruction 본문을 노출할 수 있는 것과 구분한다. fingerprint는 operation을 식별하는 보조 정보이며 승인 토큰·잠금·다음 실행 결과의 보장이 아니다.
 
 Mutation은 쓰기 대상의 원래 bytes/type/mode/hash를 고정하고 그 이미지로부터 결과를 렌더링한다. 적용 직전 모든 preimage와 개별 write의 preimage를 확인한다. 새 파일은 기존 파일을 덮어쓰지 않는 방식으로 만들고, 기존 파일은 완성된 임시 파일로 교체한다. 중간 실패 시 일치하는 자기 postimage만 복구하고 concurrent 변경은 보존·보고한다. 이것은 OS 수준의 완전한 동시성 격리가 아니다.
+
+새 파일의 불변 operation은 확정 mode 숫자 대신 `0666`에 OS 생성 권한을 적용하는 정책을 기록한다. 비공개 임시 디렉터리에서 완성한 파일의 실제 mode를 postimage로 기록하고, link 성공 후에만 소유권을 확정한다. 소유자 읽기가 불가능하면 게시하지 않는다. Fingerprint는 실제 mode가 아닌 생성 정책을 식별한다. 기본 ACL의 구체적 동작은 OS와 파일시스템에 달려 있다.
 
 ## 제품 검증과 source 검사
 

@@ -1,7 +1,7 @@
 ---
 id: PLAN-2026-0013
 kind: exec-plan
-status: active
+status: paused
 owner: main
 area: source-operating-contract-evaluation
 created: 2026-09-09
@@ -10,6 +10,8 @@ base_commit: "f382e8d3c6173c0cd22df2e41ed0d32fb379ee71"
 ---
 
 # TD-0001 — 반복 작업의 문맥·사용량 및 실제 compact 평가
+
+> **2026-11-26 상태 정리:** 현재 진행 중인 작업과 분리해 보류로 이동했다. 아래 E1~E3 관찰과 미수락·UNPROVEN 및 소진된 예산은 그대로다. 본문의 active 기록은 당시 상태이며 이 이동은 효과 입증·완료 수락이나 재실험 승인이 아니다. 남은 근거와 재검토 조건은 [TD-0001](../tech-debt-tracker.md)에 유지한다.
 
 ## Purpose / Big Picture
 

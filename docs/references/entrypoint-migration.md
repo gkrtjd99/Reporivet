@@ -10,7 +10,7 @@ area: migration
 
 ## 제품 경계
 
-미출시 `0.3.0.dev1`은 v0.2 관리 runtime·버전 marker·운영 블록을 발견하면 쓰기 전에 거부합니다. 기존 target을 삭제·변환·재실행하거나 호환 fallback을 제공하지 않습니다. 공개된 v0.2.0과 기존 target을 그대로 계속 사용할 수도 있습니다.
+`0.3.0a1`은 v0.2 관리 runtime·버전 marker·운영 블록을 발견하면 쓰기 전에 거부합니다. 기존 target을 삭제·변환·재실행하거나 호환 fallback을 제공하지 않습니다. 공개된 v0.2.0과 기존 target을 그대로 계속 사용할 수도 있습니다.
 
 새 패키지 설치는 기존 target의 migration이 아닙니다. 전환은 target 관리자가 소유하는 별도 검토 변경입니다. 패키지 제거와 문서 제거도 별개입니다. Reporivet을 uninstall해도 target 파일은 남으며, 진입점 안내를 제거한다고 프로젝트의 다른 도구를 제거할 필요는 없습니다.
 

@@ -15,8 +15,9 @@ This directory records current product intent, architecture, quality, security, 
 | Quality expectations and evaluation limits | [`QUALITY.md`](QUALITY.md) |
 | Security boundaries and controls | [`SECURITY.md`](SECURITY.md) |
 | Engineering principles | [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md) |
-| Current complex work and manual plan policy | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/) |
+| Current work, paused plans, and plan policy | [`PLANS.md`](PLANS.md), [`exec-plans/active/`](exec-plans/active/), [`exec-plans/paused/`](exec-plans/paused/) |
 | Entrypoint migration | [`references/entrypoint-migration.md`](references/entrypoint-migration.md) |
+| Agent instruction-file compatibility and probe limits | [`references/agent-compatibility.md`](references/agent-compatibility.md) |
 | Agent navigation evaluation | [`references/agent-navigation-evaluation.md`](references/agent-navigation-evaluation.md) |
 | Durable decisions | [`decisions/`](decisions/) |
 | Historical execution | [`exec-plans/completed/`](exec-plans/completed/) |
@@ -39,7 +40,7 @@ This directory records current product intent, architecture, quality, security, 
 - `AGENTS.md` remains a compact portable routing contract. This source repository authors its portable block in `CLAUDE.md` and projects it with `./dev/agent-contract-sync`; generated targets do not receive the helper or this source-only file.
 - Current-state documents describe implemented reality and verified intent. User-owned target documents remain authoritative for their own meaning.
 - Observed paths are non-authoritative evidence. A path's existence does not prove that its contents are current requirements or a runnable command.
-- Active ExecPlans are living source records manually copied from the template. Completed plans and accepted decisions are historical records; supersede them rather than rewriting their bodies.
+- Active ExecPlans record ongoing work. Paused plans preserve unfinished or failed criteria and are not current work or approval to resume. Completed plans and accepted decisions are historical records; supersede them rather than rewriting their bodies.
 - Evaluation notes distinguish actual before/after observations from hypotheses and do not claim semantic routing or general performance from a bounded fixture. PLAN-0007's prior-template observations remain historical and are not evidence for the current UX template.
 - `init`/`upgrade --dry-run` previews are escaped human unified diffs from one immutable operation and may contain instruction content; `audit` remains content-free. Fingerprints identify a plan but are not approval or locking.
 - Retirement requires an explicit plan action, replacement or rationale, and removal of current references.

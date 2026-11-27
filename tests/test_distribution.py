@@ -44,7 +44,7 @@ class DistributionTests(unittest.TestCase):
                 self.assertFalse(any("assets/project/docs/" in name for name in names))
                 self.assertFalse(any(name.endswith((".pyc", ".pyo")) for name in names))
                 metadata = next(archive.read(name).decode() for name in names if name.endswith(".dist-info/METADATA"))
-                self.assertIn("Version: 0.3.0.dev1", metadata)
+                self.assertIn("Version: 0.3.0a1", metadata)
 
             project = root / "project"
             project.mkdir()
