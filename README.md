@@ -1,114 +1,123 @@
 # Reporivet
 
-**프로젝트의 기존 근거를 agent가 찾아 쓰도록 돕는 작은 진입점 도구입니다.**
+**프로젝트의 기존 문서와 코드를, 에이전트가 찾을 수 있도록.**
 
-현재 소스는 미출시 **0.3.0.dev1**입니다. 공개된 [v0.2.0](https://github.com/gkrtjd99/Reporivet/releases/tag/v0.2.0)은 이전 runtime형 제품이며 tag와 배포 파일은 그대로입니다. 기존 사용자는 [전환·파일 관리 안내](docs/references/entrypoint-migration.md)를 먼저 읽으세요. 새 패키지를 설치한다고 기존 target이 자동 전환되지는 않습니다.
+Reporivet은 저장소를 살펴보고 `AGENTS.md`에 작은 탐색 진입점을 추가하는 CLI입니다. 이미 있는 문서 체계와 도구를 그대로 사용하면서, 새로운 에이전트가 어디서부터 살펴볼지 알려줍니다.
 
-## 하는 일과 하지 않는 일
+[![CI](https://github.com/gkrtjd99/Reporivet/actions/workflows/ci.yml/badge.svg)](https://github.com/gkrtjd99/Reporivet/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-```text
-AGENTS.md 또는 선택한 실행 환경의 진입 문서
-    → 프로젝트가 이미 가진 문서·명세·코드·검사 방법 (필요한 범위만 점진적 탐색)
-    → agent가 근거를 읽고 기존 도구로 작업
-```
+[English](README.en.md) · [빠른 시작](#빠른-시작) · [명령어](#명령어) · [안전과 한계](#안전과-한계) · [문서](#문서)
 
-Reporivet은 문서 이름·디렉터리·frontmatter를 강제하지 않습니다. `handbook/`, `openspec/`, `specs/`, README 등 기존 경로를 제한된 범위에서 관찰해 안내를 추가합니다. **경로가 존재한다는 사실은 현재 요구사항이라는 뜻이 아닙니다.** 현재 근거와 읽기 순서는 프로젝트 소유자가 관리 블록 밖에 기록합니다.
+> **v0.3.0a1은 프리릴리즈입니다.** 공개된 [v0.2.0](https://github.com/gkrtjd99/Reporivet/releases/tag/v0.2.0)은 이전 runtime형 제품입니다. 기존 프로젝트는 자동으로 전환되지 않으므로 [전환 안내](docs/references/entrypoint-migration.md)를 먼저 확인하세요.
 
-인위적인 에이전트 조직도(Main/Subagent 계층), 모델 라우팅, 프롬프트 오케스트레이션 프레임워크를 강제하지 않습니다. 에이전트가 전체 문서를 무차별적으로 사전 로딩(pre-loading)하거나 맹목적으로 작업을 하위 에이전트에 외주 주지 않고, 작업에 필요한 근거를 직접 단계적으로 탐색할 수 있도록 돕는 린한 목차형 진입점(Lean Table of Contents)을 지향합니다.
+## 왜 Reporivet인가요?
 
-이미 진입점이 잘 연결돼 있다면 추가하지 않아도 됩니다. Spec Kit·OpenSpec·Kiro 등의 명세·작업 절차를 대체하거나 같은 상태를 두 번 관리하지 않습니다.
+저장소의 요구사항, 설계, 코드와 검사 방법은 여러 경로에 흩어져 있을 수 있습니다. Reporivet은 그 파일들을 복사하거나 새 문서 형식으로 바꾸는 대신, **실제로 관찰한 경로를 가리키는 짧은 목록**을 만듭니다.
 
 ```text
-project/
-├── AGENTS.md                  # 한정된 관리 블록; 밖의 기존 본문 보존
-├── CLAUDE.md                  # --claude 선택 시 AGENTS로 연결
-└── 기존 문서·코드·설정·CI       # 이름·배치·내용 그대로 유지
+AGENTS.md / 선택적인 CLAUDE.md
+    → 프로젝트의 기존 문서 · 명세 · 코드 · 검사 방법
+    → 에이전트가 필요한 근거를 읽고 기존 도구로 작업
 ```
 
-Target runtime·wrapper·harness.toml·버전 marker·고정 docs 문서군·ExecPlan schema·Gate·작업 상태·에이전트 조직도·CI·`.gitignore`는 생성하지 않습니다. 패키지를 제거해도 일반 Markdown과 프로젝트 자체 도구로 사용할 수 있습니다.
+- **기존 프로젝트 존중:** 문서 이름, 디렉터리 구조, frontmatter나 작업 절차를 강제하지 않습니다. Spec Kit, OpenSpec, Kiro 또는 자체 문서 체계를 그대로 사용할 수 있습니다.
+- **좁은 쓰기 범위:** `AGENTS.md`의 관리 블록과 선택적인 `CLAUDE.md` 연결만 작성합니다. 블록 밖의 기존 내용과 파일 mode는 보존합니다.
+- **검토 후 적용:** 파일 내용을 출력하지 않는 `audit`와 실제 변경 내용을 보여 주는 `--dry-run`을 제공합니다.
+- **일반 Markdown:** 대상 프로젝트에 런타임, CI, 설정 파일이나 별도의 작업 저장소를 설치하지 않습니다. 패키지를 제거해도 파일은 남습니다.
 
-## 처음 사용하기
+관찰된 경로는 **현재 요구사항이라는 보증이 아닙니다.** 어떤 문서가 최신 근거인지, 어떤 검사가 적절한지는 프로젝트 소유자와 에이전트가 확인해야 합니다. 진입점이 이미 잘 연결된 저장소에는 Reporivet이 필요하지 않을 수 있습니다.
 
-Python 3.11 이상이 필요합니다. 다음은 **이 소스 checkout의 root에서** 실행하는 방법입니다. 미출시 버전이 package index에 있다고 가정하지 않습니다.
+## 빠른 시작
+
+**요구사항:** Python 3.11 이상, Linux 또는 macOS. Windows는 현재 지원하지 않습니다. CI는 두 OS에서 Python 3.11–3.15를 검사하도록 구성되어 있습니다.
+
+### 설치
+
+[v0.3.0a1 GitHub 프리릴리즈](https://github.com/gkrtjd99/Reporivet/releases/tag/v0.3.0a1)의 wheel을 가상환경에 설치합니다. 이 버전이 PyPI에 게시되었다고 가정하지 않습니다.
 
 ```bash
-PYTHONPATH=src python3 -m reporivet --help
-PYTHONPATH=src python3 -m reporivet audit --root /absolute/path/to/project
-PYTHONPATH=src python3 -m reporivet init --root /absolute/path/to/project --dry-run
-PYTHONPATH=src python3 -m reporivet init --root /absolute/path/to/project
-PYTHONPATH=src python3 -m reporivet doctor --root /absolute/path/to/project
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install https://github.com/gkrtjd99/Reporivet/releases/download/v0.3.0a1/reporivet-0.3.0a1-py3-none-any.whl
+reporivet --version
 ```
 
-설치한 CLI에서는 `reporivet`을 사용합니다. preview와 적용에는 같은 옵션을 사용하세요.
+또는 소스 checkout에서 `python -m pip install .`로 설치할 수 있습니다. 가상환경을 만들 때는 지원되는 Python 3.11 이상을 선택하세요.
+
+### 프로젝트 살펴보고 적용하기
+
+아래 경로를 **실제 대상 프로젝트**로 바꾸세요. 먼저 관찰 결과와 변경 미리보기를 검토합니다.
 
 ```bash
-reporivet init --root ./project --name "Project" --claude --dry-run
-reporivet init --root ./project --name "Project" --claude
-reporivet doctor --root ./project
+reporivet audit --root /path/to/project
+reporivet init --root /path/to/project --dry-run
+reporivet init --root /path/to/project
+reporivet doctor --root /path/to/project
 ```
 
-- `init`: AGENTS 관리 블록을 생성·갱신합니다. 새 root의 부모 디렉터리는 먼저 있어야 하며 경로의 symlink는 거부합니다.
-- `--claude`: CLAUDE 관리 블록도 생성·갱신합니다. 기존 두 파일의 의미적 충돌까지 해결하지는 않습니다.
-- `audit`: 실제 경로와 제외 범위를 JSON으로 출력하는 읽기 전용 관찰입니다. 파일 내용이나 추론한 명령을 출력·실행하지 않습니다. Exit 0은 보고서 작성 성공이지 conflict 부재나 프로젝트 품질 통과가 아닙니다.
-- `doctor`: 생성된 로컬 링크·관리 구조 등을 기계적으로 점검합니다. 오류는 exit 2이며, 의미·작업 완료를 판정하지 않습니다.
-- `upgrade`: 경로 목록과 관리 블록을 다시 생성합니다. CLAUDE도 갱신하려면 `--claude`를 명시합니다. v0.2 자동 migration은 하지 않습니다.
+Claude Code용 연결도 원한다면 미리보기와 적용 **양쪽에** `--claude`를 추가합니다.
 
-## 미리보기에서 확인할 것
+```bash
+reporivet init --root /path/to/project --claude --dry-run
+reporivet init --root /path/to/project --claude
+```
 
-`init`과 `upgrade`의 `--dry-run`은 target 파일·디렉터리를 변경하지 않고 생성/갱신/변경 없음 목록, **실제 예정 본문의 unified diff**, fingerprint를 보여줍니다. `-`는 없어질 줄, `+`는 새 줄입니다. 변경이 없으면 `No changes (no-op).`와 `(no changes)`를 표시합니다.
+`--claude`는 `AGENTS.md`를 읽으라는 일반 텍스트 포인터를 추가합니다. Claude Code 버전·설정에 따라 지침을 불러오는 방식이 다르며, 기존 하위 `AGENTS.md` 사용에 영향을 줄 수 있습니다. [에이전트별 호환성](docs/references/agent-compatibility.md)을 확인하세요.
 
-관리 블록 안의 수동 편집이 대체되는지도 diff에 드러납니다. CRLF의 `\r`, terminal 제어 문자, 방향 제어 문자는 실행되지 않는 문자열로 표시하고 마지막 줄바꿈이 없으면 `No newline at end of file` 표시를 붙입니다. 이는 사람의 검토용 출력이며 그대로 적용할 patch로 보장하지 않습니다.
+## 명령어
 
-**Preview에는 기존 instruction 본문과 주변 문맥이 포함될 수 있습니다.** 비밀값이 있는지 확인하기 전 외부에 공유하지 마세요. 파일 내용을 출력하지 않는 `audit`와 다릅니다. Fingerprint는 승인·잠금·다음 실행 결과의 보장이 아니므로 입력이나 문서가 바뀌면 preview부터 다시 확인합니다.
+| 명령 | 하는 일 |
+|---|---|
+| `init` | 한정된 `AGENTS.md` 관리 블록을 생성하거나 갱신합니다. `--claude`를 선택하면 연결도 작성합니다. |
+| `audit` | 실제 경로와 제외 범위를 읽기 전용 JSON으로 보고합니다. 파일 내용이나 추론한 명령은 출력·실행하지 않습니다. 종료 코드 0은 보고서 작성 성공을 뜻합니다. |
+| `upgrade` | 관찰 경로와 관리 블록을 다시 생성합니다. CLAUDE 연결도 갱신하려면 다시 `--claude`를 지정합니다. |
+| `doctor` | 관리 구조와 로컬 링크 등을 기계적으로 점검합니다. 오류 시 종료 코드 2를 반환하며, 문서의 의미나 작업 완료를 판정하지 않습니다. |
 
-## 직접 쓸 지침과 자동 갱신할 목록 구분하기
+`init`과 `upgrade`는 `--dry-run`을 지원합니다. 상세 옵션은 `reporivet --help`와 각 명령의 `--help`를 확인하세요. 새 프로젝트 경로를 지정할 때는 부모 디렉터리가 먼저 있어야 합니다.
 
-AGENTS의 `reporivet:entrypoints:start/end` 사이만 Reporivet 관리 영역입니다. **그 안의 편집은 다음 init/upgrade에서 대체됩니다.** 보존할 프로젝트 지침은 블록 앞이나 뒤에 작성하세요. 기존 파일의 양쪽 본문 bytes와 mode는 보존합니다.
+## 프로젝트 지침 관리
 
-다음은 관리 블록 밖에 쓸 수 있는 예시입니다. 경로와 명령은 예시이므로 자기 프로젝트의 실제 근거로 바꾸세요. 문서를 새 schema에 맞추거나 존재하지 않는 파일을 만들 필요는 없습니다.
+Reporivet이 관리하는 부분은 아래 marker 사이입니다. **다음 `init` 또는 `upgrade`에서 이 블록은 다시 생성됩니다.** 보존할 프로젝트 지침은 블록 밖에 작성하세요.
 
 ```markdown
-## 이 프로젝트의 읽기 순서
-
-- 현재 요구사항은 handbook/current.md를 읽는다.
-- archive/의 문서는 과거 기록이며 현재 정책을 대체하지 않는다.
-- 관련 구현은 src/에서 찾고, 검사 방법은 CONTRIBUTING.md에서 확인한다.
-- 문서끼리 충돌하면 근거를 보고하고 임의로 선택하지 않는다.
+<!-- reporivet:entrypoints:start -->
+Reporivet이 관리하는 탐색 안내
+<!-- reporivet:entrypoints:end -->
 ```
 
-관찰 목록은 완전한 inventory가 아닙니다. 한글·공백 파일명은 읽을 수 있는 label로 표시하고 링크 주소는 URL encoding합니다. 이름만 보고 현재/과거 authority를 자동 분류하지 않습니다.
+예를 들어 블록 밖에서 현재 요구사항의 위치, 과거 문서 구분, 실제 검사 명령을 직접 안내할 수 있습니다. 파일을 추가·이동·삭제한 뒤에는 `upgrade --dry-run`으로 차이를 확인하고, 같은 옵션으로 적용한 다음 `doctor`를 실행하세요.
 
-## 문서를 옮기거나 안내를 제거할 때
+패키지 삭제와 안내 블록 삭제는 별개입니다. 자동 제거 명령은 없으며, 사용자 내용이 섞인 파일 전체를 삭제하지 말고 [수동 제거 절차](docs/references/entrypoint-migration.md)를 따르세요.
 
-문서를 추가·이동·삭제해도 AGENTS 목록은 자동 갱신되지 않습니다. 설치된 CLI가 있다면 다음처럼 갱신합니다.
+## 안전과 한계
 
-```bash
-reporivet upgrade --root ./project --claude --dry-run
-reporivet upgrade --root ./project --claude
-reporivet doctor --root ./project
-```
+- `audit`는 파일 내용을 출력하지 않지만, **경로 이름 자체에는 민감한 정보가 들어갈 수 있습니다.**
+- `--dry-run`은 실제 before/after의 사람 검토용 diff이며 적용 가능한 patch가 아닙니다. 기존 지침과 주변 문맥이 포함될 수 있으므로 공유 전에 확인하세요. Fingerprint는 승인·잠금·다음 실행 결과를 보장하지 않습니다.
+- 관찰은 최대 512개 항목과 깊이 제한 안에서 이루어지고, 결과는 최대 80개 파일입니다. 문서형과 그 외 경로에 각각 최대 40개를 먼저 배정하고 남는 자리를 재배분하지만, 특정 문서나 검사 파일이 포함된다는 보장은 없습니다. 파일명은 문서의 중요도나 현재성을 판정하지 않습니다.
+- 새 파일의 권한에는 OS의 생성 정책과 일반적으로 호출자의 umask가 적용됩니다. 기본 ACL 동작은 OS·파일시스템마다 다릅니다. 파일 보호는 OS 수준의 완전한 동시성 격리나 sandbox가 아닙니다. 다른 사용자가 동시에 디렉터리 항목을 교체할 수 없는 위치에서 실행하세요. 자세한 내용은 [보안과 한계](docs/SECURITY.md)를 참고하세요.
 
-패키지가 없으면 일반 Markdown으로 직접 관리할 수 있습니다. 나중에 다시 Reporivet을 사용할 생각이라면 보존할 지침은 관리 블록 밖에 두세요. 설치나 명령 예시 자체가 agent에게 실행 권한을 부여하지는 않습니다.
+## 실제 효과는 검증됐나요?
 
-패키지 제거와 문서 제거는 별개입니다. 더 이상 관리 블록을 쓰지 않으려면 [정확한 marker와 수동 제거 절차](docs/references/entrypoint-migration.md)를 따라 CLAUDE 연결과 AGENTS 블록만 검토해 제거합니다. **사용자 본문이 섞인 AGENTS/CLAUDE 전체를 삭제하지 마세요.** 자동 제거 명령은 없습니다.
+[탐색 평가](docs/references/agent-navigation-evaluation.md)는 적용 전후의 fresh 에이전트 세션과 관찰 결과를 기록합니다. 현재의 작은 합성 사례에서는 적용 전부터 에이전트가 올바르게 진단했으므로 **작업 성공률이나 비용의 개선은 입증되지 않았습니다.** 더 큰 실제 저장소와 다양한 모델에서의 결과는 아직 확인이 필요합니다.
 
-## 실제로 잘 찾아가는가?
+## 개발과 기여
 
-[실제 agent 탐색 평가](docs/references/agent-navigation-evaluation.md)는 서로 다른 작은 저장소에서 적용 전후를 fresh 세션으로 관찰한 기록입니다. 기존 실험은 적용 전부터 성공했으므로 개선 효과를 입증하지 않았습니다. 그때의 생성물과 이번 UX 보수 생성물도 구분해 기록합니다. 기계적 검사와 문구 개선만으로 새 agent의 업무 성능이 좋아졌다고 주장하지 않습니다.
-
-## 소스 개발 및 검증
+이 저장소를 수정할 때는 소스 checkout에서 다음 검사를 실행합니다. 배포 검사는 wheel 빌드가 가능한 pip/setuptools 환경을 필요로 합니다.
 
 ```bash
 PYTHON=python3 ./dev/check
 ```
 
-이 명령은 **Reporivet 소스 저장소의** unit/integration/distribution 검사이며 target에 설치되지 않습니다. 지원 Python과 offline wheel build가 가능한 pip/setuptools 환경이 필요합니다. 빌드 도구가 없으면 실패를 숨기거나 skip하지 않습니다.
+버그와 개선 제안은 [GitHub Issues](https://github.com/gkrtjd99/Reporivet/issues)에 남겨 주세요. 취약점이나 비밀정보는 공개 이슈에 게시하지 말고 [보안 정책](.github/SECURITY.md)을 따릅니다.
 
-이 소스에서만 CLAUDE portable block을 편집하고 `./dev/agent-contract-sync`로 AGENTS에 투영합니다. Target에는 source 전용 sync helper나 이 소스의 문서 구조를 배포하지 않습니다.
+## 문서
 
-- [문서 지도](docs/README.md) · [현재 요구사항](docs/PRODUCT.md) · [상세 명세](docs/product-specs/SPEC-REPORIVET-003-agent-entrypoints.md)
-- [구조와 소유권](ARCHITECTURE.md) · [품질](docs/QUALITY.md) · [보안과 한계](docs/SECURITY.md) · [계획 정책](docs/PLANS.md)
-- [전환·파일 관리](docs/references/entrypoint-migration.md) · [탐색 평가](docs/references/agent-navigation-evaluation.md)
-- [현재 제품 경계 결정](docs/decisions/ADR-0002-entrypoint-only-boundary.md)
+- [문서 지도](docs/README.md) · [제품 요구사항](docs/PRODUCT.md) · [아키텍처](ARCHITECTURE.md)
+- [에이전트별 호환성](docs/references/agent-compatibility.md) · [실제 탐색 평가](docs/references/agent-navigation-evaluation.md)
+- [v0.2 전환 및 블록 제거](docs/references/entrypoint-migration.md) · [품질 기준](docs/QUALITY.md) · [보안과 한계](docs/SECURITY.md)
 
-파일 보호는 OS 수준의 완전한 동시성 격리나 sandbox가 아닙니다. Reporivet은 프로젝트 명령 실행·agent 감독·모델 호출·배포·게시를 수행하지 않습니다.
+## 라이선스
+
+[MIT License](LICENSE)

@@ -20,6 +20,8 @@ summary: 진입점 갱신의 파일 소유권과 읽기·쓰기 경계
 - fenced marker 예시는 소유권을 부여하지 않는다. 실제 malformed/partial marker는 조용히 수선하거나 본문을 지우지 않는다.
 - 렌더 전에 immutable preimage를 고정한다. user edit 이후 이미지를 새 preimage로 채택해 덮어쓰지 않는다.
 - 원래 파일을 truncate하지 않고 완성된 임시 bytes/mode로 교체하며, 새 파일은 존재하면 실패하는 방식으로 생성한다.
+- 새 파일은 비공개 임시 디렉터리에서 요청 mode `0666`으로 생성해 OS 권한 정책을 적용한다. 일반적으로 umask가 적용되며 기본 ACL은 OS/파일시스템에 따라 다르다. 실제 mode에 소유자 읽기 권한이 없으면 게시 전에 거부한다. Link 성공이 확인되기 전 발생한 다른 파일은 같은 내용이라도 자기 소유로 간주하지 않는다.
+- 임시 디렉터리 소유자와 POSIX mode 비트는 검사하지만 OS별 ACL 권한은 검사하지 않는다. 따라서 mode만으로 ACL이 있는 환경에서 중간 파일의 접근 차단을 보장하지 않는다.
 - 실패 시 자기 postimage와 일치하는 대상만 되돌린다. concurrent 변경은 보존하고 복구 불완전을 명시한다.
 - 경로와 project name을 Markdown으로 렌더링할 때 control/marker/링크 주입을 막는다. 임의 파일명을 shell command로 만들지 않는다.
 
@@ -30,6 +32,8 @@ summary: 진입점 갱신의 파일 소유권과 읽기·쓰기 경계
 ## 미리보기와 기밀성
 
 `init`/`upgrade --dry-run`은 immutable before/after에서 만든 실제 unified diff를 terminal escape와 함께 사람이 읽을 수 있게 출력한다. 이는 실행 가능한 patch가 아니며, fingerprint도 승인·잠금·재실행 결과를 보장하지 않는다. Preview에는 관리 블록의 기존 instruction 본문과 주변 문맥이 포함될 수 있으므로 외부 공유 전 비밀·개인정보를 검토한다. `audit`은 반대로 파일 내용을 출력하지 않는 제한된 경로 관찰이다. 두 출력의 content privacy와 audit 계약을 혼동하지 않는다.
+
+신규 파일에 대한 fingerprint는 실행 시 결정되는 실제 mode가 아니라 생성 권한 정책을 식별한다.
 
 ## 기계적 점검과 의미적 승인
 
@@ -42,5 +46,7 @@ Doctor는 경로/관리 구조의 오류를 알릴 뿐 agent 능력이나 보안
 ## 한계와 보고
 
 파일 검사/preimage guard는 OS-level 완전한 race/process sandbox가 아니다. Git 상태나 preview fingerprint는 권한 부여가 아니다. 이 제품은 secret scanner나 프로젝트 CI를 설치하지 않는다. 기존 ignore/보안 도구는 프로젝트가 유지하며 비밀이 노출됐다면 폐기·회전한다. 이 소스의 과거 `.harness` 로그와 임시환경은 삭제하지 않고 기존 `.gitignore`를 보존한다. 이는 과거 raw log의 우발적인 추적·공개를 막기 위한 것으로, 새 run 상태나 runtime을 생성한다는 뜻이 아니다.
+
+여러 사용자가 target 디렉터리에 쓰고 임시 이름을 교체할 수 있는 환경에서는 임시 디렉터리 생성 직후 첫 identity 확인 전의 교체를 식별하지 못할 수 있다. 이 경우 정리 과정에서 교체된 빈 디렉터리가 제거될 수 있다. 다른 사용자가 동시에 디렉터리 항목을 교체할 수 없는 위치에서 실행한다.
 
 제보는 [보안 정책](../.github/SECURITY.md)을 따른다. 자격증명·비공개 저장소 내용·원시 로그를 공개 issue에 게시하지 않는다.

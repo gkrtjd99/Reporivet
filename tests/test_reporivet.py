@@ -5,6 +5,7 @@ import io
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -25,7 +26,7 @@ class ReporivetTests(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_version_and_runtime_free_init(self) -> None:
-        self.assertEqual(__version__, "0.3.0.dev1")
+        self.assertEqual(__version__, "0.3.0a1")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             code, output, error = self.run_cli("init", "--root", str(root), "--name", "Fixture")
@@ -51,6 +52,30 @@ class ReporivetTests(unittest.TestCase):
             self.assertTrue((root / "CLAUDE.md").read_bytes().startswith(original))
             self.assertIn("AGENTS.md", (root / "CLAUDE.md").read_text())
             self.assertFalse((root / "CLAUDE.md").is_symlink())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX umask and mode semantics")
+    def test_new_files_obey_umask_and_preview_does_not_write(self) -> None:
+        script = (
+            "import os, sys; os.umask(int(sys.argv[1], 8)); "
+            "sys.path.insert(0, sys.argv[2]); "
+            "from reporivet.cli import main; sys.exit(main(sys.argv[3:]))"
+        )
+        for mask, expected in (("002", 0o664), ("022", 0o644), ("077", 0o600), ("400", None), ("777", None)):
+            with self.subTest(mask=mask), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                command = [sys.executable, "-c", script, mask, str(REPOSITORY / "src"), "init", "--root", str(root), "--claude"]
+                preview = subprocess.run([*command, "--dry-run"], capture_output=True, text=True)
+                self.assertEqual(preview.returncode, 0, preview.stderr)
+                self.assertEqual(list(root.iterdir()), [])
+                applied = subprocess.run(command, capture_output=True, text=True)
+                if expected is None:
+                    self.assertEqual(applied.returncode, 2, applied.stdout + applied.stderr)
+                    self.assertIn("rolled back", applied.stderr)
+                    self.assertEqual(list(root.iterdir()), [])
+                else:
+                    self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+                    for name in ("AGENTS.md", "CLAUDE.md"):
+                        self.assertEqual(stat.S_IMODE((root / name).stat().st_mode), expected)
 
     def test_existing_user_agents_bytes_are_preserved_outside_managed_block(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -135,6 +160,7 @@ class ReporivetTests(unittest.TestCase):
             self.assertTrue(agents.read_bytes().startswith(b"user prefix\r\n"))
             self.assertTrue(agents.read_bytes().endswith(b"user suffix\r\n"))
             self.assertEqual(stat.S_IMODE(agents.stat().st_mode), 0o640)
+            self.assertEqual(stat.S_IMODE(claude.stat().st_mode), 0o600)
 
     def test_both_managed_blocks_preserve_suffixes_and_markers_at_eof(self) -> None:
         from reporivet import initializer

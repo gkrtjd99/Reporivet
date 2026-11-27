@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from itertools import islice
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
-from typing import Iterable
+from typing import Callable, Iterable
 
 from . import __version__
 
@@ -49,6 +49,7 @@ MAX_OBSERVED_PATHS = 80
 MAX_OBSERVED_DEPTH = 3
 MAX_VISITED_ENTRIES = 512
 MAX_EXCLUSIONS = 64
+DOCUMENT_SUFFIXES = frozenset({".md", ".markdown", ".mdx", ".rst", ".adoc"})
 
 
 class InitError(RuntimeError):
@@ -119,9 +120,13 @@ def symlink_component(path: Path) -> Path | None:
     return None
 
 
-def validate_root(root: Path, *, create: bool = False, dry_run: bool = False) -> Path:
+def validate_root(root: Path, *, create: bool = False, dry_run: bool = False, on_create: Callable[[Path], None] | None = None) -> Path:
     expanded = root.expanduser()
     raw = expanded if expanded.is_absolute() else Path.cwd() / expanded
+    try:
+        str(raw).encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise InitError("project root path is not valid UTF-8") from exc
     component = symlink_component(raw)
     if component is not None:
         raise InitError(f"refusing to use a symlinked project root or parent: {root} (via {component})")
@@ -132,7 +137,12 @@ def validate_root(root: Path, *, create: bool = False, dry_run: bool = False) ->
         if not absolute.parent.is_dir():
             raise InitError(f"project root parent is unavailable: {absolute.parent}; create the parent directory first")
         if not dry_run:
-            absolute.mkdir(parents=True, exist_ok=False)
+            try:
+                absolute.mkdir(parents=True, exist_ok=False)
+            except OSError as exc:
+                raise InitError(f"cannot create project root {absolute}: {exc}") from exc
+            if on_create is not None:
+                on_create(absolute)
     elif not absolute.is_dir():
         raise InitError(f"project root is not a directory: {root}")
     return absolute
@@ -187,7 +197,9 @@ def _same(path: Path, expected: _Image, root: Path) -> bool:
 def _operation(root: Path, relative: str, content: bytes, *, before: _Image | None = None) -> _Operation:
     path = root / relative
     frozen = before if before is not None else _image(path, root)
-    after = _Image("file", frozen.mode if frozen.mode is not None else 0o644, hashlib.sha256(content).hexdigest(), content)
+    # A missing target's mode is an OS-filtered 0666 creation policy, not a
+    # known numeric mode. The concrete postimage is recorded when staging it.
+    after = _Image("file", frozen.mode, hashlib.sha256(content).hexdigest(), content)
     return _Operation(root, relative, frozen, after)
 
 
@@ -237,19 +249,77 @@ def _fingerprint(operations: Iterable[_Operation]) -> str:
         rows.append({
             "path": op.relative,
             "preimage": {"type": op.before.kind, "mode": op.before.mode, "sha256": op.before.digest},
-            "postimage": {"type": op.after.kind, "mode": op.after.mode, "sha256": op.after.digest},
+            "postimage": {"type": op.after.kind, "mode": op.after.mode if op.after.mode is not None else "create-0666-os-filtered", "sha256": op.after.digest},
         })
     return hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def _atomic_write(op: _Operation) -> None:
+def _atomic_write(op: _Operation, *, record_postimage: Callable[[_Operation], None] | None = None) -> None:
     path = op.path
     ensure_safe_write_path(path)
     if not _same(path, op.before, op.root):
         raise InitError(f"preimage changed before write: {op.relative}")
-    if op.after.content is None or op.after.mode is None:
+    if op.after.content is None or (op.after.mode is None and op.before.kind != "missing"):
         raise InitError(f"mutation image is incomplete: {op.relative}")
     path.parent.mkdir(parents=True, exist_ok=True)
+    if op.before.kind == "missing":
+        # Mode bits restrict staging access; platform-specific ACLs can impose
+        # additional permissions and are not inspected here.
+        directory = Path(tempfile.mkdtemp(prefix=".reporivet-write-", dir=path.parent))
+        original_directory = directory.lstat()
+        directory_fd: int | None = None
+        staged_identity: tuple[int, int] | None = None
+        try:
+            directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                directory_stat = os.fstat(directory_fd)
+                directory_mode = stat.S_IMODE(directory_stat.st_mode)
+                if (not stat.S_ISDIR(directory_stat.st_mode)
+                        or (directory_stat.st_dev, directory_stat.st_ino) != (original_directory.st_dev, original_directory.st_ino)
+                        or directory_stat.st_uid != os.geteuid()
+                        or directory_mode & 0o077
+                        or directory_mode & 0o700 != 0o700):
+                    raise InitError(f"staging directory is not private: {op.relative}")
+                descriptor = os.open("content", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666, dir_fd=directory_fd)
+                try:
+                    staged = os.fstat(descriptor)
+                    staged_identity = (staged.st_dev, staged.st_ino)
+                    actual_mode = stat.S_IMODE(staged.st_mode)
+                    if not actual_mode & stat.S_IRUSR:
+                        raise InitError(f"new file would not be owner-readable: {op.relative}")
+                    view = memoryview(op.after.content)
+                    while view:
+                        count = os.write(descriptor, view)
+                        if count <= 0:
+                            raise OSError("short write while applying mutation")
+                        view = view[count:]
+                    concrete = _Operation(op.root, op.relative, op.before, _Image("file", actual_mode, op.after.digest, op.after.content))
+                finally:
+                    os.close(descriptor)
+                ensure_safe_write_path(path)
+                if not _same(path, op.before, op.root):
+                    raise InitError(f"preimage changed before write: {op.relative}")
+                os.link("content", path, src_dir_fd=directory_fd, follow_symlinks=False)
+                if record_postimage is not None:
+                    record_postimage(concrete)
+            finally:
+                if staged_identity is not None:
+                    staged = os.stat("content", dir_fd=directory_fd, follow_symlinks=False)
+                    if (staged.st_dev, staged.st_ino) != staged_identity:
+                        raise InitError(f"staged file changed before cleanup: {op.relative}")
+                    os.unlink("content", dir_fd=directory_fd)
+        finally:
+            if directory_fd is not None:
+                os.close(directory_fd)
+            try:
+                current = directory.lstat()
+            except FileNotFoundError:
+                pass
+            else:
+                if (current.st_dev, current.st_ino) != (original_directory.st_dev, original_directory.st_ino):
+                    raise InitError(f"staging directory changed before cleanup: {op.relative}")
+                os.rmdir(directory)
+        return
     descriptor, temporary = tempfile.mkstemp(prefix=".reporivet-write-", dir=path.parent)
     temporary_path = Path(temporary)
     try:
@@ -266,10 +336,7 @@ def _atomic_write(op: _Operation) -> None:
         ensure_safe_write_path(path)
         if not _same(path, op.before, op.root):
             raise InitError(f"preimage changed before write: {op.relative}")
-        if op.before.kind == "missing":
-            os.link(temporary_path, path)
-        else:
-            os.replace(temporary_path, path)
+        os.replace(temporary_path, path)
     finally:
         temporary_path.unlink(missing_ok=True)
 
@@ -278,6 +345,11 @@ def _restore_owned(op: _Operation) -> bool:
     """Restore only an unchanged postimage; return false on divergence."""
     if _same(op.path, op.before, op.root):
         return True
+    if op.before.kind == "missing":
+        # Publication was not confirmed, so an identical file may belong to
+        # another writer. Preserve it instead of assuming ownership.
+        if op.after.mode is None:
+            return False
     if not _same(op.path, op.after, op.root):
         return False
     if op.before.kind == "missing":
@@ -300,7 +372,9 @@ def _apply(operations: tuple[_Operation, ...]) -> None:
             if _same(op.path, op.after, op.root):
                 continue
             attempted.append(op)
-            _atomic_write(op)
+            def record_postimage(concrete: _Operation) -> None:
+                attempted[-1] = concrete
+            _atomic_write(op, record_postimage=record_postimage)
     except BaseException as exc:
         preserved: list[str] = []
         for op in reversed(attempted):
@@ -417,6 +491,16 @@ def _legacy_reason(root: Path) -> str | None:
     return None
 
 
+def _looks_like_document(relative: str) -> bool:
+    """Classify paths mechanically for balanced selection, not authority."""
+    path = Path(relative)
+    return (
+        bool(path.parts) and path.parts[0].casefold() == "docs"
+        or path.suffix.casefold() in DOCUMENT_SUFFIXES
+        or path.name.casefold() in {"readme", "readme.txt"}
+    )
+
+
 def _observed_paths(root: Path, *, include_instructions: bool = True) -> tuple[list[str], list[str]]:
     paths: list[str] = []
     exclusions: list[str] = []
@@ -442,6 +526,11 @@ def _observed_paths(root: Path, *, include_instructions: bool = True) -> tuple[l
         entries.sort(key=lambda item: item.name)
         children: list[Path] = []
         for entry in entries:
+            try:
+                entry.name.encode("utf-8")
+            except UnicodeEncodeError:
+                exclude(".", "non-UTF-8 path omitted")
+                continue
             path = Path(entry.path)
             relative = path.relative_to(root).as_posix()
             try:
@@ -463,10 +552,8 @@ def _observed_paths(root: Path, *, include_instructions: bool = True) -> tuple[l
             elif is_file:
                 if not include_instructions and entry.name in {"AGENTS.md", "CLAUDE.md"}:
                     continue
-                elif len(paths) < MAX_OBSERVED_PATHS:
-                    paths.append(relative)
                 else:
-                    exclude(relative, "file observation limit reached")
+                    paths.append(relative)
             else:
                 exclude(relative, "non-regular entry")
         pending.extend(reversed(children))
@@ -474,7 +561,20 @@ def _observed_paths(root: Path, *, include_instructions: bool = True) -> tuple[l
         truncated = True
     if truncated:
         exclusions.append(". (observation work/exclusion budget reached; remaining entries omitted and ordering is not complete)")
-    return sorted(paths), sorted(set(exclusions))
+    # Balance the bounded list between documentation-like and other paths.
+    # This is a filename heuristic, not a ranking of current requirements.
+    documents = [path for path in paths if _looks_like_document(path)]
+    others = [path for path in paths if not _looks_like_document(path)]
+    quota = MAX_OBSERVED_PATHS // 2
+    chosen = documents[:quota] + others[:quota]
+    remaining = MAX_OBSERVED_PATHS - len(chosen)
+    if remaining:
+        chosen.extend((documents[quota:] + others[quota:])[:remaining])
+    chosen_paths = set(chosen)
+    for relative in paths:
+        if relative not in chosen_paths:
+            exclude(relative, "file observation limit reached")
+    return sorted(chosen), sorted(set(exclusions))
 
 
 def _category(relative: str) -> str | None:
@@ -489,7 +589,7 @@ def _category(relative: str) -> str | None:
         return "entry-point"
     if path.parts and path.parts[0] in {".github", ".gitlab"}:
         return "ci"
-    if relative.casefold().startswith("docs/") or path.suffix.casefold() == ".md":
+    if _looks_like_document(relative):
         return "document"
     return None
 
@@ -578,8 +678,8 @@ def _safe_heading(value: str, fallback: str) -> str:
     return _markdown_label(value)
 
 
-def _agent_block(root: Path, name: str, summary: str) -> str:
-    observed, exclusions = _observed_paths(root, include_instructions=False)
+def _agent_block(root: Path, name: str, summary: str, *, virtual_empty_root: bool = False) -> str:
+    observed, exclusions = ([], []) if virtual_empty_root else _observed_paths(root, include_instructions=False)
     rows = "\n".join(f"- [{_markdown_label(item)}](./{_markdown_path(item)}) (observed path; not authority)" for item in observed[:MAX_OBSERVED_PATHS]) or "- No bounded paths observed; establish purpose and verification method before changing files."
     displayed_exclusions = exclusions[:12]
     if len(exclusions) > 12:
@@ -620,7 +720,7 @@ def _legacy_guidance(reason: str) -> str:
     )
 
 
-def _prepare(root: Path, *, name: str, summary: str, claude: bool) -> tuple[tuple[_Operation, ...], ChangeSet]:
+def _prepare(root: Path, *, name: str, summary: str, claude: bool, virtual_empty_root: bool = False) -> tuple[tuple[_Operation, ...], ChangeSet]:
     legacy = _legacy_reason(root)
     if legacy:
         raise InitError(_legacy_guidance(legacy))
@@ -630,7 +730,7 @@ def _prepare(root: Path, *, name: str, summary: str, claude: bool) -> tuple[tupl
         raise InitError("AGENTS.md is not a regular file")
     agents_before = _image(agents_path, root)
     agents_original = agents_before.content or b""
-    targets = [("AGENTS.md", _agent_block(root, name or _existing_name(agents_original), summary), AGENTS_START, AGENTS_END, agents_before)]
+    targets = [("AGENTS.md", _agent_block(root, name or _existing_name(agents_original), summary, virtual_empty_root=virtual_empty_root), AGENTS_START, AGENTS_END, agents_before)]
     if claude:
         claude_path = root / "CLAUDE.md"
         ensure_safe_write_path(claude_path)
@@ -659,16 +759,36 @@ def apply_harness(*, root: Path, mode: str, name: str = "", summary: str = "", c
         raise InitError(f"unsupported lifecycle mode: {mode}")
     requested = root.expanduser()
     raw = requested if requested.is_absolute() else Path.cwd() / requested
-    created_root = mode == "init" and not raw.exists() and not dry_run
-    root = validate_root(root, create=mode == "init", dry_run=dry_run)
+    virtual_empty_root = mode == "init" and dry_run and not raw.exists()
+    created_identity: tuple[int, int, int] | None = None
+
+    def remember_created(path: Path) -> None:
+        nonlocal created_identity
+        metadata = path.lstat()
+        created_identity = (metadata.st_dev, metadata.st_ino, stat.S_IMODE(metadata.st_mode))
+
+    root = validate_root(root, create=mode == "init", dry_run=dry_run, on_create=remember_created)
+
+    def check_virtual_root() -> None:
+        if virtual_empty_root:
+            try:
+                root.lstat()
+            except FileNotFoundError:
+                return
+            raise InitError("project root appeared during preview; retry")
+
     try:
-        operations, changes = _prepare(root, name=name, summary=summary, claude=claude)
+        check_virtual_root()
+        operations, changes = _prepare(root, name=name, summary=summary, claude=claude, virtual_empty_root=virtual_empty_root)
+        check_virtual_root()
         if not dry_run:
             _apply(operations)
     except BaseException:
-        if created_root:
+        if created_identity is not None:
             try:
-                if root.is_dir() and not any(root.iterdir()):
+                metadata = root.lstat()
+                identity = (metadata.st_dev, metadata.st_ino, stat.S_IMODE(metadata.st_mode))
+                if stat.S_ISDIR(metadata.st_mode) and identity == created_identity:
                     root.rmdir()
             except OSError:
                 pass

@@ -10,7 +10,7 @@ summary: 기존 프로젝트 근거를 찾도록 돕는 runtime 없는 agent 진
 
 ## Purpose
 
-Reporivet은 프로젝트의 기존 문서·코드·검사 방법을 agent가 찾아 쓰도록 짧은 진입점을 안전하게 구성한다. 다음 미출시 버전은 0.3.0.dev1이다. 공개 v0.2.0의 고정 문서 schema·copied runtime·Gate·계획 종료 모델은 [ADR-0002](decisions/ADR-0002-entrypoint-only-boundary.md)로 대체한다.
+Reporivet은 프로젝트의 기존 문서·코드·검사 방법을 agent가 찾아 쓰도록 짧은 진입점을 안전하게 구성한다. 현재 소스는 0.3.0a1 프리릴리즈 계열이다. 공개 v0.2.0의 고정 문서 schema·copied runtime·Gate·계획 종료 모델은 [ADR-0002](decisions/ADR-0002-entrypoint-only-boundary.md)로 대체한다.
 
 ## Users and jobs
 

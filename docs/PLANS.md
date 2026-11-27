@@ -1,52 +1,31 @@
 # Source ExecPlan Policy
 
-ExecPlans are source-repository documents for complex work. They are manually copied from [`exec-plans/_template.md`](exec-plans/_template.md), version-controlled, and readable without chat history. They are not a generated target schema or an automatic completion system.
+ExecPlans are version-controlled source records for work that needs a durable plan; they are not a target-project schema or an automatic completion system. The [template](exec-plans/_template.md) is a starting point, not a required collection of headings.
 
 ## When a plan is required
 
-Create a plan for cross-cutting, risky, long-running, public-contract, persistent-data, authentication, authorization, payment, infrastructure, deployment, or difficult-to-verify changes. Small, local, reversible work may proceed without a durable plan until its scope expands.
+Use a plan for cross-cutting, risky, long-running, public-contract, persistent-data, authentication, authorization, payment, infrastructure, deployment, or difficult-to-verify changes. Small, local, reversible work may proceed without a durable plan until its scope expands.
 
-## Required properties
-
-A plan records purpose, scope, non-goals, acceptance criteria, current authority, approach, progress, discoveries, decisions, verification commands and results, documentation impact, recovery, and follow-ups.
+A narrow change that still needs a plan may use a short record. Record only the context needed to do and review that work; combine related items and omit inapplicable sections rather than filling them with `N/A`. Larger or uncertain work can add detail as needed. Keep a single record of each fact or link to existing evidence rather than copying it into multiple places.
 
 ## Current contract and progress
 
-The plan must keep a **Current Contract** separate from **Progress**:
-- **Current Contract** contains the authoritative source and revision, scope, non-goals, acceptance criteria, protected paths, and constraints.
-- **Progress** records transient state, candidate, completed steps, and unresolved work. A status summary never replaces the current contract.
-
-When resuming paused work, after context compression, or when instructions or requirements change, recheck the authoritative contract and plan before proceeding. If requirements conflict or scope expands, stop and resolve the conflict rather than proceeding silently.
+Before implementation, record the purpose, relevant authority, scope and protected paths, constraints, acceptance criteria, and planned verification. Keep this **Current Contract** distinct from **Progress**: progress records the candidate, decisions, changes, and unresolved work without silently changing the contract. Recheck the contract when work resumes or the instructions change; resolve conflicts and scope changes explicitly.
 
 ## Stop and escalate before
 
-- changing public APIs, persisted data, authentication, authorization, payments, infrastructure, or production deployment;
-- adding or replacing a production dependency;
-- writing outside the assigned scope or protected paths;
-- weakening an acceptance test merely to make an implementation pass;
-- rewriting unrelated code or formatting the repository broadly;
-- continuing after the same approach has failed twice.
+Check that the user has authorized public API or persisted-data changes, authentication, authorization, payments, infrastructure or production deployment, and new or replacement production dependencies. Existing user instructions may already provide that authorization. Do not weaken a test merely to pass it, write outside the authorized scope, or broadly rewrite unrelated files. Investigate repeated failures before choosing another approach.
 
 ## Verification and evidence
 
-Verification records the exact candidate (commit SHA or base commit with nonignored file hashes/modes and deletion list), commands run, exit status, and relevant output.
+Record the exact candidate using an immutable Git commit or tree ID, or the base revision plus changed-file hashes and modes and a deletion list. In the same plan or linked review, record the environment, commands and results, relevant documentation impact, independent review when required, and unresolved limits. Avoid copying the same evidence between the plan and review. File safety checks and independent review for risky changes remain required by [`QUALITY.md`](QUALITY.md) and [`SECURITY.md`](SECURITY.md).
 
-Criteria are judged using three states:
-- `PASS`: verified by evidence.
-- `FAIL`: violated or required behavior missing.
-- `UNPROVEN`: insufficient evidence to confirm.
-
-Do not convert `UNPROVEN` to `PASS` based on intent, assumption, or passing unrelated checks. If a required acceptance criterion is `FAIL` or `UNPROVEN`, completion cannot be approved. Final acceptance authority remains with the user or reviewer.
-
-When defects are found, record the root cause, failing evidence, affected criteria, fix, and re-verification result.
+Distinguish `PASS` (verified), `FAIL` (violated), and `UNPROVEN` (insufficient evidence). Never treat intent or unrelated passing tests as proof. Do not recommend acceptance with required criteria at FAIL or UNPROVEN. The user or reviewer retains acceptance authority. Record material defects and their re-verification, and leave unresolved work with an owner and next step.
 
 ## Recovery and completion
 
-- Use actual repository and project-owned checks.
-- There is no automatic Gate, Verification Run, `close-plan` command, run directory, or generated closure record. A plan is completed manually after acceptance criteria, documentation impact, verification, and follow-ups are resolved.
-- Historical completed plans and accepted decisions remain unchanged; current documents supersede them explicitly.
-- An agent saying “done” is not completion evidence.
+Use the project's real checks and retain the recovery information needed for the change. There is no automatic Gate, Verification Run, `close-plan` command, run directory, or generated closure record. Complete a plan manually when its criteria, review, documentation impact, and follow-ups are resolved. Completed plans and accepted decisions are historical records; supersede them rather than rewriting their bodies. A completion claim alone is not evidence.
 
-## Non-goals
+When work is no longer being actively pursued, mark it paused and move it to [`exec-plans/paused/`](exec-plans/paused/). Retain failed or unproven results and unresolved follow-ups; do not present incomplete criteria as successful or the work as completed. Before resuming, review the prior results, permissions and budget against the current instructions and obtain any separately required authorization. An old plan does not itself authorize a new run.
 
-ExecPlans do not authorize an external task service, daemon, model judge, backup, archive, deletion, publication, deployment, or old-repository operation unless explicitly granted.
+Plans do not themselves authorize external services, deployment, deletion, or unrelated changes.

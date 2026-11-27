@@ -14,4 +14,4 @@ Include the affected version or commit, impact, reproduction conditions, and a m
 
 ## Secret handling
 
-Reporivet-generated `.gitignore` rules reduce common accidental commits, but `.gitignore` is not a security boundary and does not protect content that was already tracked. If a credential, private key, token, or sensitive data file is committed, revoke or rotate it immediately and then remove it from Git history where appropriate.
+Reporivet does not generate or modify `.gitignore`. A project's existing ignore rules are not a security boundary and do not protect content that was already tracked. If a credential, private key, token, or sensitive data file is committed, revoke or rotate it immediately and then remove it from Git history where appropriate.
